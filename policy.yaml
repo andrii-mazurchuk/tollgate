@@ -35,5 +35,5 @@ taint:
 content:
   pii:       { iban: redact, pesel: block, card: redact, email: redact }
   secrets:   block
-  injection: { low: 0.50, high: 0.99, sync_max_tokens: 64, tier1_action: allow }  # strict: block
+  injection: { low: 0.50, high: 0.50, sync_max_tokens: 64, tier1_action: allow }  # strict: block. high swept on the 70% split (audit/eval.json): strict 0.50 (FPR<=10%), lenient 0.50 (FPR<=2%); below low is not allowed
   signatures: signatures.yaml

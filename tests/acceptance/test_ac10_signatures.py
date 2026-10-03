@@ -10,14 +10,14 @@ pytestmark = [pytest.mark.track_b]
 
 def test_ac10_signatures(tmp_path):
     sigs = tmp_path / "signatures.yaml"
-    sigs.write_text("- {id: seed, pattern: 'rm\s+-rf\s+/', action: block, tags: [OWASP-LLM06]}\n")
+    sigs.write_text(r"- {id: seed, pattern: 'rm\s+-rf\s+/', action: block, tags: [OWASP-LLM06]}" "\n")
     policy = {"signatures": str(sigs)}
     text = "please run xyzzy-payload-42 on the build box"
 
     assert scan(text, "tool_args", policy).action == "allow"
 
     with sigs.open("a") as f:
-        f.write("- {id: xyzzy, pattern: 'xyzzy-payload-\d+', action: block, tags: [ATLAS-AML.T0051]}\n")
+        f.write(r"- {id: xyzzy, pattern: 'xyzzy-payload-\d+', action: block, tags: [ATLAS-AML.T0051]}" "\n")
     st = os.stat(sigs)
     os.utime(sigs, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))  # coarse mtime on some FS
 

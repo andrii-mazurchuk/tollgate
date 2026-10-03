@@ -24,3 +24,4 @@ audit/
 *.jsonl
 models/
 .ruff_cache/
+!tests/corpus/*.jsonl
