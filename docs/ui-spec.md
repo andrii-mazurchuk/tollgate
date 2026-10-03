@@ -76,6 +76,43 @@ The separate **Analytics tab is removed**; its useful parts move into Dashboard.
 
 Order on the page, top to bottom: status line → KPI strip → trend → (reasons | tools side by side) → recent events.
 
+### Research-backed standard (AI observability and guardrail products, 2026-10-03)
+
+**Sources:** Langfuse (open-source code gives exact sizes), LangSmith, W&B Weave, Arize Phoenix, Datadog LLM Observability, Lakera Guard, Pangea AIDR, Microsoft Defender for Cloud AI. Full report and URLs are in the session log. The rules below are adopted for both UIs.
+
+**Products to imitate:**
+- **Local edge:** Langfuse first, then Weave, then LangSmith.
+- **Server console:** Lakera Guard first, then Pangea AIDR, then Defender.
+
+**Rules:**
+1. **Neutral surface, one accent.** Status hues appear only on small badges and dots, never on numbers, card backgrounds or borders.
+2. **Badges are tinted:**
+   - pale background + dark text of the same hue, no border;
+   - 12px text, ~20px tall, radius 4–6px.
+   
+   Only *Blocked* uses a hue (red). Masked, Waiting and Flagged use neutral tints with an icon.
+3. **KPI tiles:**
+   - a 12–13px muted label, a 22–24px value (deliberately smaller than Langfuse's 30px, per Andrey's feedback), and a small delta vs the previous period;
+   - 4 tiles in one row: Actions checked · Blocked · Masked · Sessions.
+4. **One global time-range picker at top right** (15 min / 1 h / today / all), applying to the whole page.
+5. **Charts:** a line or stacked area over time; breakdowns as a sorted horizontal bar or top-5 table. No pies. Grey series, blocked in red.
+6. **Dense tables:** 12–13px body, a muted header, ~36px rows, 8px cell padding, a hover tint.
+7. **Session page is the trace layout:**
+   - a summary strip on top (agent, role, started, duration, state, counts);
+   - **left:** the step list (each row: tool in plain words, duration, a small badge only if blocked/masked/flagged), with a toggle to a timeline view;
+   - **right:** a detail pane with tabs **Overview** (what happened + why + what you can do) · **Input/Output** (original vs what the agent got, masked spans highlighted) · **Checks** (the key → role → arguments → data flow → content chain with ms) · **Sent to server**.
+8. **Guardrail hits appear in two places:** on the step (the Checks tab plus a badge), and in an **Events** list of blocked/masked/flagged items only (like Lakera's "Threats").
+9. **Security wording:** name the check, then the action as a past-tense verb ("Data-flow rule: blocked", "Secret detector: masked 2 values", "Injection check: flagged"). Redactions show inline as `[SECRET]`, `[EMAIL]`, `[IBAN:…2874]`.
+10. **Filters as pills** under a search box, combined with AND.
+11. **Light and dark**, light by default.
+
+**Local edge nav, final:**
+1. **Overview** (the Dashboard above)
+2. **Sessions** (table → trace page)
+3. **Events** (blocked/masked/flagged only, filterable)
+4. **Setup**
+5. **Scenario**
+
 ## Server console (security lead)
 
 **Purpose:** govern and oversee **all peers** (laptops/edges running agents) and all agents in the company. This is the complex side and the primary UI.
