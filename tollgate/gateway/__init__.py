@@ -1,4 +1,8 @@
 import contextlib
+import hashlib
+import json
+import time
+from datetime import datetime, timezone
 import importlib
 import posixpath
 from pathlib import PurePosixPath
@@ -10,11 +14,15 @@ from fastmcp.server.dependencies import get_http_headers
 from fastmcp.server.middleware import Middleware
 from fastmcp.server.providers.fastmcp_provider import FastMCPProvider
 from fastmcp.server.transforms.namespace import Namespace
+from fastmcp.tools.base import ToolResult
+from mcp.types import TextContent
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount
 
-from tollgate.gateway import keys
+from tollgate.content import scan
+from tollgate.contract import SEVERITY, AuditEvent, Reason, Verdict
+from tollgate.gateway import audit, keys, taint
 from tollgate.gateway.policy import PolicyHolder
 
 
@@ -85,16 +93,83 @@ class RoleGate(Middleware):
         name, args = context.message.name, context.message.arguments or {}
         auth = get_http_headers(include={"authorization"}).get("authorization")
         ident = keys.from_header(auth)  # (role, key_id); None in-process (no HTTP)
+        key_id = ident[1] if ident else "local"
+        args_json = json.dumps(args, ensure_ascii=False)  # not ASCII-escaped: Polish rules miss escaped text
+        data = self.policy.data
+        ev = AuditEvent(
+            ts=datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            role=self.role, key_id=key_id, door="tool", verdict="allow", scan_point="tool_args",
+            source=name.partition(".")[0], tool=name,
+            content_sha256=hashlib.sha256(args_json.encode()).hexdigest(),
+            policy_version=hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()[:8],
+        )
+        try:
+            return await self._decide(context, call_next, name, args, args_json, auth, ident, key_id, data, ev)
+        finally:
+            st = taint.state(key_id)
+            ev.tainted, ev.holds_private = bool(st["tainted"]), bool(st["holds_private"])
+            audit.write(ev)
+
+    def _apply(self, ev: AuditEvent, v: Verdict, point: str) -> None:
+        """Folds a content verdict into the event; raises on block/approve. Keeps reasons of flagged allows."""
+        ev.reasons += v.reasons
+        ev.transforms += [t for t in v.transforms if t not in ev.transforms]
+        ev.t2_score = v.t2_score if v.t2_score is not None else ev.t2_score
+        for tier, ms in v.latency_ms.items():
+            ev.latency_ms[tier] = round(ev.latency_ms.get(tier, 0) + ms, 3)
+        if SEVERITY[v.action] > SEVERITY[ev.verdict]:
+            ev.verdict, ev.scan_point = v.action, point
+        if v.action in ("block", "approve"):  # approve not built yet: treated as block
+            raise ToolError(f"content: {v.action} at {point}: " + "; ".join(f"{r.rule} ({r.detail})" for r in v.reasons))
+
+    async def _decide(self, context, call_next, name, args, args_json, auth, ident, key_id, data, ev):
+        def deny(rule: str, msg: str):
+            ev.verdict = "block"
+            ev.reasons.append(Reason(rule=rule, tier=0, detail=msg))
+            raise ToolError(f"{rule}: {msg}")
+
+        t0 = time.perf_counter()
         if auth and (not ident or ident[0] != self.role):
-            raise ToolError(f"role.denied: key not bound to {self.role}")
+            deny("role.denied", f"key not bound to {self.role}")
         rp = self.role_policy()
         tool = await self.server.get_tool(name)
         if tool is None or not tool_allowed(rp, tool):
-            raise ToolError(f"role.denied: {name} is not available to {self.role}")
+            deny("role.denied", f"{name} is not available to {self.role}")
         why = check_args((rp.get("constrain") or {}).get(name, {}), args)
+        ev.latency_ms["role"] = round((time.perf_counter() - t0) * 1000, 3)
         if why:
-            raise ToolError(f"role.constraint: {name} {why}")
-        return await call_next(context)
+            deny("role.constraint", f"{name} {why}")
+
+        t0 = time.perf_counter()
+        blocked = taint.check(data, key_id, name)
+        ev.latency_ms["taint"] = round((time.perf_counter() - t0) * 1000, 3)
+        if blocked:
+            deny("taint.flow", blocked)
+
+        # roles.<role>.content overrides keys of the global content section (A's section; B's stays untouched)
+        cpol = {**(data.get("content") or {}), **(rp.get("content") or {})}
+        v = scan(args_json, "tool_args", cpol)
+        self._apply(ev, v, "tool_args")
+        if v.action == "redact":
+            try:
+                context.message.arguments = json.loads(v.redacted_text)
+            except (TypeError, ValueError):
+                deny("content.redact_failed", "redacted arguments are not valid JSON")
+
+        result = await call_next(context)
+        text = "".join(getattr(b, "text", "") for b in result.content)
+        v = scan(text, "tool_result", cpol)
+        self._apply(ev, v, "tool_result")
+        if v.action == "redact":
+            sc = result.structured_content
+            # ponytail: only the {"result": str} wrapper is rewritten; other structured output is dropped
+            result = ToolResult(content=[TextContent(type="text", text=v.redacted_text)],
+                                structured_content={"result": v.redacted_text} if sc and set(sc) == {"result"} else None,
+                                meta=result.meta, is_error=result.is_error)
+        elif ev.verdict == "allow":
+            ev.scan_point = "tool_result"
+        taint.record(data, key_id, name, args)
+        return result
 
 
 def load_sources(policy: PolicyHolder) -> dict[str, FastMCP]:
