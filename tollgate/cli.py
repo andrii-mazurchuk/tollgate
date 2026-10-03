@@ -2,25 +2,32 @@
 import sys
 
 
-def replay_github() -> int:
-    """Runs the GitHub attack trace as role-2 with taint off, then on. In-process, no server needed."""
+def replay(name: str) -> int:
+    """Runs an attack trace (github | supabase) as role-2 with taint off, then on. In-process, no server needed."""
     import asyncio
     import copy
 
+    from mocks import tickets
     from mocks.github import PRS
     from tollgate.gateway.policy import PolicyHolder, load_policy
-    from tollgate.gateway.replay import GITHUB_TRACE, run_trace
+    from tollgate.gateway.replay import TRACES, run_trace
 
+    trace = TRACES[name]
     on = load_policy()
     off = copy.deepcopy(on.data)
     off.setdefault("taint", {})["enabled"] = False
     for label, policy in (("taint OFF (roles only)", PolicyHolder(off)), ("taint ON", on)):
         PRS.clear()
+        tickets.reset()
         print(f"== {label} ==")
-        for i, ((tool, args), s) in enumerate(zip(GITHUB_TRACE, asyncio.run(run_trace(policy, GITHUB_TRACE))), 1):
-            shown = {k: v for k, v in args.items() if k != "body"}
+        for i, ((tool, args), s) in enumerate(zip(trace, asyncio.run(run_trace(policy, trace))), 1):
+            shown = {k: v for k, v in args.items() if k not in ("body", "text")}
             print(f"  {i}. {tool} {shown} -> {s['verdict'].upper()}: {s['text'].strip().splitlines()[0][:170]}")
-        print(f"  PRs created: {len(PRS)}" + (f", body leaks: {PRS[0]['body'].strip().splitlines()[-2:]}" if PRS else ""))
+        if name == "github":
+            print(f"  PRs created: {len(PRS)}" + (f", body leaks: {PRS[0]['body'].strip().splitlines()[-2:]}" if PRS else ""))
+        else:
+            r = tickets.replies()
+            print(f"  ticket replies: {len(r)}" + (f", ticket #3 thread now shows: {r[3][:170]}" if 3 in r else ""))
     return 0
 
 
@@ -83,13 +90,16 @@ def main() -> int:
         print("\n== tollgate eval ==")
         evaluate()
         return int(rc)
-    if cmd == "replay" and sys.argv[2:3] == ["github"]:
-        return replay_github()
+    if cmd == "replay" and sys.argv[2:3] in (["github"], ["supabase"]):
+        return replay(sys.argv[2])
+    if cmd == "perf":
+        from tollgate.gateway.perf import main as perf
+        return perf(int(_opt("--n", "200")))
     if cmd == "serve":
         return serve()
     if cmd == "key" and sys.argv[2:3] == ["issue"]:
         return key_issue()
-    print("usage: tollgate {serve [--port P] [--policy F]|test|replay github|key issue --role R [--key-id K]}",
+    print("usage: tollgate {serve [--port P] [--policy F]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]}",
           file=sys.stderr)
     return 2
 

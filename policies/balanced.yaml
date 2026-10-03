@@ -1,0 +1,62 @@
+# Tollgate policy profile: BALANCED (the default; same as the active policy.yaml).
+# Use: copy over policy.yaml (`cp policies/balanced.yaml policy.yaml`); the gateway hot reloads it on the next call.
+# Posture: block known-bad, redact sensitive values, let taint stop data flows instead of blocking every suspicious read.
+# Schema: TOLLGATE.md 4.6. Gateway sections (servers/roles/labels/taint/loops) are validated on load; an invalid
+# file is rejected and the old policy kept. `content:` is passed to the content pipeline (tollgate/content).
+
+mode: balanced                                 # profile name; a label for the dashboard and audit, not read as a switch
+
+servers:                                       # source MCP servers the gateway proxies (tool names become <server>.<tool>)
+  github:  { mock: mocks.github }              # in-process mock GitHub: issues.read, repo.read, pr.create
+  tickets: { mock: mocks.tickets }             # in-process mock helpdesk (SQLite): read, reply, query
+  files:   { mock: mocks.files }               # in-process mock filesystem: fs.list, fs.read, fs.write, fs.delete
+
+roles:                                         # one virtual MCP per role at /mcp/<role>/, reachable only with that role's key
+  role-1:                                      # read-only analyst
+    servers:                                   # which sources this role sees
+      github: { access: read }                 # read = only tools the source marks readOnlyHint
+    models: [qwen3:1.7b]                       # model door allow-list; any other model -> 403 (AC12)
+    budget: { tokens_per_day: 20000 }          # model door daily token cap; over it -> 429 (AC11); small so the demo can hit it
+  role-2:                                      # engineer / support agent: the role the attack traces run as
+    servers:                                   # which sources this role sees
+      github:  { access: rw }                  # rw = every tool on the source
+      tickets: { access: rw }                  # rw = read, reply, query
+      files:   { tools: [fs.list, fs.read, fs.write] }   # exact tool pick: fs.delete is absent and rejected (AC3)
+    constrain:                                 # per-tool argument limits (AC4)
+      files.fs.read: { path: "/workspace/**" } # path glob; ../ tricks are normalised first
+      tickets.query: { sql: select_only }      # a single SELECT only; DELETE/DROP/stacked statements are blocked
+    content: { secrets: redact }               # per-role override of content keys: mask secrets instead of blocking (replay demo)
+    models: [qwen3:4b]                         # model door allow-list
+    budget: { tokens_per_day: 500000 }         # model door daily token cap
+
+labels:                                        # taint labels per tool (TOLLGATE.md 4.4)
+  github.issues.read: [untrusted_source]       # public issues: anyone can write them
+  github.repo.read:   [private_data]           # private repos
+  github.pr.create:   [public_sink]            # PRs on public repos are world-readable
+  tickets.read:       [untrusted_source]       # ticket bodies are customer-written (Supabase incident)
+  tickets.query:      [private_data]           # can read the customers table (PII)
+  tickets.reply:      [public_sink]            # replies are visible to the ticket's author
+
+taint:                                         # session taint; a session = one issued role key
+  enabled: true                                # false = roles only (the "before" half of `tollgate replay`)
+  block_flow: { from: private_data, to: public_sink, action: block }   # tainted + holds private -> public sink is blocked
+
+loops: { max_identical_calls: 5 }              # same key + tool + args more than N times in a row -> loop.cutoff (AC11)
+
+content:                                       # content pipeline (Track B semantics, mirrored from policy.yaml)
+  pii:                                         # tier 1 PII, regex + checksum; action per type: allow|redact|approve|block
+    iban: redact                               # mod-97 valid IBAN -> [IBAN:…1234]
+    pesel: block                               # valid PESEL (national id) -> block the call
+    nip: redact                                # valid NIP (tax id) -> [NIP] (built-in default, made explicit)
+    card: redact                               # Luhn-valid card number -> [CARD:…1234]
+    email: redact                              # email address -> [EMAIL]
+  secrets: block                               # API keys, tokens, private keys -> block (role-2 overrides to redact above)
+  injection:                                   # tier 1 heuristics + tier 2 classifier (DeBERTa, ONNX, CPU)
+    low: 0.50                                  # tier 2 score >= low -> t2.suspect reason (flag only)
+    high: 0.50                                 # tier 2 score >= high -> block; tuned on the 70% split (audit/eval.json)
+    sync_max_tokens: 64                        # texts up to this many tokens get tier 2 synchronously; longer ones are deferred
+    sync_points: [prompt]                      # scan points always scored synchronously, any length (the model door)
+    tier1_action: allow                        # tier 1 injection phrases: allow = keep as a flag that escalates to tier 2
+    md_exfil: block                            # markdown image with a query-string URL (exfil channel) -> block (default)
+    tool_result_action: flag                   # intent: flag injection in tool results, let taint stop the flow. NOT read by scan() yet (tier 2 >= high still blocks there)
+  signatures: signatures.yaml                  # hot-reloaded signature feed (AC10)
