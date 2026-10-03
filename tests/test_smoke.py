@@ -19,6 +19,7 @@ def test_scan_honours_contract():
 async def test_taint_blocks_github_replay(tmp_path, monkeypatch):
     """Demo step 2: the GitHub attack is allowed, allowed, then blocked by taint."""
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "e.jsonl"))
+    monkeypatch.setenv("TOLLGATE_T2", "off")  # no model in smoke; taint, not tier 2, makes this block
     from tollgate.gateway.policy import load_policy
     from tollgate.gateway.replay import run_trace
 
