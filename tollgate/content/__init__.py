@@ -101,4 +101,6 @@ def _tier2(norm, decoded, findings, point, policy, reasons, latency) -> tuple[fl
         reasons.append(Reason(rule="t2.injection", tier=2, detail=f"injection score {best:.4f} >= high {high}"))
     elif best >= low:
         reasons.append(Reason(rule="t2.suspect", tier=2, detail=f"injection score {best:.4f} in [low {low}, high {high})"))
-    return best, best >= high
+    # TOLLGATE 4.5: balanced flags a tool result injection and relies on taint; strict sets tool_result_action: block
+    flag_only = point == "tool_result" and inj.get("tool_result_action", "flag") == "flag"
+    return best, best >= high and not flag_only
