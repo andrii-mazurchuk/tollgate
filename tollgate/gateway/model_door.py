@@ -13,7 +13,7 @@ from starlette.responses import JSONResponse
 
 from tollgate.content import scan
 from tollgate.contract import AuditEvent, Reason
-from tollgate.gateway import audit, keys
+from tollgate.gateway import audit, keys, local_text, taint, trace
 
 DEFAULT_UPSTREAM = "http://127.0.0.1:11434/v1"
 USED: dict[tuple[str, str], int] = {}  # (role, UTC day) -> tokens. ponytail: in-memory, lost on restart
@@ -39,6 +39,16 @@ def _text(content) -> str:
     if isinstance(content, str):
         return content
     return "".join(p.get("text", "") for p in content or [] if isinstance(p, dict))
+
+
+def _keep(texts: dict, point: str, text: str, v) -> None:
+    """Edge-only full text: messages joined per scan point, spans offset into the joined text."""
+    t = texts.setdefault(point, {"original": "", "sent": "", "spans": []})
+    off = len(t["original"]) + (1 if t["original"] else 0)
+    t["spans"] += [[s + off, e + off] for r in v.reasons if r.span for s, e in [r.span]]
+    sep = "\n" if t["original"] else ""
+    t["original"] += sep + text
+    t["sent"] += sep + (v.redacted_text if v.action == "redact" else text)
 
 
 def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
@@ -68,7 +78,9 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
                         role=role, key_id=key_id, door="model", verdict="allow", scan_point="prompt",
                         source="model", tool=str(model),
                         content_sha256=hashlib.sha256(prompt.encode()).hexdigest(),
-                        policy_version=policy.version)
+                        policy_version=policy.version, trace_id=trace.new_id(), session_id=key_id)
+        ev.state_before = ev.state_after = trace.label(taint.STATE.get(key_id))  # the model door never changes taint
+        texts: dict = {}
 
         def deny(status, rule, msg):
             ev.verdict = "block"
@@ -92,6 +104,7 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
                 for m in body["messages"]:
                     if isinstance(m, dict):
                         v = scan(_text(m.get("content")), "prompt", cpol)
+                        _keep(texts, "prompt", _text(m.get("content")), v)
                         apply_verdict(ev, v, "prompt")
                         if v.action == "redact":
                             m["content"] = v.redacted_text
@@ -122,6 +135,7 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
                 for ch in out.get("choices") or []:
                     msg = ch.get("message") or {}
                     v = scan(_text(msg.get("content")), "response", cpol)
+                    _keep(texts, "response", _text(msg.get("content")), v)
                     apply_verdict(ev, v, "response")
                     if v.action == "redact":
                         msg["content"] = v.redacted_text
@@ -132,5 +146,6 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
             return JSONResponse(out)
         finally:
             audit.write(ev)
+            local_text.write(ev.trace_id, texts)
 
     return chat

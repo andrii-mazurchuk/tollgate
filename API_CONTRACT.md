@@ -49,7 +49,21 @@ One JSON object per line, appended to `audit/events.jsonl`. It is the `dataclass
  "tainted": true, "holds_private": true, "tokens": 0, "content_sha256": "c1e0…", "policy_version": "a3f9"}
 ```
 
-Raw content is never written. B's dashboard and eval read this file only.
+Optional trace fields (absent in older lines; readers must default them):
+
+```json
+{"trace_id": "t_9f2c01ab", "session_id": "k_41c", "state_before": "untrusted+holds_private", "state_after": "untrusted+holds_private",
+ "stages": [{"name": "key", "outcome": "ok", "detail": "", "ms": null}, {"name": "role", "outcome": "ok", "detail": "", "ms": 0.1},
+            {"name": "arguments", "outcome": "ok", "detail": "", "ms": null}, {"name": "data_flow", "outcome": "fail", "detail": "taint.flow", "ms": 0.1},
+            {"name": "content", "outcome": "skip", "detail": "", "ms": null}, {"name": "budget", "outcome": "skip", "detail": "", "ms": null},
+            {"name": "approval", "outcome": "skip", "detail": "", "ms": null}]}
+```
+
+- `session_id` = `key_id` (a session is a role key). `state_*`: `clean` | `untrusted` | `holds_private` | `untrusted+holds_private`.
+- `stages`: the check chain in order `key, role, arguments, data_flow, content, budget, approval`; `outcome` is `ok|warn|fail|skip`.
+- Full text (original and masked args/results/prompts) goes only to the edge-local `audit/local_text.jsonl`, keyed by `trace_id`, capped to the last 2,000 calls.
+
+Raw content is never written to `events.jsonl`. B's dashboard and eval read this file only.
 
 ## 3. `policy.yaml` ownership
 
@@ -64,3 +78,4 @@ A's loader validates only its own sections and passes `content` through untouche
 | When | Change |
 |---|---|
 | 2026-10-03 16:40 | Initial contract |
+| 2026-10-03 22:10 | `AuditEvent` gains optional `trace_id`, `session_id`, `stages`, `state_before`, `state_after` (edge UI); full text lives only in edge-local `audit/local_text.jsonl` |

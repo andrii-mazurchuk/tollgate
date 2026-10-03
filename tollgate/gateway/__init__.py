@@ -26,7 +26,7 @@ from starlette.routing import Mount, Route
 from tollgate.content import scan
 from tollgate.feed import Puller
 from tollgate.contract import SEVERITY, AuditEvent, Reason, Verdict
-from tollgate.gateway import audit, keys, model_door, taint
+from tollgate.gateway import audit, keys, local_text, model_door, taint, trace
 from tollgate.gateway.approvals import Approvals, admin_ok
 from tollgate.gateway.pins import Pins
 from tollgate.gateway.policy import PolicyHolder
@@ -134,16 +134,20 @@ class RoleGate(Middleware):
             role=self.role, key_id=key_id, door="tool", verdict="allow", scan_point="tool_args",
             source=name.partition(".")[0], tool=name,
             content_sha256=hashlib.sha256(args_json.encode()).hexdigest(),
-            policy_version=self.policy.version,
+            policy_version=self.policy.version, trace_id=trace.new_id(), session_id=key_id,
+            state_before=trace.label(taint.STATE.get(key_id)),
         )
+        texts: dict = {}  # edge-only full text, keyed by trace_id (never in the audit log)
         try:
-            return await self._decide(context, call_next, name, args, args_json, auth, ident, key_id, data, ev)
+            return await self._decide(context, call_next, name, args, args_json, auth, ident, key_id, data, ev, texts)
         finally:
             st = taint.state(key_id)
             ev.tainted, ev.holds_private = bool(st["tainted"]), bool(st["holds_private"])
+            ev.state_after = trace.label(st)
             audit.write(ev)
+            local_text.write(ev.trace_id, texts)
 
-    async def _decide(self, context, call_next, name, args, args_json, auth, ident, key_id, data, ev):
+    async def _decide(self, context, call_next, name, args, args_json, auth, ident, key_id, data, ev, texts):
         def deny(rule: str, msg: str):
             ev.verdict = "block"
             ev.reasons.append(Reason(rule=rule, tier=0, detail=msg))
@@ -184,6 +188,8 @@ class RoleGate(Middleware):
 
         cpol = content_policy(data, rp)
         v = scan(args_json, "tool_args", cpol)
+        texts["args"] = {"original": args_json, "sent": v.redacted_text if v.action == "redact" else args_json,
+                         "spans": [r.span for r in v.reasons if r.span]}
         apply_verdict(ev, v, "tool_args")
         if v.action == "redact":
             try:
@@ -199,6 +205,8 @@ class RoleGate(Middleware):
         result = await call_next(context)
         text = "".join(getattr(b, "text", "") for b in result.content)
         v = scan(text, "tool_result", cpol)
+        texts["result"] = {"original": text, "sent": v.redacted_text if v.action == "redact" else text,
+                           "spans": [r.span for r in v.reasons if r.span]}
         apply_verdict(ev, v, "tool_result")
         if v.action == "redact":
             sc = result.structured_content
@@ -223,7 +231,7 @@ class RoleGate(Middleware):
         """Parks the call until an admin decides (POST /admin/approvals/{id}) or approval.timeout_s passes."""
         reason = "; ".join(f"{r}: {d}" for r, d in why)
         item = self.approvals.create(self.role, ev.key_id, ev.tool, ev.content_sha256, reason)
-        req = AuditEvent(**{**ev.__dict__, "reasons": [Reason(rule="approval.requested", tier=0,
+        req = AuditEvent(**{**ev.__dict__, "trace_id": ev.trace_id + "-req", "stages": [], "reasons": [Reason(rule="approval.requested", tier=0,
                                                                detail=f"{item['id']}: {reason}")],
                             "verdict": "approve", "transforms": [], "latency_ms": {}})
         audit.write(req)

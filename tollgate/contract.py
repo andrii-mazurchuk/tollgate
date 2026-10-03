@@ -49,3 +49,15 @@ class AuditEvent:
     tokens: int = 0
     content_sha256: str | None = None
     policy_version: str | None = None
+    # optional per-call trace (2026-10-03 edge UI); old readers ignore them
+    trace_id: str | None = None       # one per decision; keys audit/local_text.jsonl (edge-only full text)
+    session_id: str | None = None     # = key_id (taint is keyed by key)
+    stages: list[dict] = field(default_factory=list)  # [{name, outcome: ok|warn|fail|skip, detail, ms}], see STAGES
+    state_before: str | None = None   # SessionState
+    state_after: str | None = None
+
+
+# check chain order; key|role|arguments|data_flow|content|budget|approval
+STAGES = ("key", "role", "arguments", "data_flow", "content", "budget", "approval")
+# "clean" | "untrusted" | "holds_private" | "untrusted+holds_private"
+SessionState = str
