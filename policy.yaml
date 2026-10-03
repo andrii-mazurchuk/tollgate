@@ -31,6 +31,9 @@ labels:
   github.issues.read: [untrusted_source]
   github.repo.read:   [private_data]
   github.pr.create:   [public_sink]
+  tickets.read:       [untrusted_source]   # Supabase trace: ticket bodies are customer-written
+  tickets.query:      [private_data]       # can read customers (PII); role-2's select_only still allows it
+  tickets.reply:      [public_sink]        # replies are visible to the ticket's author
 
 taint:
   enabled: true

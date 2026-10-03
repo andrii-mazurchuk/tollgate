@@ -176,9 +176,17 @@ class RoleGate(Middleware):
         apply_verdict(ev, v, "tool_result")
         if v.action == "redact":
             sc = result.structured_content
-            # ponytail: only the {"result": str} wrapper is rewritten; other structured output is dropped
+            # ponytail: only the {"result": ...} wrapper is rewritten; other structured output is dropped
+            new_sc = None
+            if sc and set(sc) == {"result"}:
+                new_sc = {"result": v.redacted_text}
+                if not isinstance(sc["result"], str):  # JSON result (e.g. rows): keep its type for the output schema
+                    try:  # masks sit inside JSON strings, so the redacted text stays valid JSON
+                        new_sc = {"result": json.loads(v.redacted_text)}
+                    except ValueError:  # fail closed: the client rejects a result that breaks the output schema
+                        deny("content.redact_failed", "redacted result is not valid JSON")
             result = ToolResult(content=[TextContent(type="text", text=v.redacted_text)],
-                                structured_content={"result": v.redacted_text} if sc and set(sc) == {"result"} else None,
+                                structured_content=new_sc,
                                 meta=result.meta, is_error=result.is_error)
         elif ev.verdict == "allow":
             ev.scan_point = "tool_result"

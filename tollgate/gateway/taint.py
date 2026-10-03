@@ -18,9 +18,10 @@ def _labels(policy: dict, tool: str) -> list:
 
 
 def _cause(tool: str, args: dict) -> str:
-    if "number" in args:
-        return f"{tool} #{args['number']}"
-    where = ":".join(str(args[k]) for k in ("repo", "path") if k in args)
+    for k in ("number", "id"):
+        if k in args:
+            return f"{tool} #{args[k]}"
+    where = ":".join(str(args[k]) for k in ("repo", "path", "sql") if k in args)
     return f"{tool} {where}".strip()
 
 
