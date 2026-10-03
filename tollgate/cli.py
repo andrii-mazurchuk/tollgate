@@ -63,7 +63,8 @@ def serve() -> int:
     print(f"  health: {base}/healthz   taint: {base}/admin/taint   budget: {base}/admin/budget", flush=True)
     print(f"  approvals: {base}/admin/approvals   (tollgate approve|deny <id>)", flush=True)
     print(f"  edge UI: {base}/edge", flush=True)
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    # open /edge tabs hold an endless SSE stream; without a cap uvicorn waits on it forever at Ctrl+C
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning", timeout_graceful_shutdown=1)
     return 0
 
 
