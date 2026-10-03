@@ -46,7 +46,7 @@ def n_tokens(text: str) -> int | None:
     return None if m is None else len(m[0].encode(text, add_special_tokens=False).ids)
 
 
-def _score(text: str) -> float | None:
+def _score(text: str, max_chunks: int | None = None) -> float | None:
     m = _load()
     if m is None:
         return None
@@ -55,7 +55,10 @@ def _score(text: str) -> float | None:
     tok, sess, cls, sep = m
     ids = tok.encode(text, add_special_tokens=False).ids or [sep]
     body, step, best = CHUNK - 2, CHUNK - 2 - OVERLAP, 0.0
-    for s in range(0, max(len(ids) - OVERLAP, 1), step):
+    starts = list(range(0, max(len(ids) - OVERLAP, 1), step))
+    if max_chunks and len(starts) > max_chunks:  # evenly spaced sample, first and last always in
+        starts = [starts[round(i * (len(starts) - 1) / (max_chunks - 1))] for i in range(max_chunks)] if max_chunks > 1 else starts[:1]
+    for s in starts:
         x = np.array([[cls, *ids[s:s + body], sep]], dtype=np.int64)
         lg = sess.run(None, {"input_ids": x, "attention_mask": np.ones_like(x)})[0][0]
         e = np.exp(lg - lg.max())
@@ -63,16 +66,16 @@ def _score(text: str) -> float | None:
     return best
 
 
-def score(text: str) -> float | None:
-    """Injection probability (max over 256-token chunks), or None if the model is unavailable."""
+def score(text: str, max_chunks: int | None = None) -> float | None:
+    """Injection probability (max over 256-token chunks, or an evenly spaced sample of max_chunks), None if unavailable."""
     if CACHE is None:
-        return _score(text)
-    key = hashlib.sha256(text.encode()).hexdigest()
+        return _score(text, max_chunks)
+    key = hashlib.sha256(text.encode()).hexdigest() + (f":{max_chunks}" if max_chunks else "")
     if key not in CACHE:
         import time
 
         t0 = time.perf_counter()
-        s = _score(text)
+        s = _score(text, max_chunks)
         if s is None:
             return None
         CACHE[key] = [s, round((time.perf_counter() - t0) * 1000, 3)]
