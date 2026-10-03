@@ -95,3 +95,10 @@ async def test_scenario_reset_keeps_other_budgets(monkeypatch):
         r.reset()
     assert model_door.USED == {("role-1", day): 50, ("role-2", day): 100}
     model_door.USED.clear()
+
+
+def test_pre_trace_events_get_one_stable_id():
+    """Events written before traces existed have no trace_id; the list and the timeline must agree on a stand-in id."""
+    old = {k: v for k, v in ev(30, "block", "role.denied", sid="s9").items() if k != "trace_id"}
+    item = edge.events_list([old], "all", {}, now=NOW)["items"][0]
+    assert item["trace_id"] and item["trace_id"] == edge.timeline([old], "s9")[0]["trace_id"]

@@ -70,6 +70,11 @@ def _sid(ev: dict) -> str:
     return ev.get("session_id") or ev.get("key_id") or "?"
 
 
+def _tid(ev: dict) -> str:
+    """trace_id, or a stand-in for events written before traces existed (the UI selects by this id)."""
+    return ev.get("trace_id") or "ts_" + ev["ts"]
+
+
 def _state(ev: dict) -> str:
     """state_after, or the pre-trace flags of older events."""
     if ev.get("state_after"):
@@ -100,7 +105,7 @@ def timeline(events: list[dict], sid: str, texts: dict | None = None) -> list[di
     texts = texts or {}
     out = []
     for e in sorted((e for e in events if _sid(e) == sid), key=_ts):
-        out.append({**e, "explain": explain.event(e), "text": texts.get(e.get("trace_id")), "kind": kind(e),
+        out.append({**e, "trace_id": _tid(e), "explain": explain.event(e), "text": texts.get(e.get("trace_id")), "kind": kind(e),
                     "action": action_words(e) if kind(e) else None,
                     "ms": round(sum(st.get("ms") or 0 for st in e.get("stages") or []), 1),
                     "state_words_before": explain.state_words(e.get("state_before")),
@@ -183,7 +188,7 @@ def _item(e: dict, labels: dict | None = None) -> dict:
             "check": explain.check_name((explain.main_reason(e) or {}).get("rule")), "role": e.get("role"),
             "agent": explain.AGENTS.get(e.get("role"), e.get("role")),
             "tool": explain.tool(e.get("tool"), e.get("door", "tool")),
-            "session_id": _sid(e), "session_label": (labels or {}).get(_sid(e)), "trace_id": e.get("trace_id")}
+            "session_id": _sid(e), "session_label": (labels or {}).get(_sid(e)), "trace_id": _tid(e)}
 
 
 def overview(events: list[dict], rng: str = "today", labels: dict | None = None, now: datetime | None = None) -> dict:
@@ -230,14 +235,14 @@ def health(events: list[dict], policy, pins, feed, since: str | None) -> dict:
     fs = feed.state if feed else {}
     if fs.get("url") and fs.get("last_error"):
         return {"level": "warn", "message": "Threat feed unreachable", "detail": fs["last_error"]}
-    cut = since or ""
+    cut = max(since or "", (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat().replace("+00:00", "Z"))  # recent only
     hits = [e for e in events if e.get("verdict") in ("block", "approve") and e["ts"] > cut]
     if hits:
         last = max(hits, key=_ts)
         n_block = sum(e["verdict"] == "block" for e in hits)
         msg = (f"{n_block} action{'s' * (n_block != 1)} blocked" if n_block else "Waiting for approval")
         return {"level": "warn" if last["verdict"] == "approve" else "alert", "message": msg, "ts": last["ts"],
-                "trace_id": last.get("trace_id"), "session_id": _sid(last)}
+                "trace_id": _tid(last), "session_id": _sid(last)}
     return {"level": "ok", "message": "All good"}
 
 

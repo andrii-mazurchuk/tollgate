@@ -68,7 +68,6 @@ const ms = v => v == null ? "" : v < 10 ? `${v.toFixed(1)} ms` : `${Math.round(v
 const n = v => Number(v || 0).toLocaleString();
 const view = () => document.getElementById("view");
 const stepHref = (sid, step) => `#/sessions/${encodeURIComponent(sid)}` + (step ? "/" + encodeURIComponent(step) : "");
-const pageHead = (title, sub, right) => h("div", { class: "page-h" }, h("div", {}, h("h1", {}, title), sub ? h("p", {}, sub) : null), right || null);
 const card = (title, right, ...body) => h("section", { class: "card" }, title ? h("div", { class: "card-h" }, h("h2", {}, title), right || null) : null, ...body);
 const emptyState = msg => h("div", { class: "empty" }, msg || "Nothing in this time range. ", "Connect your agent in ", h("a", { href: "#/setup" }, "Setup"), " or run the ", h("a", { href: "#/scenario" }, "Scenario"), ".");
 
@@ -90,14 +89,13 @@ async function refreshStatus() {
   }
   renderHealth(st.health);
   const host = st.server.url.replace(/^https?:\/\//, "");
-  const vers = `app ${st.app_version} · policy ${String(st.policy.version).slice(0, 7)} · feed ${st.feed.version ?? "local"}`;
+  box.title = [`Key ${st.account.key_id}`, `Server ${host}`, `App ${st.app_version}`,
+    `Policy ${String(st.policy.version).slice(0, 7)} (${st.policy.profile})`, `Threat feed ${st.feed.version ?? "local"}`,
+    `Injection check ${st.classifier}`].join("\n");
   box.replaceChildren(
-    h("span", { class: "who", title: `Key ${st.account.key_id}` }, icon("user"), st.account.agent, h("span", { class: "muted" }, st.account.role)),
+    h("span", { class: "who" }, icon("user"), st.account.agent, h("span", { class: "muted" }, st.account.role)),
     h("span", { class: "sep" }),
-    h("span", { title: "Connected server" }, h("span", { class: "cdot" }), host),
-    h("span", { class: "sep vers" }),
-    h("span", { class: "vers", title: `Policy profile: ${st.policy.profile}. Injection check: ${st.classifier}.` }, vers,
-      st.classifier === "off" ? " · injection check off" : ""));
+    h("span", {}, h("span", { class: "cdot" }), host));
 }
 
 function renderHealth(hl) {
@@ -112,11 +110,12 @@ function renderHealth(hl) {
   };
 }
 
+// Top-bar slot for the current view's controls: the time range (Overview, Events) or the scenario runner.
+const bar = (...kids) => document.getElementById("bar").replaceChildren(...kids);
 function renderRange() {
-  const box = document.getElementById("range");
-  box.style.visibility = ["overview", "events"].includes(ui.view) ? "visible" : "hidden";
-  box.replaceChildren(...Object.entries(RANGES).map(([k, l]) => h("button", { type: "button", "aria-pressed": String(ui.range === k),
-    onclick: () => { ui.range = k; save("range", k); renderRange(); route(false); } }, l)));
+  if (!["overview", "events"].includes(ui.view)) return bar();
+  bar(h("div", { class: "seg", role: "group", "aria-label": "Time range" }, Object.entries(RANGES).map(([k, l]) => h("button", { type: "button", "aria-pressed": String(ui.range === k),
+    onclick: () => { ui.range = k; save("range", k); renderRange(); route(false); } }, l))));
 }
 
 function themeNow() {
@@ -200,7 +199,6 @@ async function renderOverview() {
   const tiles = [["checked", "Actions checked"], ["blocked", "Blocked"], ["masked", "Masked"], ["sessions", "Sessions"]];
   const hasData = k.checked.value > 0;
   view().replaceChildren(
-    pageHead("Overview", "What agents on this laptop did, and what Tollgate stopped or changed."),
     h("div", { class: "stack" },
       h("div", { class: "kpis" }, tiles.map(([key, l]) => h("div", { class: "card kpi" },
         h("div", { class: "l" }, l), h("div", { class: "v" }, n(k[key].value)), h("div", { class: "d" }, delta(k[key]))))),
@@ -224,8 +222,7 @@ const lastOutcome = v => v === "allow" ? h("span", { class: "muted" }, "Allowed"
 
 async function renderSessions(sidArg, stepArg) {
   const { sessions } = await api("/sessions");
-  const head = pageHead("Sessions", "Every agent session on this laptop. A session is one key: what it read stays with it.");
-  if (!sessions.length) return view().replaceChildren(head, h("div", { class: "card" }, emptyState("No sessions yet. ")));
+  if (!sessions.length) return view().replaceChildren(h("div", { class: "card" }, emptyState("No sessions yet. ")));
   const sid = sidArg || (ui.trace && sessions.some(x => x.id === ui.trace.sid) ? ui.trace.sid : sessions[0].id);
   const pick = id => { ui.tab = ui.tab || "overview"; location.hash = stepHref(id); };
   const list = h("section", { class: "card pane", "data-keep": "slist" }, h("table", { class: "t" },
@@ -239,8 +236,8 @@ async function renderSessions(sidArg, stepArg) {
       h("td", { class: "num r" }, n(x.n)),
       h("td", {}, stateIcons(x.state)),
       h("td", {}, lastOutcome(x.last_verdict)))))));
-  const right = h("section", { class: "card pane", "data-keep": "sdetail" });
-  view().replaceChildren(head, h("div", { class: "md" }, list, right));
+  const right = h("section", { class: "card pane split" });
+  view().replaceChildren(h("div", { class: "md" }, list, right));
   let d;
   try { d = await api("/sessions/" + encodeURIComponent(sid)); } catch (err) {
     right.replaceChildren(h("div", { class: "empty" }, String(err.message).startsWith("404") ? "This session is not on this laptop any more." : "Could not load this session."));
@@ -252,7 +249,7 @@ async function renderSessions(sidArg, stepArg) {
 function drawSession(box, d, stepArg) {
   const tl = d.timeline, x = d.session, sid = x.id;
   let idx = -1;
-  if (stepArg && stepArg.startsWith("t_")) idx = tl.findIndex(e => e.trace_id === stepArg);
+  if (stepArg && isNaN(stepArg)) idx = tl.findIndex(e => e.trace_id === stepArg);
   else if (stepArg) idx = Number(stepArg) - 1;
   if (!(idx >= 0 && idx < tl.length)) {
     idx = ui.trace && ui.trace.sid === sid ? ui.trace.idx : -1;
@@ -265,7 +262,7 @@ function drawSession(box, d, stepArg) {
     ["Agent", x.agent], ["Role", x.role], ["Started", time(x.first_ts)], ["Duration", dur(x.duration_s)], ["Steps", n(x.n)],
     ["Blocked", n(c.block)], ["Masked", n(c.redact)], ["State", stateEl(x.state)],
   ].map(([k, v]) => h("div", {}, h("div", { class: "k" }, k), h("div", { class: "v" }, v))));
-  const steps = h("div", { class: "steps" }), detail = h("div", { class: "detail" });
+  const steps = h("div", { class: "steps" }), detail = h("div", { class: "detail", "data-keep": "sdetail" });
   box.replaceChildren(h("div", { class: "pane-h" }, h("h2", {}, x.label || x.agent), h("span", { class: "muted small mono ell", title: sid }, sid), h("span", { class: "muted small", style: "margin-left:auto" }, x.active ? "Active" : "Ended")), strip, steps, detail);
   const draw = () => { drawSteps(steps, tl, draw); drawDetail(detail, tl[ui.trace.idx]); };
   draw();
@@ -289,7 +286,7 @@ function drawSteps(box, tl, redraw) {
       h("span", { class: "no" }, i + 1), h("span", { class: "nm ell", title: e.explain.tool_name }, e.explain.tool_name),
       badge(e.kind) || h("span", {}), h("span", { class: "ms" }, ms(e.ms))));
   });
-  box.replaceChildren(h("div", { class: "steps-h" }, h("h2", {}, "Steps"), seg), h("ul", { class: "steplist" }, rows));
+  box.replaceChildren(h("div", { class: "steps-h" }, h("h2", {}, "Steps"), seg), h("ul", { class: "steplist", "data-keep": "steps" }, rows));
 }
 
 function highlight(text, spans, masked) {
@@ -396,9 +393,9 @@ async function renderEvents(tidArg) {
         h("td", { class: "num muted r" }, time(x.ts))))))
       : h("div", { class: "empty" }, "No events match."));
   const right = h("section", { class: "card pane", "data-keep": "edetail" });
-  view().replaceChildren(pageHead("Events", "Only what Tollgate blocked, masked or flagged. Filters combine."), h("div", { class: "md" }, list, right));
+  view().replaceChildren(h("div", { class: "md" }, list, right));
   const item = items.find(x => x.trace_id === tid);
-  if (!item) return right.replaceChildren(h("div", { class: "empty" }, "Select an event to see what happened."));
+  if (!item) return right.replaceChildren(h("div", { class: "empty" }, items.length ? "Select an event to see what happened." : "Nothing to show. Try a longer time range."));
   let e;
   try { e = (await api("/sessions/" + encodeURIComponent(item.session_id))).timeline.find(x => x.trace_id === tid); } catch { e = null; }
   if (!e) return right.replaceChildren(h("div", { class: "empty" }, "The details of this event are not on this laptop any more."));
@@ -472,10 +469,11 @@ async function renderSetup() {
   const theme = h("select", { id: "thm", class: "sel-in", onchange: ev => post({ theme: ev.target.value }) },
     ["system", "light", "dark"].map(t => h("option", { value: t, selected: se.settings.theme === t }, { system: "Match the system", light: "Light", dark: "Dark" }[t])));
 
-  view().replaceChildren(pageHead("Setup", `How ${a.agent} (${a.role}) is connected and what it may do. Policy ${a.policy.version}, profile ${a.policy.profile}.`),
+  view().replaceChildren(
     h("div", { class: "stack" },
       h("div", { class: "grid2" },
-        card("Connection", null, h("div", { class: "card-b" },
+        card("Connection", h("span", { class: "muted small", title: `How ${a.agent} is connected and what it may do` },
+          `${a.agent} · ${a.role} · policy ${String(a.policy.version).slice(0, 7)} · ${a.policy.profile}`), h("div", { class: "card-b" },
           field("Server", c.server), field("Health", health), field("MCP URL", c.mcp_url, copyBtn(c.mcp_url)), field("Model URL", c.model_url, copyBtn(c.model_url)),
           field("Key", c.key_masked, h("button", { class: "btn sm", onclick: ev => copy(c.key, ev.currentTarget) }, "Copy key")),
           field("Expiry", h("span", {}, "No expiry. Your security team can revoke it.")),
@@ -522,11 +520,10 @@ async function renderScenario(note) {
   const btn = (label, fn, cls) => h("button", { class: "btn " + (cls || ""), disabled: ui.running, onclick: fn }, label);
   const result = r => r.pass ? h("span", { class: "badge" }, icon("check"), "PASS") : h("span", { class: "badge fail" }, icon("x"), "FAIL");
   if (ui.view !== "scenario") return;
+  bar(h("span", { class: "muted small" }, note || (done.length ? `${passed.length} of ${done.length} passed` : `${all.length} steps`)),
+    btn("Reset", async () => { await api("/scenario/reset", { method: "POST" }); renderScenario(); }),
+    btn("Run all", () => runSteps(all.map(x => x.id)), "primary"));
   view().replaceChildren(
-    pageHead("Scenario", "The Acme story, run through the real gateway step by step: expected vs what actually happened.",
-      h("div", { class: "sc-bar" }, h("span", { class: "muted small" }, note || (done.length ? `${passed.length} of ${done.length} passed` : `${all.length} steps`)),
-        btn("Reset", async () => { await api("/scenario/reset", { method: "POST" }); renderScenario(); }),
-        btn("Run all", () => runSteps(all.map(x => x.id)), "primary"))),
     h("div", { class: "stack" }, acts.map(a => card(`Act ${a.id}: ${a.title}`,
       a.operator ? h("span", { class: "muted small" }, "Done in the Server console") : btn("Run act", () => runSteps(a.steps.filter(x => !x.operator).map(x => x.id)), "sm"),
       a.subtitle ? h("p", { class: "muted small", style: "margin:-8px 16px 8px" }, a.subtitle) : null,
