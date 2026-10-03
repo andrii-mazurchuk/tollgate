@@ -18,6 +18,7 @@ WEIGHTS = {"pii": 3, "secrets": 3, "injection": 3, "signatures": 1, "obfuscation
 ROOT = CORPUS.parents[1]
 CACHE = ROOT / "audit" / "t2_cache.json"
 PROFILES = {"strict": 0.10, "balanced": 0.05, "lenient": 0.02}  # benign FPR ceiling when choosing tier 2 `high`
+MIN_HELD_OUT = 10  # below this many held-out cases a control's posture uses its full-corpus pass rate
 NEVER = 1.01  # a `high` tier 2 can never reach
 
 
@@ -96,22 +97,29 @@ def run(policy: dict, cases: list[dict] | None = None) -> dict:
 
 
 def _run(content: dict, cases: list[dict], inj: dict | None) -> dict:
-    by_source, by_control, lat = defaultdict(list), defaultdict(list), defaultdict(list)
-    sync, t2_ms = 0, []
+    by_source, by_control, full, lat = defaultdict(list), defaultdict(list), defaultdict(list), defaultdict(list)
+    sync, t2_ms, t2_short = 0, [], []
+    short = (inj or {}).get("sync_max_tokens", 64)
     for c in cases:
+        tier2.MS = 0.0
         v = scan(c["text"], c["point"], content)
         if "t2" in v.latency_ms:
             sync += 1
-            hit = tier2.CACHE.get(hashlib.sha256(normalise(c["text"])[0].encode()).hexdigest())
-            if hit:
-                t2_ms.append(hit[1])  # model time from the first (uncached) run; cached reruns read ~0
+            t2_ms.append(tier2.MS)  # model time from the first (uncached) run; cached reruns read ~0
+            if tier2.n_tokens(normalise(c["text"])[0]) <= short:
+                t2_short.append(tier2.MS)
+        row = (c["expect"] != "allow", detected(v, c["expect"]))
+        full[c["tags"][0]].append(row)
         if not train(c):
-            row = (c["expect"] != "allow", detected(v, c["expect"]))
             by_source[c["source"]].append(row)
             by_control[c["tags"][0]].append(row)
             lat["t1"].append(v.latency_ms["t1"])  # t2 time comes from the score cache (model time), below
     controls = {k: {**_metrics(by_control.get(k, [])), "weight": w, "enabled": _enabled(content, k)} for k, w in WEIGHTS.items()}
-    posture = sum(c["weight"] * c["enabled"] * (c["pass_rate"] or 0) for c in controls.values()) / sum(WEIGHTS.values())
+    for k, c in controls.items():  # a held-out slice under 10 cases is noise; posture reads the full corpus instead
+        small = c["n"] < MIN_HELD_OUT
+        m = _metrics(full.get(k, [])) if small else c
+        c.update(posture_basis="full corpus" if small else "held-out", posture_n=m["n"], posture_pass_rate=m["pass_rate"])
+    posture = sum(c["weight"] * c["enabled"] * (c["posture_pass_rate"] or 0) for c in controls.values()) / sum(WEIGHTS.values())
     res = {
         "cases_run": len(cases),
         "split": "held-out 30% (sha256(id) % 100 >= 70); thresholds tuned on the other 70%",
@@ -123,7 +131,7 @@ def _run(content: dict, cases: list[dict], inj: dict | None) -> dict:
         "ablation": _ablation(content, cases),
     }
     if inj is not None:
-        res["tier2"] = {"sync_share": round(sync / len(cases), 4), "sync_n": sync, "latency_ms": _pct(t2_ms),
+        res["tier2"] = {"sync_share": round(sync / len(cases), 4), "sync_n": sync, "latency_ms": _pct(t2_ms), "latency_ms_short": _pct(t2_short),
                         **_calibrate(content, [c for c in cases if c["tags"][0] == "injection"], inj)}
     return res
 
@@ -131,6 +139,7 @@ def _run(content: dict, cases: list[dict], inj: dict | None) -> dict:
 def _calibrate(content: dict, cases: list[dict], inj: dict) -> dict:
     """Sweep `high` on the 70; report each profile on the held-out 30, also as if deferred texts had been scored."""
     probe = {**content, "injection": {**inj, "high": 2.0, "low": 2.0}}  # tier 2 runs as gated but never decides
+    ungated = {**probe, "injection": {**probe["injection"], "sync_max_tokens": 10**9}}
     fit, test, test_async = [], [], []
     for c in cases:
         v = scan(c["text"], c["point"], probe)
@@ -140,7 +149,7 @@ def _calibrate(content: dict, cases: list[dict], inj: dict) -> dict:
             continue
         test.append(row)
         if any(r.rule == "t2.deferred" for r in v.reasons):
-            row = (*row[:2], tier2.score(normalise(c["text"])[0]))
+            row = (*row[:2], scan(c["text"], c["point"], ungated).t2_score)
         test_async.append(row)
     profiles = _sweep(fit, inj.get("low", 0.0))
     for p in profiles.values():
@@ -165,12 +174,15 @@ def report(res: dict) -> str:
     head = f"{'source':16}{'n':>5}{'TP':>5}{'FP':>5}{'TN':>5}{'FN':>5}  prec   recall FPR   pass rate"
     line = lambda k, m: f"{k:16}{m['n']:5}{m['tp']:5}{m['fp']:5}{m['tn']:5}{m['fn']:5}  {f(m['precision'])}  {f(m['recall'])}  {f(m['fpr'])}  {f(m['pass_rate'])}"  # noqa: E731
     out = [f"HELD-OUT 30% of {res['cases_run']} cases run", head, *(line(k, m) for k, m in res["sources"].items()), line("OVERALL", res["overall"]), ""]
-    out.append("control       weight on  pass rate")
-    out += [f"{k:14}{c['weight']:6} {'y' if c['enabled'] else 'n':3} {f(c['pass_rate'])}" for k, c in res["controls"].items()]
+    out.append("control       weight on  pass rate  posture uses")
+    out += [f"{k:14}{c['weight']:6} {'y' if c['enabled'] else 'n':3} {f(c['pass_rate'])}      "
+            + (f"{f(c['posture_pass_rate'])} full corpus (held-out n={c['n']} < {MIN_HELD_OUT}, full n={c['posture_n']})"
+               if c["posture_basis"] == "full corpus" else "held-out") for k, c in res["controls"].items()]
     out.append("latency ms    " + "  ".join(f"{t} p50 {p['p50']} p95 {p['p95']}" for t, p in res["latency_ms"].items()))
     if "tier2" in res:
         t = res["tier2"]
-        out.append(f"tier 2 sync share {t['sync_share']:.3f} ({t['sync_n']}/{res['cases_run']}), model ms p50 {t['latency_ms']['p50']} p95 {t['latency_ms']['p95']}")
+        out.append(f"tier 2 sync share {t['sync_share']:.3f} ({t['sync_n']}/{res['cases_run']}), model ms p50 {t['latency_ms']['p50']} p95 {t['latency_ms']['p95']}"
+                   f" (short texts p50 {t['latency_ms_short']['p50']} p95 {t['latency_ms_short']['p95']})")
         out.append("profile   high (tuned on 70%)  held-out inj recall  FPR    | if deferred texts scored: recall  FPR")
         for k, p in t["profiles"].items():
             h, a = p["held_out"], p["held_out_if_async_scored"]

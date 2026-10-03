@@ -37,15 +37,7 @@ def scan(text: str, point: ScanPoint, policy: dict) -> Verdict:
         action = max([f[3] for f in findings] + ["block"] * t2_block, key=SEVERITY.__getitem__, default="allow")
         redacted = None
         if action == "redact":
-            masks: dict[tuple[int, int], list[str]] = {}
-            for _, s, e, a, mk, _ in findings:
-                if a == "redact" and mk not in masks.setdefault((s, e), []):
-                    masks[(s, e)].append(mk)
-            parts, pos = [], 0
-            for (s, e), mks in sorted(masks.items()):
-                parts += [norm[pos:s], " ".join(mks)]
-                pos = e
-            redacted = "".join(parts) + norm[pos:]
+            redacted = _masked(norm, [f for f in findings if f[3] == "redact"])
         return Verdict(
             action=action,
             reasons=reasons,
@@ -62,25 +54,43 @@ def scan(text: str, point: ScanPoint, policy: dict) -> Verdict:
         )
 
 
+def _masked(norm: str, findings) -> str:
+    """norm with each finding span replaced by its mask(s)."""
+    masks: dict[tuple[int, int], list[str]] = {}
+    for _, s, e, _, mk, _ in findings:
+        if mk not in masks.setdefault((s, e), []):
+            masks[(s, e)].append(mk)
+    parts, pos = [], 0
+    for (s, e), mks in sorted(masks.items()):
+        parts += [norm[pos:s], " ".join(mks)]
+        pos = e
+    return "".join(parts) + norm[pos:]
+
+
 # injection is the main threat on inbound text only (TOLLGATE 4.5); outbound args/responses stay tier 1
 T2_POINTS = ("prompt", "tool_result")
 
 
 def _tier2(norm, decoded, findings, point, policy, reasons, latency) -> tuple[float | None, bool]:
-    """Gated classifier. Sync on short text or a tier 1 inj.* escalation, else deferred. Returns (score, block)."""
+    """Gated classifier. Sync at `sync_points`, on short text or a tier 1 inj.* escalation, else deferred.
+
+    Scores the text with tier 1 PII/secret spans masked: a payee line with an IBAN is PII, not injection.
+    Returns (score, block).
+    """
     inj = policy.get("injection")
     if not isinstance(inj, dict) or "high" not in inj or point not in inj.get("points", T2_POINTS):
         return None, False  # no thresholds in the policy = tier 2 off
     t0 = time.perf_counter()
     escalated = any(f[0].startswith("inj.") for f in findings)
-    n = tier2.n_tokens(norm)
+    text = _masked(norm, [f for f in findings if f[0].startswith(("pii.", "secret."))])
+    n = tier2.n_tokens(norm)  # gate on the raw length: masking must not pull a deferred text into sync
     if n is None:
         reasons.append(Reason(rule="t2.unavailable", tier=2, detail="classifier not loaded"))
         return None, False
-    if not escalated and n > inj.get("sync_max_tokens", 64):
+    if not escalated and point not in inj.get("sync_points", ()) and n > inj.get("sync_max_tokens", 64):
         reasons.append(Reason(rule="t2.deferred", tier=2, detail=f"{n} tokens > sync_max_tokens"))
         return None, False  # ponytail: no async audit scoring yet; taint covers long tool results
-    scores = [tier2.score(t) for t in [norm, *decoded]]
+    scores = [tier2.score(t) for t in [text, *decoded]]
     latency["t2"] = round((time.perf_counter() - t0) * 1000, 3)
     if None in scores:
         reasons.append(Reason(rule="t2.unavailable", tier=2, detail="classifier failed"))

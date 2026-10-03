@@ -1,12 +1,14 @@
 """Tier 2: protectai/deberta-v3-base-prompt-injection-v2, ONNX fp32 on CPU. Lazy singleton; None when unavailable."""
 import hashlib
 import logging
+import os
 import threading
 
 log = logging.getLogger(__name__)
 REPO = "protectai/deberta-v3-base-prompt-injection-v2"
 CHUNK, OVERLAP = 256, 32
 CACHE: dict[str, list[float]] | None = None  # sha256(text) -> [score, ms]; set by the eval runner only
+MS = 0.0  # with CACHE set: model ms summed over score() calls; the eval runner resets it per case
 
 _lock = threading.Lock()
 _model = None  # (tokenizer, session, cls, sep) | False once loading failed
@@ -14,6 +16,8 @@ _model = None  # (tokenizer, session, cls, sep) | False once loading failed
 
 def _load():
     global _model
+    if os.environ.get("TOLLGATE_T2") == "off":  # fast test runs (smoke): unavailable without poisoning the singleton
+        return None
     if _model is None:
         with _lock:
             if _model is None:
@@ -72,4 +76,6 @@ def score(text: str) -> float | None:
         if s is None:
             return None
         CACHE[key] = [s, round((time.perf_counter() - t0) * 1000, 3)]
+    global MS
+    MS += CACHE[key][1]
     return CACHE[key][0]

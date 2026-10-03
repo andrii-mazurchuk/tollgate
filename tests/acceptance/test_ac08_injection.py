@@ -1,8 +1,8 @@
 """AC8 (injection part) and AC9, on the held-out 30% at the balanced profile (policy.yaml).
 
-Floors are the measured held-out numbers (2026-10-03), not the AC8 targets (recall >= 85%, FPR <= 5%).
-Recall misses the target because tier 2 is gated: prompts over 64 tokens are deferred, and the held-out
-recall with deferred texts scored is 0.837 (reported as held_out_if_async_scored).
+Floors are the measured held-out numbers (2026-10-03, tier 2 tune), not the AC8 targets (recall >= 85%, FPR <= 5%).
+Prompts are scored at any length (`sync_points: [prompt]`), so held-out recall now equals the as-if-async recall,
+0.837: just under the target, the misses are model misses (deepset), not gating.
 """
 import pytest
 import yaml
@@ -20,7 +20,7 @@ def _cached() -> bool:
         return False
 
 
-pytestmark = [pytest.mark.track_b]
+pytestmark = [pytest.mark.track_b, pytest.mark.slow]
 needs_model = pytest.mark.skipif(not _cached(), reason="tier 2 model not in the HF cache")
 
 
@@ -35,15 +35,15 @@ def test_ac08_injection_held_out_balanced(result):
     t2 = result["tier2"]
     inj = result["controls"]["injection"]
     assert inj["n"] < 400  # held-out only
-    assert inj["recall"] >= 0.62  # measured 0.6415; target 0.85 missed (gating), see module docstring
+    assert inj["recall"] >= 0.82  # measured 0.837; target 0.85 just missed, see module docstring
     assert inj["fpr"] <= 0.02  # measured 0.0088; target 0.05 met
-    assert t2["profiles"]["balanced"]["held_out_if_async_scored"]["recall"] >= 0.80  # measured 0.8365
+    assert t2["profiles"]["balanced"]["held_out_if_async_scored"]["recall"] >= 0.80  # measured 0.837
     assert 0 < t2["sync_share"] < 1
 
 
 @needs_model
 def test_ac15_t2_short_text_latency(result):
-    assert result["tier2"]["latency_ms"]["p95"] < 150  # measured 87 ms p95 (fp32, 4 threads); AC15 target 80
+    assert result["tier2"]["latency_ms_short"]["p95"] < 150  # texts <= sync_max_tokens; measured 84 ms p95 (fp32, 4 threads); AC15 target 80
 
 
 def test_ac09_obfuscation_within_10_points(result):

@@ -6,7 +6,7 @@ import yaml
 
 from tollgate.eval import runner
 
-pytestmark = [pytest.mark.track_b]
+pytestmark = [pytest.mark.track_b, pytest.mark.slow]
 
 
 @pytest.fixture(scope="module")
