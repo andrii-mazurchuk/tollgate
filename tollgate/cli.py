@@ -77,6 +77,7 @@ def key_issue() -> int:
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252 and mangle "…" in redactions
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "test":
         args = sys.argv[2:]
