@@ -31,7 +31,9 @@ async def chat(request: Request):
     return JSONResponse({"id": f"scripted-{len(results)}", "object": "chat.completion", "model": MODEL,
                          "choices": [{"index": 0, "message": msg,
                                       "finish_reason": "tool_calls" if "tool_calls" in msg else "stop"}],
-                         "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}})
+                         # a rough, honest count (~4 chars/token), so the daily budget (SCENARIO 5.4) is spent
+                         "usage": {"prompt_tokens": (n := len(json.dumps(msgs)) // 4), "completion_tokens": 20,
+                                   "total_tokens": n + 20}})
 
 
 APP = Starlette(routes=[Route("/v1/chat/completions", chat, methods=["POST"])])

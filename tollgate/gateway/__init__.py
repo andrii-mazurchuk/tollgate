@@ -336,6 +336,8 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
               Route("/admin/approvals/{id}", admin_decide, methods=["POST"]),
               Route("/v1/chat/completions", model_door.build_door(policy, upstream), methods=["POST"])]
     routes += [Mount(f"/mcp/{r}", app=require_key(r, a)) for r, a in apps.items()]
+    from tollgate import edge  # late: edge -> scenario -> gateway
+    routes += edge.routes(policy)
     app = Starlette(routes=routes, lifespan=lifespan)
     app.state.approvals, app.state.pins, app.state.feed = approvals, pins, feed
     return app
