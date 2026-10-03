@@ -3,7 +3,9 @@
 mode: balanced
 
 servers:
-  github: { mock: mocks.github }
+  github:  { mock: mocks.github }
+  tickets: { mock: mocks.tickets }
+  files:   { mock: mocks.files }
 
 roles:
   role-1:
@@ -11,7 +13,12 @@ roles:
       github: { access: read }
   role-2:
     servers:
-      github: { access: rw }
+      github:  { access: rw }
+      tickets: { access: rw }
+      files:   { tools: [fs.list, fs.read, fs.write] }   # exact pick, no fs.delete
+    constrain:
+      files.fs.read: { path: "/workspace/**" }
+      tickets.query: { sql: select_only }
 
 labels:
   github.issues.read: [untrusted_source]
