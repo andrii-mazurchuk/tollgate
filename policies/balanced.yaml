@@ -43,6 +43,7 @@ taint:                                         # session taint; a session = one 
 
 approval: { timeout_s: 30 }                    # `approve` verdicts wait this long for an admin decision (tollgate approve|deny <id>), then fail closed
 loops: { max_identical_calls: 5 }              # same key + tool + args more than N times in a row -> loop.cutoff (AC11)
+# feed: { url: http://127.0.0.1:8090/bundle.json, interval_s: 10 }   # P6 external signature feed: pulled, HMAC-verified, written to content.signatures; `tollgate up` starts the feed server
 
 content:                                       # content pipeline (Track B semantics, mirrored from policy.yaml)
   pii:                                         # tier 1 PII, regex + checksum; action per type: allow|redact|approve|block

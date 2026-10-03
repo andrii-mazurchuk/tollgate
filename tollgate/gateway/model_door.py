@@ -98,9 +98,12 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
             except ToolError as e:
                 return _err(400, "content.blocked", str(e), ev.reasons)
 
-            base = os.environ.get("TOLLGATE_UPSTREAM") or DEFAULT_UPSTREAM
+            base, transport = os.environ.get("TOLLGATE_UPSTREAM") or DEFAULT_UPSTREAM, upstream
+            if base == "scripted":  # offline demo: in-process hijacked-LLM replay, tagged model=scripted-hijacked
+                from tollgate.agent.scripted import APP
+                base, transport = "http://scripted/v1", httpx2.ASGITransport(app=APP)
             try:
-                async with httpx2.AsyncClient(transport=upstream, timeout=300) as c:
+                async with httpx2.AsyncClient(transport=transport, timeout=300) as c:
                     r = await c.post(f"{base.rstrip('/')}/chat/completions", json=body)
                 out = r.json()
             except (httpx2.HTTPError, ValueError) as e:

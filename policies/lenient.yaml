@@ -42,6 +42,7 @@ taint:                                         # session taint; a session = one 
 
 approval: { timeout_s: 120 }                   # a human has 2 minutes to click approve (dashboard / tollgate approve <id>); then approval.timeout
 loops: { max_identical_calls: 10 }             # tolerate retries and polling agents
+# feed: { url: http://127.0.0.1:8090/bundle.json, interval_s: 10 }   # P6 external signature feed: pulled, HMAC-verified, written to content.signatures; `tollgate up` starts the feed server
 
 content:                                       # content pipeline (Track B semantics)
   pii:                                         # mask rather than block

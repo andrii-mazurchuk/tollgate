@@ -97,6 +97,10 @@ def validate(p) -> dict:
     mic = (p.get("loops") or {}).get("max_identical_calls", 5)
     if not isinstance(mic, int) or isinstance(mic, bool) or mic < 1:
         raise ValueError("loops.max_identical_calls: need an integer >= 1")
+    f = p.get("feed")
+    if f is not None and (not isinstance(f, dict) or not isinstance(f.get("url"), str)
+                          or not isinstance(f.get("interval_s", 10), (int, float)) or f.get("interval_s", 10) <= 0):
+        raise ValueError("feed: need {url: http://..., interval_s: number > 0}")
     return p
 
 

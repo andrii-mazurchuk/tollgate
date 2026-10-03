@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import hashlib
 import json
@@ -21,6 +22,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
 from tollgate.content import scan
+from tollgate.feed import Puller
 from tollgate.contract import SEVERITY, AuditEvent, Reason, Verdict
 from tollgate.gateway import audit, keys, model_door, taint
 from tollgate.gateway.approvals import Approvals, admin_ok
@@ -253,6 +255,15 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
     sources, approvals, pins = load_sources(policy), Approvals(), Pins()
     servers = {r: build_role_server(r, policy, sources, approvals, pins) for r in policy.data["roles"]}
     apps = {r: s.http_app(path="/") for r, s in servers.items()}
+    feed = Puller(None)
+
+    async def feed_loop():  # P6: re-reads `feed:` every cycle, so enabling it in policy.yaml needs no restart
+        while True:
+            cfg = policy.data.get("feed") or {}
+            if cfg.get("url"):
+                feed.state["url"] = cfg["url"]
+                await feed.pull((policy.data.get("content") or {}).get("signatures") or "signatures.yaml")
+            await asyncio.sleep(float(cfg.get("interval_s", 10)))
 
     @contextlib.asynccontextmanager
     async def lifespan(_):
@@ -261,13 +272,17 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
         async with contextlib.AsyncExitStack() as stack:
             for a in apps.values():
                 await stack.enter_async_context(a.router.lifespan_context(a))
-            yield
+            task = asyncio.create_task(feed_loop())
+            try:
+                yield
+            finally:
+                task.cancel()
 
     async def healthz(_):
         st = policy.status()
         return JSONResponse({"ok": True, "policy": st, "roles": list(apps), "sources": list(sources),
                              "policy_roles": list(policy.data.get("roles") or {}),
-                             "pin_alerts": list(pins.alerts.values())})
+                             "pin_alerts": list(pins.alerts.values()), "feed": feed.state})
 
     async def admin_taint(_):  # read-only; ponytail: no auth, bind to 127.0.0.1 only
         return JSONResponse(taint.STATE)
@@ -296,5 +311,5 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
               Route("/v1/chat/completions", model_door.build_door(policy, upstream), methods=["POST"])]
     routes += [Mount(f"/mcp/{r}", app=require_key(r, a)) for r, a in apps.items()]
     app = Starlette(routes=routes, lifespan=lifespan)
-    app.state.approvals, app.state.pins = approvals, pins
+    app.state.approvals, app.state.pins, app.state.feed = approvals, pins, feed
     return app
