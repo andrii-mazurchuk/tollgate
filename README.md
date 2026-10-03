@@ -34,7 +34,7 @@ Agent ──► Edge (local) ──────────────► Hub (
 
 ## Quick start
 
-Needs Python ≥ 3.13 and [uv](https://docs.astral.sh/uv/). The first `tollgate test` downloads the tier 2 ONNX model (~739 MB) from Hugging Face.
+Needs Python ≥ 3.13 and [uv](https://docs.astral.sh/uv/). The first `tollgate test` downloads the tier 2 ONNX model from Hugging Face: ~739 MB (about 1.4 GB on disk on Windows); the first run takes ~5–6 min, warm runs ~30 s.
 
 ```bash
 uv sync
@@ -64,7 +64,7 @@ List the role's tools: `uv run fastmcp list http://127.0.0.1:8080/mcp/role-1/ --
 
 Dashboard (started by `tollgate up`, or alone with `uv run tollgate dashboard`): http://127.0.0.1:8501. It reads `audit/` and the gateway's `/healthz`, `/admin/*`. Its one write action is the approval panel's Approve/Deny, which uses `TOLLGATE_ADMIN_TOKEN` from the environment (never typed into the page). `uv run python dashboard/seed_demo.py` fills `audit/events.jsonl` with real gateway flows.
 
-Fast test run without the slow model tests: `uv run pytest -q -m "not slow"` (143 passed, 6 slow deselected).
+Fast test run without the slow model tests: `uv run pytest -q -m "not slow"` (144 passed, 6 slow deselected).
 
 **Ollama.** The model door (`/v1/chat/completions`) proxies to Ollama at `http://127.0.0.1:11434/v1` (override with `TOLLGATE_UPSTREAM`). Run `ollama pull qwen3:1.7b` (role-1) and `ollama pull qwen3:4b` (role-2). Without Ollama, an allowed model returns **502 `upstream.error`**; the allow-list (403 `model.denied`) and budget (429) checks still work. Everything else runs without Ollama.
 

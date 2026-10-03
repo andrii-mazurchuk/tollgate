@@ -2,11 +2,15 @@
 import logging
 import os
 import re
+from pathlib import Path
 
 import yaml
 
+ROOT = Path(__file__).resolve().parents[2]  # policy paths are relative to the repo root, not the CWD
+
 log = logging.getLogger(__name__)
 _ACTIONS = ("allow", "redact", "approve", "block")
+_missing: set[str] = set()
 _cache: dict[str, tuple[int, list, list[str]]] = {}  # path -> (mtime_ns, rules, errors)
 
 
@@ -35,9 +39,13 @@ def rules(path: str | None) -> list:
     """(rule_id, regex, action, detail) for the feed at path. Cheap: one stat per call."""
     if not path:
         return []
+    path = str(ROOT / path)  # absolute paths pass through unchanged
     try:
         mtime = os.stat(path).st_mtime_ns
     except OSError:
+        if path not in _missing:  # warn once per path, rules() runs on every scan
+            _missing.add(path)
+            log.warning("signatures file %s not found: tier 1 feed has 0 signatures", path)
         return []
     hit = _cache.get(path)
     if hit is None or hit[0] != mtime:
@@ -52,4 +60,4 @@ def rules(path: str | None) -> list:
 
 def errors(path: str) -> list[str]:
     rules(path)
-    return _cache.get(path, (0, [], []))[2]
+    return _cache.get(str(ROOT / path), (0, [], []))[2]
