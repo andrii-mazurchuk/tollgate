@@ -5,6 +5,8 @@ description = "AI control layer: per-role virtual MCPs, session taint, local con
 requires-python = ">=3.13"
 dependencies = [
     "fastmcp==4.0.10",
+    "pandas>=3.0.6",
+    "pyarrow>=25.0.1",
     "pyyaml>=6",
 ]
 
