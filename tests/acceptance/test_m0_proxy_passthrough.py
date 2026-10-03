@@ -1,9 +1,27 @@
 import pytest
+from fastmcp import Client
 
 pytestmark = [pytest.mark.track_a]
 
 
-@pytest.mark.xfail(strict=True, reason="M0 gate: not built yet. Remove this marker when green.")
-def test_m0_proxy_passthrough():
+async def test_m0_proxy_passthrough():
     """M0 gate: tools/list through the Tollgate proxy equals the mock github server's list, and a tools/call round-trips (in-memory fastmcp Client)."""
-    raise NotImplementedError
+    from mocks.github import mcp as github
+    from tollgate.gateway import build_gateway
+
+    gateway = build_gateway(github)
+
+    async with Client(github) as src, Client(gateway) as gw:
+        src_tools = {t.name: t for t in await src.list_tools()}
+        gw_tools = {t.name: t for t in await gw.list_tools()}
+
+        assert set(src_tools) == {"issues_read", "repo_read", "pr_create"}
+        assert set(gw_tools) == {"github.issues.read", "github.repo.read", "github.pr.create"}
+        assert gw_tools["github.issues.read"].annotations.read_only_hint is True
+        assert gw_tools["github.pr.create"].annotations.read_only_hint is False
+
+        args = {"repo": "acme/website", "number": 12}
+        direct = await src.call_tool("issues_read", args)
+        proxied = await gw.call_tool("github.issues.read", args)
+        assert proxied.data == direct.data
+        assert "acme/payroll" in proxied.data
