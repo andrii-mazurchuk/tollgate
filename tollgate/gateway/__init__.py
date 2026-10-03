@@ -18,7 +18,7 @@ from fastmcp.tools.base import ToolResult
 from mcp.types import TextContent
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
-from starlette.routing import Mount
+from starlette.routing import Mount, Route
 
 from tollgate.content import scan
 from tollgate.contract import SEVERITY, AuditEvent, Reason, Verdict
@@ -101,7 +101,7 @@ class RoleGate(Middleware):
             role=self.role, key_id=key_id, door="tool", verdict="allow", scan_point="tool_args",
             source=name.partition(".")[0], tool=name,
             content_sha256=hashlib.sha256(args_json.encode()).hexdigest(),
-            policy_version=hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()[:8],
+            policy_version=self.policy.version,
         )
         try:
             return await self._decide(context, call_next, name, args, args_json, auth, ident, key_id, data, ev)
@@ -209,4 +209,14 @@ def build_app(policy: PolicyHolder) -> Starlette:
                 await stack.enter_async_context(a.router.lifespan_context(a))
             yield
 
-    return Starlette(routes=[Mount(f"/mcp/{r}", app=require_key(r, a)) for r, a in apps.items()], lifespan=lifespan)
+    async def healthz(_):
+        st = policy.status()
+        return JSONResponse({"ok": True, "policy": st, "roles": list(apps), "sources": list(sources),
+                             "policy_roles": list(policy.data.get("roles") or {})})
+
+    async def admin_taint(_):  # read-only; ponytail: no auth, bind to 127.0.0.1 only
+        return JSONResponse(taint.STATE)
+
+    routes = [Route("/healthz", healthz), Route("/admin/taint", admin_taint)]
+    routes += [Mount(f"/mcp/{r}", app=require_key(r, a)) for r, a in apps.items()]
+    return Starlette(routes=routes, lifespan=lifespan)

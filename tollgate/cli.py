@@ -24,6 +24,47 @@ def replay_github() -> int:
     return 0
 
 
+def _opt(name: str, default: str | None = None) -> str | None:
+    args = sys.argv[2:]
+    return args[args.index(name) + 1] if name in args and args.index(name) + 1 < len(args) else default
+
+
+def serve() -> int:
+    """One process: role MCPs (mocks in-process), /healthz, /admin/taint. Policy hot reloads on the next request."""
+    import logging
+
+    import uvicorn
+
+    from tollgate.gateway import build_app
+    from tollgate.gateway.policy import DEFAULT_PATH, load_policy
+
+    logging.basicConfig(level=logging.WARNING)  # policy reloads/rejections log at WARNING/ERROR
+    port = int(_opt("--port", "8080"))
+    holder = load_policy(_opt("--policy") or DEFAULT_PATH)
+    app = build_app(holder)
+    base = f"http://127.0.0.1:{port}"
+    print(f"Tollgate on {base}  policy {holder.status()['version']} ({holder.path})")
+    for role in holder.data["roles"]:
+        print(f"  {role}: {base}/mcp/{role}/   (key: tollgate key issue --role {role})")
+    print(f"  health: {base}/healthz   taint: {base}/admin/taint", flush=True)
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    return 0
+
+
+def key_issue() -> int:
+    from tollgate.gateway.keys import issue
+
+    role, key_id = _opt("--role"), _opt("--key-id")
+    if not role or "_" in role + (key_id or ""):
+        print("usage: tollgate key issue --role R [--key-id K] [--port P]", file=sys.stderr)
+        return 2
+    key = issue(role, key_id)
+    print(key)
+    print(f"MCP URL: http://127.0.0.1:{_opt('--port', '8080')}/mcp/{role}/")
+    print(f"Header:  Authorization: Bearer {key}")
+    return 0
+
+
 def main() -> int:
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "test":
@@ -31,7 +72,12 @@ def main() -> int:
         return pytest.main(["-q", *sys.argv[2:]])
     if cmd == "replay" and sys.argv[2:3] == ["github"]:
         return replay_github()
-    print("usage: tollgate {serve|test|replay|key}  (wired: test, replay github)", file=sys.stderr)
+    if cmd == "serve":
+        return serve()
+    if cmd == "key" and sys.argv[2:3] == ["issue"]:
+        return key_issue()
+    print("usage: tollgate {serve [--port P] [--policy F]|test|replay github|key issue --role R [--key-id K]}",
+          file=sys.stderr)
     return 2
 
 
