@@ -79,11 +79,19 @@ def validate(p) -> dict:
             if not isinstance(c, dict) or tool.split(".")[0] not in servers \
                     or not all(isinstance(v, str) for v in c.values()):
                 raise ValueError(f"roles.{role}.constrain.{tool}: bad constraint (want {{arg: glob|select_only}})")
+        if not all(isinstance(m, str) for m in r.get("models") or []) or not isinstance(r.get("models") or [], list):
+            raise ValueError(f"roles.{role}.models: need a list of model names")
+        tpd = (r.get("budget") or {}).get("tokens_per_day")
+        if tpd is not None and (not isinstance(tpd, int) or isinstance(tpd, bool) or tpd < 0):
+            raise ValueError(f"roles.{role}.budget.tokens_per_day: need a non-negative integer")
     t = p.get("taint") or {}
     if not isinstance(t, dict) or (t.get("block_flow") or {}).get("action", "block") not in ("block", "approve"):
         raise ValueError("taint.block_flow.action: need block|approve")
     if "enabled" in t and not isinstance(t["enabled"], bool):
         raise ValueError("taint.enabled: need true|false")
+    mic = (p.get("loops") or {}).get("max_identical_calls", 5)
+    if not isinstance(mic, int) or isinstance(mic, bool) or mic < 1:
+        raise ValueError("loops.max_identical_calls: need an integer >= 1")
     return p
 
 

@@ -22,7 +22,7 @@ from starlette.routing import Mount, Route
 
 from tollgate.content import scan
 from tollgate.contract import SEVERITY, AuditEvent, Reason, Verdict
-from tollgate.gateway import audit, keys, taint
+from tollgate.gateway import audit, keys, model_door, taint
 from tollgate.gateway.policy import PolicyHolder
 
 
@@ -76,11 +76,30 @@ def check_args(constraint: dict, args: dict) -> str | None:
     return None
 
 
+def content_policy(data: dict, role_policy: dict) -> dict:
+    """roles.<role>.content overrides keys of the global content section (A's section; B's stays untouched)."""
+    return {**(data.get("content") or {}), **(role_policy.get("content") or {})}
+
+
+def apply_verdict(ev: AuditEvent, v: Verdict, point: str) -> None:
+    """Folds a content verdict into the event; raises on block/approve. Keeps reasons of flagged allows."""
+    ev.reasons += v.reasons
+    ev.transforms += [t for t in v.transforms if t not in ev.transforms]
+    ev.t2_score = v.t2_score if v.t2_score is not None else ev.t2_score
+    for tier, ms in v.latency_ms.items():
+        ev.latency_ms[tier] = round(ev.latency_ms.get(tier, 0) + ms, 3)
+    if SEVERITY[v.action] > SEVERITY[ev.verdict]:
+        ev.verdict, ev.scan_point = v.action, point
+    if v.action in ("block", "approve"):  # approve not built yet: treated as block
+        raise ToolError(f"content: {v.action} at {point}: " + "; ".join(f"{r.rule} ({r.detail})" for r in v.reasons))
+
+
 class RoleGate(Middleware):
     """Per-role scoping. Reads the policy on every request; denies on call too (list filtering does not block)."""
 
     def __init__(self, role: str, policy: PolicyHolder, server: FastMCP):
         self.role, self.policy, self.server = role, policy, server
+        self.last: dict[str, tuple[str, int]] = {}  # key_id -> (last call signature, times in a row)
 
     def role_policy(self) -> dict:
         return (self.policy.data.get("roles") or {}).get(self.role) or {}
@@ -110,18 +129,6 @@ class RoleGate(Middleware):
             ev.tainted, ev.holds_private = bool(st["tainted"]), bool(st["holds_private"])
             audit.write(ev)
 
-    def _apply(self, ev: AuditEvent, v: Verdict, point: str) -> None:
-        """Folds a content verdict into the event; raises on block/approve. Keeps reasons of flagged allows."""
-        ev.reasons += v.reasons
-        ev.transforms += [t for t in v.transforms if t not in ev.transforms]
-        ev.t2_score = v.t2_score if v.t2_score is not None else ev.t2_score
-        for tier, ms in v.latency_ms.items():
-            ev.latency_ms[tier] = round(ev.latency_ms.get(tier, 0) + ms, 3)
-        if SEVERITY[v.action] > SEVERITY[ev.verdict]:
-            ev.verdict, ev.scan_point = v.action, point
-        if v.action in ("block", "approve"):  # approve not built yet: treated as block
-            raise ToolError(f"content: {v.action} at {point}: " + "; ".join(f"{r.rule} ({r.detail})" for r in v.reasons))
-
     async def _decide(self, context, call_next, name, args, args_json, auth, ident, key_id, data, ev):
         def deny(rule: str, msg: str):
             ev.verdict = "block"
@@ -140,16 +147,23 @@ class RoleGate(Middleware):
         if why:
             deny("role.constraint", f"{name} {why}")
 
+        sig = f"{name} {json.dumps(args, sort_keys=True, default=str)}"
+        prev, n = self.last.get(key_id, (None, 0))
+        n = n + 1 if prev == sig else 1
+        self.last[key_id] = (sig, n)
+        cap = (data.get("loops") or {}).get("max_identical_calls", 5)
+        if n > cap:
+            deny("loop.cutoff", f"{name} called {n} times in a row with identical arguments (max {cap})")
+
         t0 = time.perf_counter()
         blocked = taint.check(data, key_id, name)
         ev.latency_ms["taint"] = round((time.perf_counter() - t0) * 1000, 3)
         if blocked:
             deny("taint.flow", blocked)
 
-        # roles.<role>.content overrides keys of the global content section (A's section; B's stays untouched)
-        cpol = {**(data.get("content") or {}), **(rp.get("content") or {})}
+        cpol = content_policy(data, rp)
         v = scan(args_json, "tool_args", cpol)
-        self._apply(ev, v, "tool_args")
+        apply_verdict(ev, v, "tool_args")
         if v.action == "redact":
             try:
                 context.message.arguments = json.loads(v.redacted_text)
@@ -159,7 +173,7 @@ class RoleGate(Middleware):
         result = await call_next(context)
         text = "".join(getattr(b, "text", "") for b in result.content)
         v = scan(text, "tool_result", cpol)
-        self._apply(ev, v, "tool_result")
+        apply_verdict(ev, v, "tool_result")
         if v.action == "redact":
             sc = result.structured_content
             # ponytail: only the {"result": str} wrapper is rewritten; other structured output is dropped
@@ -197,7 +211,7 @@ def require_key(role: str, app):
     return guard
 
 
-def build_app(policy: PolicyHolder) -> Starlette:
+def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
     """/mcp/{role}/ per role in the policy. ponytail: roles fixed at startup; new roles need a restart."""
     sources = load_sources(policy)
     apps = {r: build_role_server(r, policy, sources).http_app(path="/") for r in policy.data["roles"]}
@@ -217,6 +231,10 @@ def build_app(policy: PolicyHolder) -> Starlette:
     async def admin_taint(_):  # read-only; ponytail: no auth, bind to 127.0.0.1 only
         return JSONResponse(taint.STATE)
 
-    routes = [Route("/healthz", healthz), Route("/admin/taint", admin_taint)]
+    async def admin_budget(_):  # read-only, same caveat as /admin/taint
+        return JSONResponse(model_door.budget(policy.data))
+
+    routes = [Route("/healthz", healthz), Route("/admin/taint", admin_taint), Route("/admin/budget", admin_budget),
+              Route("/v1/chat/completions", model_door.build_door(policy, upstream), methods=["POST"])]
     routes += [Mount(f"/mcp/{r}", app=require_key(r, a)) for r, a in apps.items()]
     return Starlette(routes=routes, lifespan=lifespan)

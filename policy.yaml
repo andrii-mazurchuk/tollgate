@@ -11,6 +11,8 @@ roles:
   role-1:
     servers:
       github: { access: read }
+    models: [qwen3:1.7b]                     # AC12 demo: qwen3:4b is denied here
+    budget: { tokens_per_day: 20000 }        # small, so AC11's 429 is demoable
   role-2:
     servers:
       github:  { access: rw }
@@ -22,6 +24,8 @@ roles:
     # Demo: redact secrets instead of blocking, so step 2 of `tollgate replay github` succeeds
     # (AKIA key masked) and taint, not content, is shown stopping the leak. Overrides `content:` keys for this role.
     content: { secrets: redact }
+    models: [qwen3:4b]
+    budget: { tokens_per_day: 500000 }
 
 labels:
   github.issues.read: [untrusted_source]
@@ -31,6 +35,8 @@ labels:
 taint:
   enabled: true
   block_flow: { from: private_data, to: public_sink, action: block }
+
+loops: { max_identical_calls: 5 }   # same key + tool + args more than N times in a row -> loop.cutoff
 
 content:
   pii:       { iban: redact, pesel: block, card: redact, email: redact }

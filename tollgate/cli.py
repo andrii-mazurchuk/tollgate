@@ -30,7 +30,7 @@ def _opt(name: str, default: str | None = None) -> str | None:
 
 
 def serve() -> int:
-    """One process: role MCPs (mocks in-process), /healthz, /admin/taint. Policy hot reloads on the next request."""
+    """One process: role MCPs (mocks in-process), model door, /healthz, /admin/taint, /admin/budget. Policy hot reloads on the next request."""
     import logging
 
     import uvicorn
@@ -46,7 +46,11 @@ def serve() -> int:
     print(f"Tollgate on {base}  policy {holder.status()['version']} ({holder.path})")
     for role in holder.data["roles"]:
         print(f"  {role}: {base}/mcp/{role}/   (key: tollgate key issue --role {role})")
-    print(f"  health: {base}/healthz   taint: {base}/admin/taint", flush=True)
+    import os
+
+    from tollgate.gateway.model_door import DEFAULT_UPSTREAM
+    print(f"  model door: {base}/v1/chat/completions  -> {os.environ.get('TOLLGATE_UPSTREAM') or DEFAULT_UPSTREAM}")
+    print(f"  health: {base}/healthz   taint: {base}/admin/taint   budget: {base}/admin/budget", flush=True)
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
     return 0
 
