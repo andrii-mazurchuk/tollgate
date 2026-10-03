@@ -340,5 +340,5 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
     from tollgate import edge  # late: edge -> scenario -> gateway
     routes += edge.routes(policy)
     app = Starlette(routes=routes, lifespan=lifespan)
-    app.state.approvals, app.state.pins, app.state.feed = approvals, pins, feed
+    app.state.approvals, app.state.pins, app.state.feed, app.state.sources = approvals, pins, feed, sources
     return app

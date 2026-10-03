@@ -1,4 +1,5 @@
-"""Local edge UI: static app at /edge, JSON API at /edge/api/ (read-only except the scenario), SSE of new trace ids.
+"""Local edge UI: static app at /edge, JSON API at /edge/api/ (read-only except the scenario and local settings),
+SSE of new trace ids.
 
 Loopback only: the API serves full local text and the edge key. Sessions = role keys (taint is keyed by key)."""
 import asyncio
@@ -260,6 +261,79 @@ SNIPPETS = {
 }
 
 
+LABEL_WORDS = {"untrusted_source": "outside text", "private_data": "private data", "public_sink": "public destination"}
+LABEL_WHY = {"untrusted_source": "anyone outside can write this text", "private_data": "returns company or customer data",
+             "public_sink": "what it writes can be seen outside the company"}
+ACTION_WORDS = {"block": "block", "approve": "ask a human", "redact": "mask", "allow": "allow"}
+PII = {"iban": "IBANs", "pesel": "PESEL numbers", "nip": "NIP tax ids", "card": "card numbers", "email": "email addresses"}
+
+
+def limit_words(arg: str, rule: str) -> str:
+    if rule == "select_only":
+        return f"{arg}: a single SELECT only"
+    if arg == "to_domain":
+        return f"recipients @{rule.lstrip('@')} only"
+    return f"{arg}: only {rule.removesuffix('/**')}" + (" and below" if rule.endswith("/**") else "")
+
+
+def agent(data: dict, role: str, source_tools: dict, feed_state: dict, used: dict) -> dict:
+    """Everything about how this role's agent is set up, from the live policy and each source's own tool list."""
+    from tollgate.gateway import content_policy, tool_allowed
+    from types import SimpleNamespace
+    rp = (data.get("roles") or {}).get(role) or {}
+    constrain, approval = rp.get("constrain") or {}, set(rp.get("approval") or [])
+    servers = []
+    for srv, tools in source_tools.items():
+        allowed, denied = [], []
+        for t in tools:
+            name = f"{srv}.{t.name.replace('_', '.')}"
+            ro = bool(t.annotations and t.annotations.read_only_hint)
+            item = {"name": name, "plain": explain.tool(name), "write": not ro}
+            if tool_allowed(rp, SimpleNamespace(name=name, annotations=t.annotations)):
+                lim = [limit_words(a, r) for a, r in (constrain.get(name) or {}).items()]
+                allowed.append({**item, "limits": lim + (["asks a human first"] if name in approval else [])})
+            else:
+                denied.append(item)
+        spec = (rp.get("servers") or {}).get(srv) or {}
+        servers.append({"name": srv, "reachable": bool(spec), "access": spec.get("access") or "picked tools" if spec else None,
+                        "allowed": allowed, "denied": denied})
+    flow = (data.get("taint") or {}).get("block_flow") or {}
+    on = (data.get("taint") or {}).get("enabled", True)
+    act = ACTION_WORDS.get(flow.get("action", "block"), "block")
+    labels = [{"tool": t, "plain": explain.tool(t), "labels": ls, "words": [LABEL_WORDS[x] for x in ls],
+               "why": "; ".join(LABEL_WHY[x] for x in ls)} for t, ls in (data.get("labels") or {}).items()
+              if any(t.startswith(s["name"] + ".") and s["reachable"] for s in servers)]
+    c = content_policy(data, rp)
+    acts = {**{PII.get(k, k): v for k, v in (c.get("pii") or {}).items()}, "Secrets": c.get("secrets", "block")}
+    inj = c.get("injection") or {}
+    lo, hi = inj.get("low", 0.5), inj.get("high", 0.9)
+    sig_path = Path(c.get("signatures") or "signatures.yaml")
+    try:
+        import yaml
+        n_sig = len(yaml.safe_load(sig_path.read_text(encoding="utf-8")) or [])
+    except (OSError, ValueError, TypeError):
+        n_sig = 0
+    return {
+        "role": role, "agent": explain.AGENTS.get(role, role), "servers": servers,
+        "models": rp.get("models") or [], "budget": used,
+        "labels": labels,
+        "flow_rule": {"enabled": on, "action": flow.get("action", "block"),
+                      "sentence": (f"When a session has read outside text and holds private data, a call to a public "
+                                   f"destination is {'blocked' if act == 'block' else 'held until a human approves'}.")
+                      if on else "Off: sessions are not tracked, only the role limits apply."},
+        "content": {"masked": [k for k, v in acts.items() if v == "redact"],
+                    "blocked": [k for k, v in acts.items() if v == "block"],
+                    "asks": [k for k, v in acts.items() if v == "approve"],
+                    "injection": {"profile": data.get("mode"), "low": lo, "high": hi,
+                                  "words": f"Blocks when the classifier is at least {round(hi * 100)}% sure; "
+                                           + (f"flags from {round(lo * 100)}%." if lo < hi else "nothing is only flagged.")
+                                           + (" Hidden links that leak data are blocked." if inj.get("md_exfil", "block") == "block" else "")},
+                    "signatures": {"version": feed_state.get("version"), "count": n_sig,
+                                   "source": "threat feed" if feed_state.get("url") else "local file"}},
+        "policy": {"profile": data.get("mode"), "managed_by": "your security team"},
+    }
+
+
 def routes(policy) -> list:
     def local(view):
         async def h(request: Request):
@@ -342,6 +416,29 @@ def routes(policy) -> list:
             return JSONResponse({"ok": False, "error": f"{type(e).__name__}: {e}"})
         return JSONResponse({"ok": True, "tools": [{"name": t, "plain": explain.tool(t)} for t in tools]})
 
+    async def get_agent(request):
+        from tollgate.gateway import model_door
+        role = (keys.verify(edge_key()) or ("role-2",))[0]
+        st = request.app.state
+        tools = {n: await src.list_tools() for n, src in (getattr(st, "sources", None) or {}).items()}
+        data = policy.data
+        a = agent(data, role, tools, st.feed.state, model_door.budget(data).get(role) or {})
+        a["policy"]["version"] = policy.status()["version"]
+        return JSONResponse(a)
+
+    def settings_view():
+        return {"settings": local_text.settings(), "ceiling": local_text.ceiling(policy.data),
+                "path": str(local_text.settings_path())}
+
+    async def settings(request):
+        if request.method == "POST":
+            try:
+                new = local_text.check_settings(await request.json(), local_text.ceiling(policy.data))
+            except ValueError as e:
+                return JSONResponse({"error": str(e) or "need a JSON object"}, 400)
+            local_text.save_settings(new)
+        return JSONResponse(settings_view())
+
     async def stream(request):
         q: asyncio.Queue = asyncio.Queue()
         audit.LISTENERS.add(q)
@@ -385,7 +482,8 @@ def routes(policy) -> list:
     api = [Route("/status", local(status)), Route("/sessions", local(list_sessions)),
            Route("/sessions/{id}", local(one_session)), Route("/overview", local(get_overview)),
            Route("/events", local(get_events)),
-           Route("/setup", local(setup)), Route("/setup/test", local(setup_test)), Route("/stream", local(stream)),
+           Route("/setup", local(setup)), Route("/agent", local(get_agent)),
+           Route("/settings", local(settings), methods=["GET", "POST"]), Route("/setup/test", local(setup_test)), Route("/stream", local(stream)),
            Route("/scenario", local(get_scenario)), Route("/scenario/run/{step}", local(run_step), methods=["POST"]),
            Route("/scenario/reset", local(reset), methods=["POST"])]
     return [Mount("/edge/api", routes=api), Route("/edge", lambda r: RedirectResponse("/edge/")),
