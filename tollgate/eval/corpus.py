@@ -176,7 +176,8 @@ def make_corpus(data: Path = DATA, out: Path = CORPUS) -> dict[str, int]:
 
 
 def load(path: Path = CORPUS) -> list[dict]:
-    return [json.loads(line) for p in sorted(path.glob("*.jsonl")) for line in p.open(encoding="utf-8") if line.strip()]
+    """All corpus cases except *_holdout.jsonl, which is scored once by hand and never by the eval."""
+    return [json.loads(line) for p in sorted(path.glob("*.jsonl")) if not p.stem.endswith("_holdout") for line in p.open(encoding="utf-8") if line.strip()]
 
 
 if __name__ == "__main__":
