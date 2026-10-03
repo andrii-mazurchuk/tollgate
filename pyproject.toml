@@ -35,5 +35,6 @@ markers = [
     "smoke: demo-path checks run by scripts/smoke.sh before every merge to main",
     "track_a: owned by Track A (Gateway)",
     "track_b: owned by Track B (Content and evidence)",
+    "redteam: Track A/B red-team bypass attempts that must stay blocked",
     "slow: loads the real tier 2 model or runs the full eval; skip with -m 'not slow'",
 ]

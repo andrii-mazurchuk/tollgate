@@ -14,6 +14,8 @@ def _mac(role: str, key_id: str) -> str:
 
 def issue(role: str, key_id: str | None = None) -> str:
     key_id = key_id or "k" + secrets.token_hex(4)
+    if any(c in role + key_id for c in "_:"):  # `_` splits the key, `:` splits the MAC payload
+        raise ValueError("role and key_id must not contain '_' or ':'")
     return f"tg_{role}_{key_id}_{_mac(role, key_id)}"
 
 
@@ -23,6 +25,8 @@ def verify(key: str) -> tuple[str, str] | None:
     if len(parts) != 4 or parts[0] != "tg":
         return None
     _, role, key_id, mac = parts
+    if ":" in role + key_id:  # MAC payload is `role:key_id`; (a, b:c) and (a:b, c) would share it
+        return None
     return (role, key_id) if hmac.compare_digest(mac, _mac(role, key_id)) else None
 
 

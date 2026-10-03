@@ -59,6 +59,9 @@ class PolicyHolder:
                 "path": str(self.path) if self.path else None}
 
 
+LABELS = {"untrusted_source", "private_data", "public_sink"}
+
+
 def validate(p) -> dict:
     """Checks A's sections only; `content` is passed through untouched (Track B)."""
     if not isinstance(p, dict):
@@ -75,6 +78,10 @@ def validate(p) -> dict:
             if not isinstance(spec, dict) or (
                     spec.get("access") not in ("read", "rw") and not isinstance(spec.get("tools"), list)):
                 raise ValueError(f"roles.{role}.servers.{srv}: need access: read|rw or tools: [...]")
+            if "tools" in spec and not (isinstance(spec["tools"], list) and all(isinstance(t, str) for t in spec["tools"])):
+                raise ValueError(f"roles.{role}.servers.{srv}.tools: need a list of tool names")  # a string would substring-match
+        if not isinstance(r.get("content") or {}, dict):
+            raise ValueError(f"roles.{role}.content: need a mapping of content keys")
         for tool, c in (r.get("constrain") or {}).items():
             if not isinstance(c, dict) or tool.split(".")[0] not in servers \
                     or not all(isinstance(v, str) for v in c.values()):
@@ -86,6 +93,10 @@ def validate(p) -> dict:
         tpd = (r.get("budget") or {}).get("tokens_per_day")
         if tpd is not None and (not isinstance(tpd, int) or isinstance(tpd, bool) or tpd < 0):
             raise ValueError(f"roles.{role}.budget.tokens_per_day: need a non-negative integer")
+    labels = p.get("labels") or {}
+    if not isinstance(labels, dict) or not all(
+            isinstance(v, list) and set(v) <= LABELS for v in labels.values()):  # a typo would silently drop a sink
+        raise ValueError(f"labels: need {{tool: [...]}} with labels from {sorted(LABELS)}")
     t = p.get("taint") or {}
     if not isinstance(t, dict) or (t.get("block_flow") or {}).get("action", "block") not in ("block", "approve"):
         raise ValueError("taint.block_flow.action: need block|approve")

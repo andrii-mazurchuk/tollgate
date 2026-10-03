@@ -62,8 +62,8 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
         data = policy.data
         rp = (data.get("roles") or {}).get(role) or {}
         model = body.get("model")
-        prompt = "\n".join(_text(m.get("content")) for m in body["messages"]
-                           if isinstance(m, dict) and m.get("role") in ("user", "system"))
+        # every role: an injected `assistant`/`tool`/`developer` message reaches the model just the same
+        prompt = "\n".join(_text(m.get("content")) for m in body["messages"] if isinstance(m, dict))
         ev = AuditEvent(ts=datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
                         role=role, key_id=key_id, door="model", verdict="allow", scan_point="prompt",
                         source="model", tool=str(model),
@@ -90,7 +90,7 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
             try:
                 # per message, so a redaction lands back in the message it came from
                 for m in body["messages"]:
-                    if isinstance(m, dict) and m.get("role") in ("user", "system"):
+                    if isinstance(m, dict):
                         v = scan(_text(m.get("content")), "prompt", cpol)
                         apply_verdict(ev, v, "prompt")
                         if v.action == "redact":
@@ -111,7 +111,12 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
             if r.status_code != 200:
                 return JSONResponse(out, r.status_code)
 
-            ev.tokens = int((out.get("usage") or {}).get("total_tokens") or 0)
+            if not isinstance(out, dict):
+                return deny(502, "upstream.error", f"{base}: reply is not a JSON object")
+            used = (out.get("usage") or {}).get("total_tokens") if isinstance(out.get("usage"), dict) else None
+            if not isinstance(used, int) or isinstance(used, bool) or used < 0:  # no refunds, no free calls
+                used = max(1, (len(json.dumps(body)) + len(json.dumps(out))) // 4)  # ponytail: ~4 chars/token
+            ev.tokens = used
             USED[(role, _today())] = USED.get((role, _today()), 0) + ev.tokens  # charged even if the reply is blocked
             try:
                 for ch in out.get("choices") or []:

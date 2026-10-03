@@ -30,6 +30,35 @@ def _sig(body: dict) -> str:
     return hmac.new(key, canon, hashlib.sha256).hexdigest()
 
 
+MAX_PATTERN = 500
+
+
+def _nested_quantifier(pattern: str) -> bool:
+    """A quantified group that itself contains a quantifier ((a+)+, (\\w+\\s?)*): the classic catastrophic-backtracking
+    shape. ponytail: heuristic; overlapping alternations like (a|a)* slip through, a regex timeout would catch those."""
+    p = re.sub(r"\[(?:\\.|[^\]])*\]", "c", re.sub(r"\\.", "e", pattern))  # drop escapes, then classes
+    while True:  # fold innermost groups: Q = group holding a quantifier, g = plain group
+        if re.search(r"Q[+*{]", p):
+            return True
+        q = re.sub(r"\([^()]*\)", lambda m: "Q" if re.search(r"[+*}Q]", m.group()) else "g", p)
+        if q == p:
+            return False
+        p = q
+
+
+def check_signatures(sigs) -> None:
+    """Raises ValueError on an entry the scanner must not run: not {id, pattern}, a broken, huge or ReDoS-shaped
+    regex. A validly signed bundle is still checked: the feed key can leak, and patterns run on every call."""
+    if not isinstance(sigs, list):
+        raise ValueError("signatures: need a list")
+    for e in sigs:
+        if not isinstance(e, dict) or not isinstance(e.get("id"), str) or not isinstance(e.get("pattern"), str):
+            raise ValueError(f"signature {e!r:.80}: need id and pattern strings")
+        if len(e["pattern"]) > MAX_PATTERN or _nested_quantifier(e["pattern"]):
+            raise ValueError(f"signature {e['id']}: pattern too long or nested quantifier (ReDoS risk); rejected")
+        re.compile(e["pattern"])
+
+
 def bundle(feed_dir) -> dict:
     src = yaml.safe_load((Path(feed_dir) / SRC).read_text(encoding="utf-8")) or {}
     body = {"version": int(src.get("version", 1)), "issued_at": src.get("issued_at") or _now(),
@@ -42,7 +71,7 @@ def publish(feed_dir, spec: str) -> int:
     entry = dict(kv.split("=", 1) for kv in re.split(r",(?=(?:id|pattern|action|tags)=)", spec))
     if not entry.get("id") or not entry.get("pattern"):
         raise ValueError("need at least id=... and pattern=...")
-    re.compile(entry["pattern"])  # refuse a broken regex at the source
+    check_signatures([entry])  # refuse a broken or ReDoS-shaped regex at the source
     entry.setdefault("action", "block")
     entry["tags"] = [t for t in entry.get("tags", "").split(";") if t]
     path = Path(feed_dir) / SRC
@@ -78,6 +107,7 @@ class Puller:
                 raise ValueError("bad bundle signature (HMAC mismatch); rejected")
             if not isinstance(body["signatures"], list) or not isinstance(body["version"], int):
                 raise ValueError("malformed bundle")
+            check_signatures(body["signatures"])
         except Exception as e:
             self.state["last_error"] = f"{type(e).__name__}: {e}"
             return False

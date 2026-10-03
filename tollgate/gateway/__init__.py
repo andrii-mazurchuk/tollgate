@@ -6,7 +6,9 @@ import time
 from datetime import datetime, timezone
 import importlib
 import posixpath
+import re
 from pathlib import PurePosixPath
+from urllib.parse import unquote
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
@@ -49,7 +51,10 @@ class Dotted(Namespace):
 
     def _reverse_name(self, name: str) -> str | None:
         head = f"{self._prefix}."
-        return name[len(head):].replace(".", "_") if name.startswith(head) else None
+        # one spelling per tool: `github.pr_create` would reach pr_create while labels/limits key on `github.pr.create`
+        if not name.startswith(head) or "_" in name[len(head):]:
+            return None
+        return name[len(head):].replace(".", "_")
 
 
 def tool_allowed(role_policy: dict, tool) -> bool:
@@ -66,16 +71,20 @@ def tool_allowed(role_policy: dict, tool) -> bool:
 def check_args(constraint: dict, args: dict) -> str | None:
     """Returns why the arguments break the constraint, or None."""
     for key, rule in constraint.items():
-        if key == "to_domain":
-            if not str(args.get("to", "")).endswith(rule):
+        if key == "to_domain":  # every recipient, whole domain: no `evil-acme.com`, no `x@evil.com, y@acme.com`
+            to = [t for t in re.split(r"[,;\s]+", str(args.get("to", ""))) if t]
+            ok = re.compile(r"[^@<>()\"\[\]:]+@" + re.escape(rule.lstrip("@")), re.I)
+            if not to or not all(ok.fullmatch(t) for t in to):
                 return f"recipient outside {rule}"
         elif rule == "select_only":
             sql = str(args.get(key, "")).strip().rstrip(";").strip()
             if not sql.upper().startswith("SELECT") or ";" in sql:
                 return f"{key}: only a single SELECT is allowed"
         else:
-            val = posixpath.normpath(str(args.get(key, "")))
-            if not PurePosixPath(val).full_match(rule):
+            raw = str(args.get(key, ""))
+            # `\` and %-escapes are separators/dots to some servers: normalise them too (fail closed), refuse NUL
+            val = posixpath.normpath(unquote(unquote(raw)).replace("\\", "/"))
+            if "\x00" in val or not PurePosixPath(val).full_match(rule):
                 return f"{key}: {val} outside {rule}"
     return None
 
@@ -183,6 +192,9 @@ class RoleGate(Middleware):
                 deny("content.redact_failed", "redacted arguments are not valid JSON")
         if approve:
             await self._approval(ev, approve, deny)
+            rp = self.role_policy()  # the policy may have changed while the call was parked: re-check access
+            if not tool_allowed(rp, tool) or (why := check_args((rp.get("constrain") or {}).get(name, {}), args)):
+                deny("role.denied", f"{name} no longer allowed for {self.role} after approval ({why or 'access'})")
 
         result = await call_next(context)
         text = "".join(getattr(b, "text", "") for b in result.content)
@@ -242,7 +254,9 @@ def require_key(role: str, app):
     """ASGI guard: 401 unless the bearer key is valid and bound to this route's role."""
     async def guard(scope, receive, send):
         if scope["type"] == "http":
-            auth = dict(scope["headers"]).get(b"authorization", b"").decode()
+            auths = [v for k, v in scope["headers"] if k == b"authorization"]
+            # exactly one: a proxy reading the first and us the last would disagree on who is calling
+            auth = auths[0].decode("latin-1") if len(auths) == 1 else ""  # non-ASCII: 401, not 500
             ident = keys.from_header(auth)
             if not ident or ident[0] != role:
                 return await JSONResponse({"error": "invalid key for this role"}, 401)(scope, receive, send)
@@ -284,14 +298,18 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
                              "policy_roles": list(policy.data.get("roles") or {}),
                              "pin_alerts": list(pins.alerts.values()), "feed": feed.state})
 
-    async def admin_taint(_):  # read-only; ponytail: no auth, bind to 127.0.0.1 only
-        return JSONResponse(taint.STATE)
+    def admin_read(view):
+        """Read-only admin GETs: loopback (the dashboard) or the admin token. ponytail: behind a reverse proxy every
+        client looks loopback; send the token from the dashboard then."""
+        async def get(request):
+            if (request.client and request.client.host in ("127.0.0.1", "::1", "localhost"))                     or admin_ok(request.headers.get("authorization")):
+                return JSONResponse(view())
+            return JSONResponse({"error": "admin token required (TOLLGATE_ADMIN_TOKEN)"}, 401)
+        return get
 
-    async def admin_budget(_):  # read-only, same caveat as /admin/taint
-        return JSONResponse(model_door.budget(policy.data))
-
-    async def admin_approvals(_):  # read-only listing, same caveat as /admin/taint
-        return JSONResponse(approvals.listing())
+    admin_taint = admin_read(lambda: taint.STATE)
+    admin_budget = admin_read(lambda: model_door.budget(policy.data))
+    admin_approvals = admin_read(approvals.listing)
 
     async def admin_decide(request):
         if not admin_ok(request.headers.get("authorization")):
