@@ -39,6 +39,7 @@ Needs Python ≥ 3.13 and [uv](https://docs.astral.sh/uv/). The first `tollgate 
 ```bash
 uv sync
 uv run tollgate up                     # one command: gateway on :8080 (role MCPs + 3 mock MCP servers + model door) + dashboard on :8501
+uv run tollgate agent --scripted "check the open issues on acme/website and handle them"   # demo agent, offline: hijacked by issue #12, PR blocked by taint
 uv run tollgate replay github          # the 2025 GitHub attack, taint off vs on (in-process, no server)
 uv run tollgate replay supabase        # the 2025 Supabase ticket attack, taint off vs on (in-process)
 uv run tollgate perf                   # latency: Hub checks, tier 1, gateway overhead, tier 2 (writes audit/perf.json)
@@ -63,7 +64,7 @@ List the role's tools: `uv run fastmcp list http://127.0.0.1:8080/mcp/role-1/ --
 
 Dashboard (started by `tollgate up`, or alone with `uv run tollgate dashboard`): http://127.0.0.1:8501. It reads `audit/` and the gateway's `/healthz`, `/admin/*`. Its one write action is the approval panel's Approve/Deny, which uses `TOLLGATE_ADMIN_TOKEN` from the environment (never typed into the page). `uv run python dashboard/seed_demo.py` fills `audit/events.jsonl` with real gateway flows.
 
-Fast test run without the slow model tests: `uv run pytest -q -m "not slow"` (112 passed, 5 slow deselected at submission 1).
+Fast test run without the slow model tests: `uv run pytest -q -m "not slow"` (143 passed, 6 slow deselected).
 
 **Ollama.** The model door (`/v1/chat/completions`) proxies to Ollama at `http://127.0.0.1:11434/v1` (override with `TOLLGATE_UPSTREAM`). Run `ollama pull qwen3:1.7b` (role-1) and `ollama pull qwen3:4b` (role-2). Without Ollama, an allowed model returns **502 `upstream.error`**; the allow-list (403 `model.denied`) and budget (429) checks still work. Everything else runs without Ollama.
 
@@ -72,6 +73,7 @@ Fast test run without the slow model tests: `uv run pytest -q -m "not slow"` (11
 | You want to | Do this |
 |---|---|
 | Run the test suite | `uv run tollgate test` → pytest, then the eval report: per-source confusion matrix, pass rate, FPR, posture score, latency |
+| Watch an agent get hijacked | `uv run tollgate agent --scripted "check the open issues on acme/website and handle them"` (offline, one terminal; the model is labelled `scripted-hijacked`). Turn 1 reads issue #12, turn 2 reads the payroll `.env` (both AWS keys come back `[SECRET]`), turn 3's PR is **BLOCKED** by `taint.flow`. With a real LLM: `uv run tollgate serve`, then `uv run tollgate agent --model qwen3:4b "…"` (needs Ollama) |
 | Replay a real attack | `uv run tollgate replay github` → leaks with taint off (PR created with salaries), **BLOCK** `taint.flow` with taint on. `uv run tollgate replay supabase` → same for the ticket attack; the query result already shows `[EMAIL]` and `[IBAN:…2874]` |
 | Approve a risky call by hand | `cp policies/lenient.yaml policy.yaml` (`taint.block_flow.action: approve`), then run the Supabase flow against the live gateway ([DEMO.md](DEMO.md#approval)). The reply parks, appears on the dashboard, and runs after Approve (or `uv run tollgate approve <id>`); Deny or 120 s timeout blocks it |
 | Switch policy profile | `cp policies/strict.yaml policy.yaml` (or `balanced`, `lenient`) while the gateway runs; the next call uses it. Each profile is commented |
@@ -81,7 +83,7 @@ Fast test run without the slow model tests: `uv run pytest -q -m "not slow"` (11
 | Change a role's tools | With `tollgate serve` running, add `files: { tools: [fs.read] }` under `roles.role-1.servers` in `policy.yaml`. The next `tools/list` on `/mcp/role-1/` includes `files.fs.read`. No restart. |
 | Break the policy on purpose | Save an invalid `policy.yaml` (e.g. append `roles: [oops`). `curl http://127.0.0.1:8080/healthz` shows `policy.last_error` with the parse error and the old `version`; the dashboard shows a red "Policy reload REJECTED … Still enforcing <version>" banner. The old policy keeps enforcing. Fix the file and it reloads. |
 | Change a threshold | Edit `content.injection.high` (or `taint.enabled`) in `policy.yaml`. The next call follows the new rule. |
-| Disable a control | Set `content.injection: off` in `policy.yaml`, run `uv run tollgate test --eval-only`. Posture drops from 0.899 to 0.727. |
+| Disable a control | Set `content.injection: off` in `policy.yaml`, run `uv run tollgate test --eval-only`. Posture drops from 0.931 to 0.718. |
 | Add an attack signature | Append to `signatures.yaml`. Matching inputs are blocked on the next call (reloaded on mtime). |
 | Send your own attack prompt | `curl -H "Authorization: Bearer <key>" -H "Content-Type: application/json" -d '{"model":"qwen3:1.7b","messages":[{"role":"user","content":"…"}]}' http://127.0.0.1:8080/v1/chat/completions` (needs Ollama for a 200) |
 | See metrics and export the audit | `uv run streamlit run dashboard/app.py` → `http://localhost:8501` → Export JSONL / CSV |

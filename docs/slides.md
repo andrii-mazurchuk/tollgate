@@ -29,16 +29,18 @@ Numbers are from `uv run tollgate test --eval-only`, `uv run tollgate perf` and 
 - One command: `tollgate up` (gateway + dashboard).
 - **Visual:** `docs/architecture.svg`.
 
-## 5. Live demo: taint
-- Same run, taint ON: steps 1–2 ALLOW, step 3 **BLOCK**.
+## 5. Live demo: a hijacked agent, stopped by taint
+- `tollgate agent --scripted "check the open issues on acme/website and handle them"`: a real tool-calling loop through both doors (model `scripted-hijacked`, offline; `--model qwen3:4b` with Ollama).
+- Turn 1 reads issue #12 (hidden instruction), turn 2 reads `acme/payroll/.env` → `AWS_ACCESS_KEY_ID=[SECRET] AWS_SECRET_ACCESS_KEY=[SECRET]`, turn 3's PR → **BLOCKED** `taint.flow`.
+- `tollgate replay github`, taint ON: steps 1–2 ALLOW, step 3 **BLOCK**.
 - Reason shown: `taint.flow: session tainted by github.issues.read #12; private data from github.repo.read acme/payroll:.env`.
 - PRs created: 0. Benign flow (public read → PR, no private read) stays allowed (AC6).
 - Supabase replay: `tickets.reply` blocked, `tainted by tickets.read #3; private data from tickets.query SELECT * FROM customers`; the query result is already masked (`[EMAIL]`, `[IBAN:…2874]`).
 - Lenient profile: the same call is **parked for a human**: dashboard Approve/Deny or `tollgate approve <id>`, admin token separate from role keys, deny/timeout fails closed.
-- **Visual:** terminal with the taint ON half; dashboard approval panel with the parked `tickets.reply`.
+- **Visual:** the agent's three turns in the terminal; dashboard approval panel with the parked `tickets.reply`.
 
 ## 6. Content pipeline, real numbers
-- 1355 corpus cases (deepset, gandalf, gretel, jackhhao, jbb + own PII / secrets / obfuscation / signatures), fixed 70/30 split.
+- 1361 corpus cases (deepset, gandalf, gretel, jackhhao, jbb + own PII / secrets / obfuscation / signatures), fixed 70/30 split.
 - Held-out injection recall **0.837** (target 0.85: missed), FPR **0.009**.
 - Obfuscated recall 1.000 with normalisation, 0.667 without (AC9).
 - `tollgate perf`: Hub checks p95 **0.52 ms**, tier 1 p95 **0.40 ms** (target 5 ms: met); gateway overhead p95 5.3 ms per call.
@@ -53,9 +55,9 @@ Numbers are from `uv run tollgate test --eval-only`, `uv run tollgate perf` and 
 - **Visual:** split screen: editor + `tools/list` output + dashboard banner.
 
 ## 8. Test suite and posture
-- `tollgate test`: pytest (112 fast tests pass, 5 slow) + eval report.
-- Overall pass rate 0.920, FPR 0.035, posture **0.899**.
-- Disable `injection` → posture **0.727**: you see exactly what a control is worth.
+- `tollgate test`: pytest (143 fast tests pass, 6 slow) + eval report.
+- Overall pass rate 0.912, FPR 0.034, posture **0.931**.
+- Disable `injection` → posture **0.718**: you see exactly what a control is worth.
 - **Visual:** the control/weight/posture table, before and after.
 
 ## 9. Dashboard and audit
@@ -66,6 +68,6 @@ Numbers are from `uv run tollgate test --eval-only`, `uv run tollgate perf` and 
 
 ## 10. Scale and what's next
 - Stateless checks per request; taint state keyed by role key; one policy file for all roles.
-- Status: 13 of 16 acceptance criteria green, 3 partial (AC8 injection recall, AC15 tier 2 short-text latency, AC16 slide PDF). Posture 0.899.
+- Status: 13 of 16 acceptance criteria green, 3 partial (AC8 injection recall, AC15 tier 2 short-text latency, AC16 slide PDF). Posture 0.931.
 - Next: separate Edge process, tier 3 judge, persistent pins and approvals, better recall on `deepset`.
 - **Visual:** AC status table (green / partial).

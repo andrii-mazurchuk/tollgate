@@ -11,7 +11,7 @@
 
 ## Status at submission 1 (2026-10-03)
 
-Measured on the day on `main` + the approval flow, pinning, `tollgate up`, Supabase replay, perf and profiles. Fast suite: `uv run pytest -q -m "not slow"` → **112 passed, 5 deselected** (slow = real tier 2 model / full eval). Eval: `uv run tollgate test --eval-only` on **1355 corpus cases**, 30% held out (374 cases). Latency: `uv run tollgate perf` (200 rounds in-process, writes `audit/perf.json`).
+Measured on the day on `main` + the approval flow, pinning, `tollgate up`, Supabase replay, perf and profiles. Fast suite: `uv run pytest -q -m "not slow"` → **143 passed, 6 deselected** (slow = real tier 2 model / full eval). Eval: `uv run tollgate test --eval-only` on **1355 corpus cases**, 30% held out (374 cases). Latency: `uv run tollgate perf` (200 rounds in-process, writes `audit/perf.json`).
 
 | AC | Status | Evidence |
 |---|---|---|
@@ -27,14 +27,16 @@ Measured on the day on `main` + the approval flow, pinning, `tollgate up`, Supab
 | AC10 signatures | green | `tests/acceptance/test_ac10_signatures.py`. External feed (P6): `tollgate feed serve\|publish\|pull`; the gateway pulls an HMAC-signed bundle every 10 s, verifies it and atomically rewrites `signatures.yaml`, which the loader reloads; a tampered bundle is rejected (`/healthz` `feed.last_error`). Supply-chain signatures: pickle GLOBAL opcodes, `torch.load` without `weights_only`, `trust_remote_code=True`, unsafe `yaml.load`, LangChain PALChain (CVE-2023-36258 / CVE-2023-36188 / CVE-2023-36095, checked on OSV). |
 | AC11 budget + loops | green | `tests/acceptance/test_ac11_budget_loops.py` (429, `loop.cutoff`) |
 | AC12 model allow-list | green | `tests/acceptance/test_ac12_model_allowlist.py`; live: `qwen3:4b` for role-1 → 403 `model.denied` |
-| AC13 suite | green | `tollgate test`: 1355 cases, pass rate 0.920, FPR 0.035, posture **0.899**; `content.injection: off` → posture 0.727. `test_ac13_suite_summary.py`, `test_eval_posture.py`. Per-pattern P1–P10 coverage is not audited. |
+| AC13 suite | green | `tollgate test`: 1361 cases, pass rate 0.912, FPR 0.034, posture **0.931**; `content.injection: off` → posture 0.718. `test_ac13_suite_summary.py`, `test_eval_posture.py`. Per-pattern P1–P10 coverage is not audited. |
 | AC14 dashboard | green | `dashboard/app.py` (verdicts, tainted sessions, budget burn, latency, posture, policy banner, pin-alert strip, approval panel with Approve/Deny, JSONL/CSV export); `tests/test_dashboard_data.py` |
 | AC15 latency | partial | `tollgate perf`: Hub checks (role + taint) p95 **0.52 ms**, tier 1 p95 **0.40 ms**, both under the 5 ms target: **met**. Gateway overhead per allowed call p95 5.3 ms wall clock. Tier 2 short text (≤ 64 tokens) p95 is noisy, **84–141 ms** across runs against 80 ms: **partial**. All texts p95 1603 ms, so tier 2 is only fit for sync on short text (sync share 0.779). |
 | AC16 deliverables | partial | README quick start, `docs/slides.md` outline, [`docs/architecture.md`](docs/architecture.md) diagram, commented `policies/strict\|balanced\|lenient.yaml` profiles: done. **Slide PDF: missing.** |
 
-**Count:** 13 green, 3 partial (AC8, AC15, AC16), 0 not built. Posture **0.899**.
+**Count:** 13 green, 3 partial (AC8, AC15, AC16), 0 not built. Posture **0.931**.
 
 **Built beyond the ACs:**
+- Demo agent (a required deliverable): `tollgate/agent/`, a framework-free tool-calling loop that talks only to Tollgate's two doors (model door + role MCP). `tollgate agent --scripted "…"` runs offline in one terminal with an in-process gateway and a scripted hijacked model (`scripted-hijacked`): issue #12 steers it to read `acme/payroll/.env` (both AWS keys masked `[SECRET]`) and its PR is blocked by `taint.flow`. `tollgate serve` + `tollgate agent --model qwen3:4b "…"` runs a real Ollama model. `tests/test_agent.py`.
+- Secrets beyond fixed prefixes: `secret.kv` (credential-named key/value, value-only mask, JSON aware), `secret.github_pat`, `secret.slack_token`, `secret.entropy` (≥ 32 chars, ≥ 4.0 bits/char). `tests/test_secrets.py`.
 - Approval flow: `taint.block_flow.action: approve` or `roles.<role>.approval: [tool]` parks the call. It appears in `GET /admin/approvals` and on the dashboard, and waits up to `approval.timeout_s` for Approve/Deny (dashboard button, `tollgate approve|deny <id>`, or `POST /admin/approvals/{id}` with `TOLLGATE_ADMIN_TOKEN`). Deny and timeout fail closed. Audit rules: `approval.requested`, `approval.approved`, `approval.denied`, `approval.timeout`.
 - Tool-description pinning (rug-pull defence): name + description + schema hashed at startup; a changed tool is hidden and its calls blocked (`pin.changed`); `/healthz` `pin_alerts` drives the dashboard's red strip.
 
@@ -421,4 +423,3 @@ Stack:
 
 **Open:**
 - Confirm the start time on Discord (RULES says "11:00 PM Oct 3", probably a typo).
-- Exact Ollama chat model for the demo agent (e.g. `qwen3:4b`). Decide in the block 1 spike.
