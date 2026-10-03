@@ -1,4 +1,4 @@
----
+﻿---
 marp: true
 size: 16:9
 paginate: true
@@ -31,6 +31,10 @@ ul { margin: 6px 0; } li { margin: 4px 0; }
 .metric b { display: block; font-size: 62px; line-height: 1; color: #d9480f; font-weight: 700; }
 .metric span { font-size: 17px; color: #555; }
 .small { font-size: 19px; color: #444; }
+table.ev { font-size: 19px; border-collapse: collapse; margin: 0; }
+table.ev th, table.ev td { padding: 4px 12px; border-bottom: 1px solid #e3e5e8; text-align: right; }
+table.ev th:first-child, table.ev td:first-child { text-align: left; }
+table.ev th { color: #555; font-weight: 600; background: #f6f7f9; }
 img.shot { border: 1px solid #ddd; border-radius: 6px; }
 section.title { justify-content: center; }
 .stack .metric b { font-size: 48px; }
@@ -93,7 +97,7 @@ $ uv run tollgate replay github          == taint OFF (roles only) ==
 
 # One policy → *one virtual MCP per role*
 
-![w:1130](architecture.svg)
+![w:1100](img/arch-simple.svg)
 
 <p class="small">Hub: exact tools, argument limits, session taint, budgets, loop cut-off, audit. Content checks on every call and result. Model door with per-role allow-list. Tool pinning against rug pulls. <code>tollgate up</code>.</p>
 
@@ -137,7 +141,7 @@ $ uv run tollgate replay supabase        == taint ON ==
 <div class="metric"><b>84 ms</b><span>tier 2 p95, short text<br>(target 80: partial; gated)</span></div>
 </div>
 
-<p class="small">Normalisation lifts obfuscated recall from 0.667 to 1.000. Long text is deferred, not scanned synchronously.</p>
+<p class="small">Normalisation lifts obfuscated recall from 0.667 to 1.000. Prompts are always scanned by tier 2; only long tool results are deferred.</p>
 
 ---
 
@@ -183,7 +187,7 @@ taint:
 <div class="cols stack">
 <div>
 <div class="metrics">
-<div class="metric"><b>143</b><span>fast tests pass (+6 slow: real model, full eval)</span></div>
+<div class="metric"><b>144</b><span>fast tests pass (+6 slow: real model, full eval)</span></div>
 <div class="metric"><b>1,361</b><span>eval cases, 30% held out (376)</span></div>
 <div class="metric"><b>14 / 16</b><span>acceptance criteria green</span></div>
 </div>
@@ -197,25 +201,38 @@ taint:
 </div>
 <div>
 
-![w:540](img/dashboard-eval.png)
+<table class="ev">
+<tr><th>held-out source</th><th>n</th><th>recall</th><th>FPR</th></tr>
+<tr><td>deepset</td><td>88</td><td>0.371</td><td>0.019</td></tr>
+<tr><td>gandalf</td><td>85</td><td>1.000</td><td>-</td></tr>
+<tr><td>gretel</td><td>88</td><td>0.966</td><td>-</td></tr>
+<tr><td>jackhhao</td><td>73</td><td>0.892</td><td>0.000</td></tr>
+<tr><td>jbb (benign)</td><td>22</td><td>-</td><td>0.000</td></tr>
+<tr><td>own: obf, poisoned, sigs</td><td>11</td><td>1.000</td><td>-</td></tr>
+<tr><td>own: pii, secrets, clean</td><td>9</td><td>1.000</td><td>0.500</td></tr>
+<tr><td><b>overall</b></td><td>376</td><td><b>0.888</b></td><td><b>0.034</b></td></tr>
+</table>
+<p class="small">Injection only: recall <b>0.837</b>, FPR <b>0.009</b>. Posture <b>0.931</b>.</p>
 
 </div>
 </div>
 
 ---
 
-## Dashboard · real data from `seed_demo.py`
+## Dashboard · live gateway + `seed_demo.py`
 
-<div class="cols" style="grid-template-columns: 1.1fr 1fr; gap: 24px;">
+<div class="cols" style="grid-template-columns: 1fr 1fr; gap: 20px;">
 <div>
 
-![w:600](img/dashboard-top.png)
+![w:530](img/dashboard-top.png)
+![w:530](img/dashboard-taint.png)
 
 </div>
 <div>
 
-![h:250](img/dashboard-taint.png)
-![w:540](img/dashboard-feed.png)
+![w:560](img/dashboard-feed.png)
+
+<p class="small">A parked <code>tickets.reply</code> waits for a human (lenient profile). Tainted sessions and the live feed come from real calls through the gateway.</p>
 
 </div>
 </div>

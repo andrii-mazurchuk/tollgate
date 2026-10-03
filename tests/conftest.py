@@ -2,6 +2,12 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _audit_to_tmp(tmp_path, monkeypatch):
+    """No test writes the real audit/events.jsonl; tests that set their own path override this."""
+    monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "audit.jsonl"))
+
+
+@pytest.fixture(autouse=True)
 def _tier2_off_for_fast_gateway_tests(request, monkeypatch):
     """Track A gateway tests not marked slow run with tier 2 off: the first tool-result scan would otherwise load
     the 739 MB classifier (~4 s) in whichever test happens to run first. Content tests (track_b) are untouched."""

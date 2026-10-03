@@ -1,5 +1,13 @@
 # Tollgate architecture
 
+## Simplified
+
+![Tollgate, simplified](img/arch-simple.svg)
+
+Agent calls go through the Edge (content checks) and the Hub (per-role gate) to the source MCPs. LLM calls go through the model door to Ollama. `policy.yaml` hot-reloads into both; the signed feed updates Edge signatures; every decision lands in the audit JSONL the dashboard reads.
+
+## Detailed
+
 ```mermaid
 flowchart LR
     agent["Agent / MCP client<br/>(Claude, Cursor, script)"]
