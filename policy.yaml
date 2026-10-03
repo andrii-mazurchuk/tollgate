@@ -1,0 +1,28 @@
+# Tollgate policy. Hot reloaded. Track A owns everything except `content:` (Track B).
+# Full schema sketch: TOLLGATE.md section 4.6. Grows as acceptance tests land.
+mode: balanced
+
+servers:
+  github: { mock: mocks.github }
+
+roles:
+  role-1:
+    servers:
+      github: { access: read }
+  role-2:
+    servers:
+      github: { access: rw }
+
+labels:
+  github.issues.read: [untrusted_source]
+  github.repo.read:   [private_data]
+  github.pr.create:   [public_sink]
+
+taint:
+  block_flow: { from: private_data, to: public_sink, action: block }
+
+content:
+  pii:       { iban: redact, pesel: block, card: redact, email: redact }
+  secrets:   block
+  injection: { low: 0.50, high: 0.80 }
+  signatures: signatures.yaml

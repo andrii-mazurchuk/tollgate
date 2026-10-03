@@ -1,0 +1,31 @@
+[project]
+name = "tollgate"
+version = "0.1.0"
+description = "AI control layer: per-role virtual MCPs, session taint, local content inspection"
+requires-python = ">=3.13"
+dependencies = [
+    "fastmcp==4.0.10",
+    "pyyaml>=6",
+]
+
+[project.scripts]
+tollgate = "tollgate.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tollgate", "mocks"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "smoke: demo-path checks run by scripts/smoke.sh before every merge to main",
+    "track_a: owned by Track A (Gateway)",
+    "track_b: owned by Track B (Content and evidence)",
+]

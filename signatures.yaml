@@ -1,0 +1,6 @@
+# External attack-signature feed (P6). Hot reloaded by Track B. One entry per known attack.
+# - id: sig.example
+#   pattern: 'regex here'
+#   action: block
+#   tags: [OWASP-LLM01]
+[]

@@ -1,0 +1,26 @@
+# env / secrets
+.env
+.env.*
+!.env.example
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+# js
+node_modules/
+dist/
+build/
+.next/
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# local claude state
+.claude/settings.local.json
+# tollgate runtime
+audit/
+*.jsonl
+models/
+.ruff_cache/
