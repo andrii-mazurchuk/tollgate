@@ -58,5 +58,5 @@ content:                                       # content pipeline (Track B seman
     sync_points: [prompt, tool_result]         # prompts and tool results always scored synchronously, any length
     tier1_action: block                        # a tier 1 injection phrase alone blocks
     md_exfil: block                            # markdown image exfiltration -> block
-    tool_result_action: block                  # intent: injection in a tool result blocks. NOT read by scan() yet; sync_points above gives this effect today
+    tool_result_action: block                  # intent: injection in a tool result blocks.
   signatures: signatures.yaml                  # hot-reloaded signature feed

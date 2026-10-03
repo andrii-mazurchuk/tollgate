@@ -58,5 +58,5 @@ content:                                       # content pipeline (Track B seman
     sync_points: [prompt]                      # scan points always scored synchronously, any length (the model door)
     tier1_action: allow                        # tier 1 injection phrases: allow = keep as a flag that escalates to tier 2
     md_exfil: block                            # markdown image with a query-string URL (exfil channel) -> block (default)
-    tool_result_action: flag                   # intent: flag injection in tool results, let taint stop the flow. NOT read by scan() yet (tier 2 >= high still blocks there)
+    tool_result_action: flag                   # intent: flag injection in tool results, let taint stop the flow.
   signatures: signatures.yaml                  # hot-reloaded signature feed (AC10)

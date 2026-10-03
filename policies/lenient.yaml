@@ -57,5 +57,5 @@ content:                                       # content pipeline (Track B seman
     sync_points: [prompt]                      # prompts at the model door always scored synchronously
     tier1_action: allow                        # tier 1 phrases are flags that escalate to tier 2, never block alone
     md_exfil: block                            # markdown image exfiltration still blocks: a data leak, not a judgement call
-    tool_result_action: flag                   # intent: flag only, rely on taint. NOT read by scan() yet (tier 2 >= high still blocks there)
+    tool_result_action: flag                   # intent: flag only, rely on taint.
   signatures: signatures.yaml                  # hot-reloaded signature feed
