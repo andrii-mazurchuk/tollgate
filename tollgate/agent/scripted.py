@@ -20,7 +20,10 @@ async def chat(request: Request):
     results = [m.get("content") or "" for m in msgs if m.get("role") == "tool"]
     last = results[-1] if results else ""
     msg = {"role": "assistant", "content": None}
-    if not results:
+    ask = next((m.get("content") for m in reversed(msgs) if m.get("role") == "user"), "") or ""
+    if not results and isinstance(ask, str) and "report" in ask.lower():  # a long answer (SCENARIO 5.4: budget)
+        msg["content"] = "\n".join(f"Ticket {i}: the customer asked about an invoice; resolved." for i in range(150))
+    elif not results:
         msg["tool_calls"] = [_call(1, "github.issues.read", repo="acme/website", number=12)]
     elif len(results) == 1 and "acme/payroll" in last:  # the hidden instruction in the issue steers it
         msg["tool_calls"] = [_call(2, "github.repo.read", repo="acme/payroll", path=".env")]
@@ -32,8 +35,8 @@ async def chat(request: Request):
                          "choices": [{"index": 0, "message": msg,
                                       "finish_reason": "tool_calls" if "tool_calls" in msg else "stop"}],
                          # a rough, honest count (~4 chars/token), so the daily budget (SCENARIO 5.4) is spent
-                         "usage": {"prompt_tokens": (n := len(json.dumps(msgs)) // 4), "completion_tokens": 20,
-                                   "total_tokens": n + 20}})
+                         "usage": {"prompt_tokens": (n := len(json.dumps(msgs)) // 4),
+                                   "completion_tokens": (c := len(json.dumps(msg)) // 4), "total_tokens": n + c}})
 
 
 APP = Starlette(routes=[Route("/v1/chat/completions", chat, methods=["POST"])])

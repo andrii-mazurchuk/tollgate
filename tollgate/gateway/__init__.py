@@ -137,7 +137,8 @@ class RoleGate(Middleware):
             policy_version=self.policy.version, trace_id=trace.new_id(), session_id=key_id,
             state_before=trace.label(taint.STATE.get(key_id)),
         )
-        texts: dict = {}  # edge-only full text, keyed by trace_id (never in the audit log)
+        # edge-only full text, keyed by trace_id (never in the audit log); args kept even if a check stops the call
+        texts: dict = {"args": {"original": args_json, "sent": args_json, "spans": []}}
         try:
             return await self._decide(context, call_next, name, args, args_json, auth, ident, key_id, data, ev, texts)
         finally:

@@ -96,7 +96,7 @@ def timeline(events: list[dict], sid: str, texts: dict | None = None) -> list[di
 
 
 def _bucket(span_s: float) -> int:
-    for b in (60, 300, 900, 3600, 4 * 3600, 86400):
+    for b in (10, 30, 60, 300, 900, 3600, 4 * 3600, 86400):
         if span_s / b <= 30:
             return b
     return 86400 * math.ceil(span_s / 86400 / 30)

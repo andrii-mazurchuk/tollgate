@@ -83,7 +83,8 @@ acts:
       - {id: "5.3", agent: assistant, session: a5-assistant, kind: chat, model: gpt-4o, prompt: "Hello",
          text: "Chat with gpt-4o", expect: {status: 403, verdict: block, rule: model.denied}}
       - {id: "5.4", agent: intern, session: a5-intern, fresh: true, kind: chat_until_budget, model: "qwen3:1.7b",
-         text: "Chat until the Intern's daily budget is used up", needs: model,
+         prompt: "Write a detailed report on every ticket from today", needs: model,
+         text: "Ask for long reports until the Intern's daily budget is used up",
          expect: {status: 429, verdict: block, rule: budget.exceeded}}
   - id: "6"
     title: Threat-intel feed

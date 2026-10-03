@@ -141,7 +141,7 @@ class Runner:
             return {**_event_fields(self._last_event(key_id)), "text": text, "error": err,
                     "new_prs": len(PRS) - prs, "key_id": key_id}
         if kind in ("chat", "chat_until_budget"):
-            prompt = step.get("prompt") or "lorem ipsum " * 4000  # ~12k tokens per call: the budget runs out fast
+            prompt = step["prompt"]
             async with self._factory() as c:
                 for _ in range(1 if kind == "chat" else 40):
                     r = await c.post("/v1/chat/completions", headers={"Authorization": f"Bearer {key}"},
