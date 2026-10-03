@@ -4,9 +4,9 @@
 
 **Challenge:** HackYeah 2026, Goldman Sachs, "AI Control Layer"
 
-**Team name:** [TEAM]
+**Team name:** holonic
 
-**Members:** [MEMBERS]
+**Members:** Andrii Mazurchuk
 
 **Repository:** https://github.com/andrii-mazurchuk/tollgate (private; access on request)
 
