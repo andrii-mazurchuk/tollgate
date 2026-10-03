@@ -30,9 +30,9 @@ Measured on the day on `main` + the approval flow, pinning, `tollgate up`, Supab
 | AC13 suite | green | `tollgate test`: 1361 cases, pass rate 0.912, FPR 0.034, posture **0.931**; `content.injection: off` → posture 0.718. `test_ac13_suite_summary.py`, `test_eval_posture.py`. Per-pattern P1–P10 coverage is not audited. |
 | AC14 dashboard | green | `dashboard/app.py` (verdicts, tainted sessions, budget burn, latency, posture, policy banner, pin-alert strip, approval panel with Approve/Deny, JSONL/CSV export); `tests/test_dashboard_data.py` |
 | AC15 latency | partial | `tollgate perf`: Hub checks (role + taint) p95 **0.52 ms**, tier 1 p95 **0.40 ms**, both under the 5 ms target: **met**. Gateway overhead per allowed call p95 5.3 ms wall clock. Tier 2 short text (≤ 64 tokens) p95 is noisy, **84–141 ms** across runs against 80 ms: **partial**. All texts p95 1603 ms, so tier 2 is only fit for sync on short text (sync share 0.779). |
-| AC16 deliverables | partial | README quick start, `docs/slides.md` outline, [`docs/architecture.md`](docs/architecture.md) diagram, commented `policies/strict\|balanced\|lenient.yaml` profiles: done. **Slide PDF: missing.** |
+| AC16 deliverables | green | README quick start, `docs/slides.md` outline, [`docs/architecture.md`](docs/architecture.md) diagram, commented `policies/strict\|balanced\|lenient.yaml` profiles, 10-slide deck [`docs/Tollgate.pdf`](docs/Tollgate.pdf) (Marp source `docs/deck.md`, real dashboard screenshots in `docs/img/`). |
 
-**Count:** 13 green, 3 partial (AC8, AC15, AC16), 0 not built. Posture **0.931**.
+**Count:** 14 green, 2 partial (AC8, AC15), 0 not built. Posture **0.931**.
 
 **Built beyond the ACs:**
 - Demo agent (a required deliverable): `tollgate/agent/`, a framework-free tool-calling loop that talks only to Tollgate's two doors (model door + role MCP). `tollgate agent --scripted "…"` runs offline in one terminal with an in-process gateway and a scripted hijacked model (`scripted-hijacked`): issue #12 steers it to read `acme/payroll/.env` (both AWS keys masked `[SECRET]`) and its PR is blocked by `taint.flow`. `tollgate serve` + `tollgate agent --model qwen3:4b "…"` runs a real Ollama model. `tests/test_agent.py`.
@@ -46,7 +46,6 @@ Measured on the day on `main` + the approval flow, pinning, `tollgate up`, Supab
 - A content-level `approve` verdict still blocks; only taint and role approvals park.
 - Pins and pending approvals live in memory: re-pinning is a restart, and a restart fails waiting calls closed.
 - No separate Edge process: content checks run in the gateway process today.
-- Slide PDF not exported yet.
 
 ---
 
