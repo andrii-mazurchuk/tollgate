@@ -32,4 +32,31 @@ Two interfaces, same visual style:
 
 ## Server console (security lead)
 
-To be specified next, in the same shell and style.
+**Purpose:** govern and oversee **all peers** (laptops/edges running agents) and all agents in the company. This is the complex side and the primary UI.
+
+**Shell:** the same as the edge. Left navigation, top-right status area (admin account, server health, policy version, feed version), and a top-left health indicator ("All good", or e.g. "1 attack stopped" → click to jump there).
+
+**Views (left nav)**
+1. **Overview**: "are we safe?" at a glance: actions today by verdict, attacks stopped, peers online, policy and feed status.
+2. **Peers & roles** (new, central). The structure of the system:
+   - **which peers exist** (laptop/edge, owner, online/offline, last seen, app version, feed version);
+   - **which role each peer's agent runs as**;
+   - **how many peers per role**, and **how roles are distributed across peers** (a chart);
+   - **per role: which MCP servers it is connected to and exactly which tools** (the role × server × tool view, with limits).
+   
+   It answers "who is out there, as what, with access to what".
+3. **Sessions**: all sessions **across all peers**, filterable by peer, role and status. The same timeline as the edge, with **fingerprints instead of text**.
+4. **Policy**: profile switch (Strict / Balanced / Lenient), role × tool matrix, rules in plain words, version history, rejected-edit warning.
+5. **Agents & keys**: issue and revoke role keys, expiry, which peer uses which key. This may merge into Peers & roles.
+6. **Analytics**: company-wide charts: verdicts over time, blocks by reason, by role, by peer, by tool; masked data by type; latency.
+7. **Threat feed**: signatures in plain words, versions, which peers are up to date, publish.
+8. **Self-test**: test-suite and evaluation results in plain words, misses stated plainly.
+9. **Approvals: open question, may be refactored.**
+   - **Concern (Andrey):** a human approval only makes sense where the agent can wait a long time (up to an hour or more). For real-time agents, waiting for a human adds unacceptable delay, and nobody may be there.
+   - **Options to decide later:**
+     - (a) keep it only for long-running/async agents, with a long timeout;
+     - (b) turn "approve" into "block now, notify the human, allow a one-time override for a retry";
+     - (c) drop it from the UI and keep it as an API.
+   - Until decided: do not invest further UI in approvals.
+
+These texts will be revised, and both frontends rebuilt, several times. This spec is the source of truth for each rebuild.
