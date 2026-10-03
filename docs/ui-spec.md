@@ -30,6 +30,52 @@ Two interfaces, same visual style:
 
 **Deferred:** analytics on classifier confidence per rule ("how sure was the injection check").
 
+### Local edge, revision 2 (review of the first build, 2026-10-03 22:40)
+
+**Feedback (Andrey):**
+- **Too childish and generic.** Element sizes are inconsistent: some are huge and grab attention, others are properly small.
+- **Too colourful** ("Christmas Eve"): red, green, amber and purple are everywhere. There should be only a couple of contrasting colours.
+- **Add a general Dashboard** that shows basic analytics, not as a separate "Analytics" tab.
+- Finalise and debug the local version before the server console.
+- Base the style on proven AI usage/session tracking products (research running; findings get appended here).
+
+**Visual rules, until the research refines them:**
+- **Grey is the default, colour is information.**
+  - Neutral greys for text, borders and charts.
+  - **One accent (blue)**, for interactive elements and selection only.
+  - **One alert colour (red)**, only for *blocked* and for real problems.
+- **Allowed has no colour**: plain text or a neutral dot.
+- **Masked** is a neutral outlined badge with a lock icon. No purple.
+- **Waiting** is a neutral badge with a clock icon. No amber fills.
+- Session states (Clean / Untrusted / Holds private data) are neutral text with a small icon, not coloured pills.
+- Remove coloured left borders on every card, coloured progress bars and filled pill backgrounds. A small dot or icon carries status.
+- Charts: grey series; only the *blocked* series in red. One chart type per question.
+- **A compact type scale:**
+  - 13px body, 12px secondary/labels, 15px section titles, 18px page title;
+  - KPI values 22–24px, never bigger;
+  - row height ~32–36px;
+  - consistent 8px spacing grid.
+- Tables and lists over big cards where data is tabular (the session list = a compact table/list).
+- Everything the same size family: no element should be visually louder than its importance.
+
+**Navigation, revised:**
+1. **Dashboard** (new home)
+2. Sessions
+3. Setup
+4. Scenario
+
+The separate **Analytics tab is removed**; its useful parts move into Dashboard.
+
+**Dashboard: the decisions it serves (decision inventory):**
+1. *Is my agent OK right now?* A status line: connected, policy/feed versions, and "nothing needs attention" or the 1–3 latest things that do.
+2. *Did Tollgate stop or change anything today?* A KPI strip, each with a delta vs the previous period: actions checked, blocked, masked, sessions.
+3. *What happened over time?* One trend: actions per time bucket, grey, with blocked in red. The time range is selectable (15 min / 1 h / today).
+4. *Why were things stopped?* Top reasons, plain English, a sorted horizontal bar, grey.
+5. *What is my agent using?* Top tools / sources (GitHub, tickets, files, model), as a sorted list with counts.
+6. *Where do I look next?* Recent events needing a look (blocked/flagged), each linking into its session timeline.
+
+Order on the page, top to bottom: status line → KPI strip → trend → (reasons | tools side by side) → recent events.
+
 ## Server console (security lead)
 
 **Purpose:** govern and oversee **all peers** (laptops/edges running agents) and all agents in the company. This is the complex side and the primary UI.
