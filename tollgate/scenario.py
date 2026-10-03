@@ -57,6 +57,7 @@ class Runner:
         self.prev: dict[str, str] = {}     # scenario session -> last tool output ($prev)
         self.results: dict[str, dict] = {}
         self.labels: dict[str, str] = {}   # key_id -> "Scenario 3: a3-attack" (edge session names)
+        self.charged: dict[tuple, int] = {}  # (role, day) -> tokens the scenario spent; reset gives back only these
 
     def _factory(self, **kw):
         return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=self.app), base_url="http://edge", **kw)
@@ -70,7 +71,7 @@ class Runner:
         return self.keys[sess]
 
     def reset(self) -> None:
-        """Fresh mocks, budgets and keys (TOLLGATE taint of scenario keys dropped)."""
+        """Fresh mocks and keys; taint of scenario keys dropped; only the tokens the scenario spent are given back."""
         from mocks import files, github, tickets
         github.PRS.clear()
         tickets.reset()
@@ -78,7 +79,13 @@ class Runner:
         files.FS.update(FS0)
         for k in self.keys.values():
             taint.reset(keys.verify(k)[1])
-        model_door.USED.clear()
+        for k, n in self.charged.items():
+            left = model_door.USED.get(k, 0) - n
+            if left > 0:
+                model_door.USED[k] = left
+            else:
+                model_door.USED.pop(k, None)
+        self.charged.clear()
         self.keys.clear()
         self.prev.clear()
         self.results.clear()
@@ -141,13 +148,16 @@ class Runner:
             return {**_event_fields(self._last_event(key_id)), "text": text, "error": err,
                     "new_prs": len(PRS) - prs, "key_id": key_id}
         if kind in ("chat", "chat_until_budget"):
-            prompt = step["prompt"]
+            prompt, before = step["prompt"], dict(model_door.USED)
             async with self._factory() as c:
                 for _ in range(1 if kind == "chat" else 40):
                     r = await c.post("/v1/chat/completions", headers={"Authorization": f"Bearer {key}"},
                                      json={"model": step["model"], "messages": [{"role": "user", "content": prompt}]})
                     if kind == "chat" or r.status_code == 429:
                         break
+            for k, n in model_door.USED.items():
+                if n > before.get(k, 0):
+                    self.charged[k] = self.charged.get(k, 0) + n - before.get(k, 0)
             return {**_event_fields(self._last_event(key_id)), "status": r.status_code, "key_id": key_id}
         raise ValueError(f"unknown step kind {kind}")
 

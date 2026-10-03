@@ -53,9 +53,11 @@ async def test_scenario_then_views(monkeypatch):
         assert tl[0]["explain"]["effect"].startswith("The session is now Untrusted")
         assert (await c.get("/edge/api/sessions/nope")).status_code == 404
 
-        an = (await c.get("/edge/api/analytics")).json()
-        assert an["blocked"] == 1 and an["masked"] == 1 and "taint.flow" in [r["rule"] for r in an["top_reasons"]]
-        assert sum(sum(r[a] for a in ("allow", "redact", "approve", "block")) for r in an["series"]) == 3
+        ov = (await c.get("/edge/api/overview", params={"range": "15m"})).json()
+        assert ov["kpis"]["blocked"]["value"] >= 1 and ov["needs_look"][0]["action"] == "Data-flow rule: blocked"
+        ev = (await c.get("/edge/api/events", params={"range": "15m", "action": "blocked"})).json()
+        assert ev["items"][0]["session_id"] == s["id"] and {x["kind"] for x in ev["items"]} == {"blocked"}
+        assert tl[2]["kind"] == "blocked" and tl[0]["kind"] is None
 
 
 async def test_setup_and_test_connection(monkeypatch):

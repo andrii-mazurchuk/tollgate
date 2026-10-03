@@ -149,3 +149,16 @@ def event(ev: dict) -> dict:
     return {"sentence": sentence, "why": why, "todo": todo, "tool_name": name,
             "effect": effect(ev.get("state_before"), ev.get("state_after")),
             "rules": [x.get("rule") for x in ev.get("reasons") or []]}
+
+
+# check that produced a rule, for "Data-flow rule: blocked" (most specific prefix first)
+CHECKS = (("taint.", "Data-flow rule"), ("role.constraint", "Argument check"), ("role.approval", "Approval rule"),
+          ("role.", "Role check"), ("auth.", "Key check"), ("pin.", "Tool pin check"), ("loop.", "Loop guard"),
+          ("model.", "Model check"), ("budget.", "Budget"), ("approval.", "Approval"), ("secret.", "Secret detector"),
+          ("pii.", "Personal-data detector"), ("sig.", "Threat feed"), ("inj.", "Injection check"),
+          ("t2.", "Injection check"), ("content.", "Content check"), ("upstream.", "Model server"),
+          ("request.", "Request check"))
+
+
+def check_name(rule_id: str | None) -> str:
+    return next((name for pref, name in CHECKS if (rule_id or "").startswith(pref)), "Tollgate check")

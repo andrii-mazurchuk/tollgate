@@ -35,9 +35,18 @@ def edge_key() -> str:
     return os.environ.get("TOLLGATE_EDGE_KEY") or keys.issue(os.environ.get("TOLLGATE_EDGE_ROLE", "role-2"), "edge")
 
 
+_CACHE: dict = {}
+
+
 def load_events() -> list[dict]:
+    """Audit events, re-parsed only when the file's (path, mtime, size) changes. Callers must not mutate the list."""
+    p = Path(os.environ.get("TOLLGATE_AUDIT") or audit.DEFAULT_PATH)
     try:
-        lines = Path(os.environ.get("TOLLGATE_AUDIT") or audit.DEFAULT_PATH).read_text(encoding="utf-8").splitlines()
+        st = p.stat()
+        sig = (str(p), st.st_mtime_ns, st.st_size)
+        if _CACHE.get("sig") == sig:
+            return _CACHE["events"]
+        lines = p.read_text(encoding="utf-8").splitlines()
     except OSError:
         return []
     out = []
@@ -48,6 +57,7 @@ def load_events() -> list[dict]:
             continue
         if isinstance(ev, dict) and "ts" in ev:
             out.append(ev)
+    _CACHE.update(sig=sig, events=out)
     return out
 
 
@@ -80,7 +90,7 @@ def sessions(events: list[dict], labels: dict | None = None, now: datetime | Non
                     "label": (labels or {}).get(sid), "first_ts": evs[0]["ts"], "last_ts": last["ts"],
                     "active": now - _ts(last) < timedelta(minutes=ACTIVE_MIN), "state": _state(last),
                     "state_words": explain.state_words(_state(last)), "last_verdict": last.get("verdict"),
-                    "tools": tools, "counts": {a: c.get(a, 0) for a in ACTIONS}, "n": len(evs)})
+                    "tools": tools, "duration_s": (_ts(last) - _ts(evs[0])).total_seconds(), "counts": {a: c.get(a, 0) for a in ACTIONS}, "n": len(evs)})
     return sorted(out, key=lambda s: s["last_ts"], reverse=True)
 
 
@@ -89,43 +99,121 @@ def timeline(events: list[dict], sid: str, texts: dict | None = None) -> list[di
     texts = texts or {}
     out = []
     for e in sorted((e for e in events if _sid(e) == sid), key=_ts):
-        out.append({**e, "explain": explain.event(e), "text": texts.get(e.get("trace_id")),
+        out.append({**e, "explain": explain.event(e), "text": texts.get(e.get("trace_id")), "kind": kind(e),
+                    "action": action_words(e) if kind(e) else None,
+                    "ms": round(sum(st.get("ms") or 0 for st in e.get("stages") or []), 1),
                     "state_words_before": explain.state_words(e.get("state_before")),
                     "state_words_after": explain.state_words(_state(e))})
     return out
 
 
-def _bucket(span_s: float) -> int:
-    for b in (10, 30, 60, 300, 900, 3600, 4 * 3600, 86400):
-        if span_s / b <= 30:
-            return b
-    return 86400 * math.ceil(span_s / 86400 / 30)
+FLAG = ("inj.", "t2.", "sig.")
 
 
-def analytics(events: list[dict], labels: dict | None = None) -> dict:
-    if not events:
-        return {"series": [], "bucket_s": 60, "totals": dict.fromkeys(ACTIONS, 0), "blocked": 0, "masked": 0,
-                "top_reasons": [], "per_session": [], "n": 0}
-    events = sorted(events, key=_ts)
-    span = (_ts(events[-1]) - _ts(events[0])).total_seconds()
-    b = _bucket(span)
-    rows: dict[float, dict] = {}
+def kind(ev: dict) -> str | None:
+    """blocked | masked | waiting | flagged (went through, but injection-like text) | None (nothing to see)."""
+    v = ev.get("verdict")
+    if v in ("block", "redact", "approve"):
+        return {"block": "blocked", "redact": "masked", "approve": "waiting"}[v]
+    r = explain.main_reason(ev)
+    return "flagged" if r and r["rule"].startswith(FLAG) else None
+
+
+def action_words(ev: dict) -> str:
+    """'Data-flow rule: blocked', 'Secret detector: masked 2 values', 'Injection check: flagged'."""
+    r, k = explain.main_reason(ev), kind(ev)
+    name = explain.check_name(r and r["rule"])
+    if k == "masked":
+        n = sum((x.get("rule") or "").startswith(("secret.", "pii.")) for x in ev.get("reasons") or []) or 1
+        return f"{name}: masked {n} value{'s' * (n != 1)}"
+    return f"{name}: " + {"blocked": "blocked", "waiting": "held for approval", "flagged": "flagged"}.get(k, "passed")
+
+
+RANGES = {"15m": 900, "1h": 3600}
+BUCKETS = (1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 3 * 3600, 6 * 3600, 12 * 3600, 86400)
+
+
+def _iso(t: float) -> str:
+    return datetime.fromtimestamp(t, timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def window(rng: str, now: datetime) -> tuple[datetime | None, tuple[datetime, datetime] | None]:
+    """(start of the range, the previous equal period) for 15m | 1h | today (local midnight) | all."""
+    if rng in RANGES:
+        d = timedelta(seconds=RANGES[rng])
+        return now - d, (now - 2 * d, now - d)
+    if rng == "today":
+        start = now.astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
+        return start, (start - timedelta(days=1), now - timedelta(days=1))
+    return None, None
+
+
+def _in(events, a, b) -> list[dict]:
+    return [e for e in events if (a is None or _ts(e) >= a) and _ts(e) <= b]
+
+
+def series(events: list[dict], start: datetime | None, now: datetime) -> tuple[list[dict], int]:
+    """Buckets from the range and the data spread: the chart starts at the first event (not an empty range start),
+    spans at least a minute and has 20-40 bars, so a burst of a few seconds is not one lonely bar."""
+    first = min((_ts(e) for e in events), default=now)
+    a = max(start, first) if start else first
+    span = max(60.0, (now - a).total_seconds())
+    b = next((x for x in BUCKETS if span / x <= 40), 86400 * math.ceil(span / 86400 / 40))
+    t0 = (now.timestamp() - span) // b * b
+    rows = [{"t": _iso(t0 + i * b), **dict.fromkeys(ACTIONS, 0)} for i in range(int((now.timestamp() - t0) // b) + 1)]
     for e in events:
-        t = _ts(e).timestamp() // b * b
-        rows.setdefault(t, {"t": datetime.fromtimestamp(t, timezone.utc).isoformat().replace("+00:00", "Z"),
-                            **dict.fromkeys(ACTIONS, 0)})[e.get("verdict", "allow")] += 1
-    totals = Counter(e.get("verdict") for e in events)
-    reasons = Counter()
-    for e in events:
+        i = int((_ts(e).timestamp() - t0) // b)
+        if 0 <= i < len(rows):
+            rows[i][e.get("verdict", "allow")] += 1
+    return rows, b
+
+
+def _kpis(evs: list[dict]) -> dict:
+    c = Counter(e.get("verdict") for e in evs)
+    return {"checked": len(evs), "blocked": c.get("block", 0), "masked": c.get("redact", 0),
+            "sessions": len({_sid(e) for e in evs})}
+
+
+def _item(e: dict, labels: dict | None = None) -> dict:
+    return {"ts": e["ts"], "kind": kind(e), "action": action_words(e), "sentence": explain.event(e)["sentence"],
+            "check": explain.check_name((explain.main_reason(e) or {}).get("rule")), "role": e.get("role"),
+            "agent": explain.AGENTS.get(e.get("role"), e.get("role")),
+            "tool": explain.tool(e.get("tool"), e.get("door", "tool")),
+            "session_id": _sid(e), "session_label": (labels or {}).get(_sid(e)), "trace_id": e.get("trace_id")}
+
+
+def overview(events: list[dict], rng: str = "today", labels: dict | None = None, now: datetime | None = None) -> dict:
+    now = now or datetime.now(timezone.utc)
+    start, prev = window(rng, now)
+    cur = _in(events, start, now)
+    k, p = _kpis(cur), (_kpis(_in(events, *prev)) if prev else None)
+    rows, b = series(cur, start, now)
+    reasons, tools = Counter(), Counter()
+    for e in cur:
+        tools[explain.tool(e.get("tool"), e.get("door", "tool"))] += 1
         r = explain.main_reason(e)
-        if r and (e.get("verdict") != "allow" or r["rule"].startswith(("inj.", "t2."))):
-            reasons[r["rule"].split(".")[0] + "." if r["rule"].startswith("sig.") else r["rule"]] += 1
-    return {"series": [rows[k] for k in sorted(rows)], "bucket_s": b,
-            "totals": {a: totals.get(a, 0) for a in ACTIONS}, "blocked": totals.get("block", 0),
-            "masked": totals.get("redact", 0), "n": len(events),
-            "top_reasons": [{"rule": r, "label": explain.rule(r)[0], "count": n} for r, n in reasons.most_common(8)],
-            "per_session": [{"id": s["id"], "agent": s["agent"], "label": s["label"], "counts": s["counts"]}
-                            for s in sessions(events, labels)][:12]}
+        if r and kind(e):
+            reasons[explain.rule(r["rule"])[0]] += 1
+    look = sorted((e for e in cur if kind(e) in ("blocked", "flagged", "waiting")), key=_ts, reverse=True)[:6]
+    return {"range": rng, "start": start and start.isoformat(), "now": now.isoformat(), "bucket_s": b, "series": rows,
+            "kpis": {n: {"value": k[n], "prev": p[n] if p else None} for n in k},
+            "top_reasons": [{"label": r, "count": n} for r, n in reasons.most_common(6)],
+            "top_tools": [{"name": t, "count": n} for t, n in tools.most_common(8)],
+            "needs_look": [_item(e, labels) for e in look]}
+
+
+def events_list(events: list[dict], rng: str = "today", filters: dict | None = None, labels: dict | None = None,
+                now: datetime | None = None) -> dict:
+    """Blocked/masked/waiting/flagged only, newest first; filters action|agent(role)|check are ANDed."""
+    now = now or datetime.now(timezone.utc)
+    items = [_item(e, labels) for e in sorted(_in(events, window(rng, now)[0], now), key=_ts, reverse=True) if kind(e)]
+    facets = {"action": sorted({x["kind"] for x in items}), "agent": sorted({x["role"] for x in items if x["role"]}),
+              "check": sorted({x["check"] for x in items})}
+    f = {"action": "kind", "agent": "role", "check": "check"}
+    for k, v in (filters or {}).items():
+        if k in f and v:
+            items = [x for x in items if x[f[k]] == v]
+    return {"items": items[:500], "facets": facets}
 
 
 def health(events: list[dict], policy, pins, feed, since: str | None) -> dict:
@@ -212,8 +300,17 @@ def routes(policy) -> list:
             return JSONResponse({"error": "unknown session"}, 404)
         return JSONResponse({"session": meta, "timeline": timeline(evs, sid, local_text.load())})
 
-    async def get_analytics(request):
-        return JSONResponse(analytics(load_events(), labels(request)))
+    def rng(request) -> str:
+        r = request.query_params.get("range", "today")
+        return r if r in ("15m", "1h", "today", "all") else "today"
+
+    async def get_overview(request):
+        return JSONResponse(overview(load_events(), rng(request), labels(request)))
+
+    async def get_events(request):
+        q = request.query_params
+        return JSONResponse(events_list(load_events(), rng(request), {k: q.get(k) for k in ("action", "agent", "check")},
+                                        labels(request)))
 
     async def setup(request):
         key, base = edge_key(), str(request.base_url).rstrip("/")
@@ -242,7 +339,7 @@ def routes(policy) -> list:
             return JSONResponse({"ok": False, "error": f"{type(e).__name__}: {e}"})
         return JSONResponse({"ok": True, "tools": [{"name": t, "plain": explain.tool(t)} for t in tools]})
 
-    async def events(request):
+    async def stream(request):
         q: asyncio.Queue = asyncio.Queue()
         audit.LISTENERS.add(q)
 
@@ -283,8 +380,9 @@ def routes(policy) -> list:
         return JSONResponse({"ok": True})
 
     api = [Route("/status", local(status)), Route("/sessions", local(list_sessions)),
-           Route("/sessions/{id}", local(one_session)), Route("/analytics", local(get_analytics)),
-           Route("/setup", local(setup)), Route("/setup/test", local(setup_test)), Route("/events", local(events)),
+           Route("/sessions/{id}", local(one_session)), Route("/overview", local(get_overview)),
+           Route("/events", local(get_events)),
+           Route("/setup", local(setup)), Route("/setup/test", local(setup_test)), Route("/stream", local(stream)),
            Route("/scenario", local(get_scenario)), Route("/scenario/run/{step}", local(run_step), methods=["POST"]),
            Route("/scenario/reset", local(reset), methods=["POST"])]
     return [Mount("/edge/api", routes=api), Route("/edge", lambda r: RedirectResponse("/edge/")),
