@@ -131,6 +131,14 @@ Order on the page, top to bottom: status line → KPI strip → trend → (reaso
    - content checks in force (what is masked, what is blocked, injection strictness, signature feed version);
    - **local settings this layer may change**: keep full text locally on/off, retention, theme. Local settings may only make things *stricter or more private*, never looser than the company policy, which stays authoritative and read-only here.
 
+### Local edge, revision 4 (audit, 2026-10-04)
+
+- **No page titles or subtitles.** The highlighted nav item names the view. Content starts right under the top bar.
+- **The top bar carries the view's controls.** From the left, aligned to the content gutter: the health indicator, then on the right the view's controls (the time range on Overview and Events, the runner on Scenario, nothing elsewhere), a compact status chip, and the theme toggle. Every control is 28px tall.
+- **The status chip** shows the agent, role, a connection dot and the server. The app, policy, feed and classifier versions are in its tooltip.
+- **Health counts only the last hour** (or since the last click). An all-time count kept it red forever.
+- **Content is full width**, so its right edge lines up with the top bar's (24px). Master–detail views fill the viewport height. In a session, the steps take up to 40% of the pane and the step detail scrolls in the rest.
+
 ## Server console (security lead)
 
 **Purpose:** govern and oversee **all peers** (laptops/edges running agents) and all agents in the company. This is the complex side and the primary UI.
