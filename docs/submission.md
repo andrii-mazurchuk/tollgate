@@ -39,7 +39,7 @@ Tollgate is a local AI control layer that sits between agents and everything the
 The working system runs locally, and all required deliverables exist: the control layer, a demo agent, an architecture diagram, documented policy profiles, a dashboard, an executable test suite and a 10-slide deck.
 
 - **Both real attacks are reproduced and stopped.** The GitHub and Supabase incidents leak data with roles only and are blocked by session taint, with the cause named. A tool-calling demo agent shows the same result through both of Tollgate's interfaces.
-- **Measured on 1,361 evaluation cases (30% held out):**
+- **Measured on 1,411 evaluation cases, including 50 hand-written red-team cases (30% held out):**
   - injection recall 0.837 at a 0.9% false-positive rate;
   - security posture score 0.931;
   - normalisation lifts recall on obfuscated attacks from 0.67 to 1.00.

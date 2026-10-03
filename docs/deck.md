@@ -187,8 +187,8 @@ taint:
 <div class="cols stack">
 <div>
 <div class="metrics">
-<div class="metric"><b>144</b><span>fast tests pass (+6 slow: real model, full eval)</span></div>
-<div class="metric"><b>1,361</b><span>eval cases, 30% held out (376)</span></div>
+<div class="metric"><b>207</b><span>fast tests pass (+6 slow: real model, full eval), incl. 63 red-team tests</span></div>
+<div class="metric"><b>1,411</b><span>eval cases incl. 50 red-team, 30% held out (390)</span></div>
 <div class="metric"><b>14 / 16</b><span>acceptance criteria green</span></div>
 </div>
 <div class="small">
@@ -210,7 +210,8 @@ taint:
 <tr><td>jbb (benign)</td><td>22</td><td>-</td><td>0.000</td></tr>
 <tr><td>own: obf, poisoned, sigs</td><td>11</td><td>1.000</td><td>-</td></tr>
 <tr><td>own: pii, secrets, clean</td><td>9</td><td>1.000</td><td>0.500</td></tr>
-<tr><td><b>overall</b></td><td>376</td><td><b>0.888</b></td><td><b>0.034</b></td></tr>
+<tr><td>red team (hand-written)</td><td>14</td><td>1.000</td><td>0.286</td></tr>
+<tr><td><b>overall</b></td><td>390</td><td><b>0.891</b></td><td><b>0.048</b></td></tr>
 </table>
 <p class="small">Injection only: recall <b>0.837</b>, FPR <b>0.009</b>. Posture <b>0.931</b>.</p>
 
