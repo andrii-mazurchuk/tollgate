@@ -1,5 +1,7 @@
-"""Tier 1: deterministic PII (regex + checksum) and secret detection."""
+"""Tier 1: deterministic secrets, injection heuristics, PII (regex + checksum) and the signature feed."""
 import re
+
+from tollgate.content import signatures
 
 
 def iban_ok(s: str) -> bool:
@@ -29,12 +31,20 @@ def _last4(m: str) -> str:
     return m.replace(" ", "").replace("-", "")[-4:]
 
 
+_inj = lambda m: "[INJ]"  # noqa: E731  never used for masking (inj actions are allow/approve/block)
+
 # (rule_id, regex, validator, policy path, default action, mask, detail)
 # Order matters: earlier rules claim their span; later rules skip overlapping matches.
 RULES = [
     ("secret.private_key", re.compile(r"-----BEGIN (?:[A-Z]+ )*PRIVATE KEY-----"), None, ("secrets",), "block", lambda m: "[SECRET]", "private key header"),
     ("secret.github_token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36}\b"), None, ("secrets",), "block", lambda m: "[SECRET]", "GitHub token"),
     ("secret.aws_key", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"), None, ("secrets",), "block", lambda m: "[SECRET]", "AWS access key id"),
+    # injection heuristics: default tier1_action 'allow' = reason kept as a flag for tier 2, verdict unaffected
+    ("inj.md_exfil", re.compile(r"!\[[^\]]*\]\(\s*https?://[^\s)]*\?[^\s)]*=[^\s)]*\)", re.I), None, ("injection", "md_exfil"), "block", _inj, "markdown image exfiltration (URL with query)"),
+    ("inj.ignore_prev", re.compile(r"\b(?:ignore|disregard|forget)\s+(?:(?:all|any|the|of|your)\s+){0,3}(?:previous|prior|above|earlier)\s+(?:instructions|rules|prompts?)\b", re.I), None, ("injection", "tier1_action"), "allow", _inj, "ignore-previous-instructions phrase"),
+    ("inj.ignore_prev_pl", re.compile(r"\b(?:zignoruj|pomiń|zapomnij)\s+(?:o\s+)?(?:wszystki(?:e|ch)\s+)?(?:poprzedni(?:e|ch)|wcześniejsz(?:e|ych))\s+(?:instrukcj(?:e|i)|polece(?:nia|ń))", re.I), None, ("injection", "tier1_action"), "allow", _inj, "ignore-previous-instructions phrase (PL)"),
+    ("inj.role_switch", re.compile(r"<\|im_start\|>|\[INST\]|^[ \t]*system[ \t]*:|\byou are now (?:in )?\w+ mode\b", re.I | re.M), None, ("injection", "tier1_action"), "allow", _inj, "chat-template token or role switch"),
+    ("inj.hide_from_user", re.compile(r"\b(?:do not|don['’]?t)\s+(?:tell|inform|mention (?:this |it |anything )?to)\s+the user\b|\bnie (?:mów|informuj) użytkownik(?:owi|a)\b", re.I), None, ("injection", "tier1_action"), "allow", _inj, "instruction to hide from the user"),
     ("pii.iban", re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b"), iban_ok, ("pii", "iban"), "redact", lambda m: f"[IBAN:…{_last4(m)}]", "IBAN, checksum valid"),
     ("pii.pesel", re.compile(r"\b\d{11}\b"), pesel_ok, ("pii", "pesel"), "block", lambda m: "[PESEL]", "PESEL, checksum valid"),
     ("pii.nip", re.compile(r"\b\d{3}-?\d{3}-?\d{2}-?\d{2}\b"), nip_ok, ("pii", "nip"), "redact", lambda m: "[NIP]", "NIP, checksum valid"),
@@ -52,10 +62,14 @@ def _action(policy: dict, path: tuple, default: str) -> str:
 
 
 def find(text: str, policy: dict) -> list[tuple[str, int, int, str, str, str]]:
-    """Findings as (rule, start, end, action, mask, detail). Actions resolved against the policy; 'allow' dropped."""
+    """Findings as (rule, start, end, action, mask, detail). Actions resolved against the policy.
+
+    'allow' findings are dropped, except inj.* which are kept as flags (tier 2 escalation hint).
+    """
     claimed: list[tuple[int, int]] = []
     out = []
-    for rule, rx, ok, path, default, mask, detail in RULES:
+    feed = [(r, rx, None, None, a, lambda m: "[SIG]", d) for r, rx, a, d in signatures.rules(policy.get("signatures"))]
+    for rule, rx, ok, path, default, mask, detail in RULES + feed:
         for m in rx.finditer(text):
             s, e = m.span()
             if any(s < ce and cs < e for cs, ce in claimed):
@@ -65,7 +79,7 @@ def find(text: str, policy: dict) -> list[tuple[str, int, int, str, str, str]]:
                     claimed.append((s, e))  # so its digit groups are not re-read as a card number
                 continue
             claimed.append((s, e))
-            action = _action(policy, path, default)
-            if action != "allow":
+            action = _action(policy, path, default) if path else default
+            if action != "allow" or rule.startswith("inj."):
                 out.append((rule, s, e, action, mask(m.group()), detail))
     return out

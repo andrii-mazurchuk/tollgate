@@ -29,8 +29,8 @@ def scan(text: str, point: ScanPoint, policy: dict) -> Verdict:
         redacted = None
         if action == "redact":
             masks: dict[tuple[int, int], list[str]] = {}
-            for _, s, e, _, mk, _ in findings:
-                if mk not in masks.setdefault((s, e), []):
+            for _, s, e, a, mk, _ in findings:
+                if a == "redact" and mk not in masks.setdefault((s, e), []):
                     masks[(s, e)].append(mk)
             parts, pos = [], 0
             for (s, e), mks in sorted(masks.items()):
