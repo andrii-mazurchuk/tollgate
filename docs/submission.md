@@ -8,7 +8,7 @@
 
 **Members:** [MEMBERS]
 
-**Repository:** [REPO]
+**Repository:** https://github.com/andrii-mazurchuk/tollgate (private; access on request)
 
 ## Description (≤ 150 words)
 
