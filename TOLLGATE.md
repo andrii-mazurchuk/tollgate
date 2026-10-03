@@ -1,11 +1,45 @@
 # Tollgate: product spec and acceptance criteria
 
 **Task:** HackYeah 2026, partner task Goldman Sachs, "AI Control Layer".
-**Status:** aligned 2026-10-03 (revision 2). Pre-build.
+**Status:** aligned 2026-10-03 (revision 2). Built through M1 + most of M2; see [Status at submission 1](#status-at-submission-1-2026-10-03).
 **Team:** 1 person, about 30 hours, full Python.
 **Visual walkthrough:** [Tollgate product map](https://claude.ai/artifact/VScYMyEP8mAdALTqa3jxq6). It includes a role builder, an attack replay and a tier 1 playground. Background research is in [RESEARCH.md](RESEARCH.md).
 
 **One-liner:** every role gets its own MCP server, generated from one policy file, that exposes exactly the tools that role may use. Every tool call is checked locally for malicious content before it leaves the machine. The server also blocks the private → public data flow once a session has read untrusted content.
+
+---
+
+## Status at submission 1 (2026-10-03)
+
+Measured on `main` (commit `6c62e7f`) on the day. Fast suite: `uv run pytest -q -m "not slow"` → **98 passed, 5 deselected** (slow = real tier 2 model / full eval). Eval: `uv run tollgate test --eval-only` on **1355 corpus cases**, 30% held out (374 cases).
+
+| AC | Status | Evidence |
+|---|---|---|
+| AC1 one command | partial | `tollgate serve` starts role MCPs, 3 in-process mocks, model door, `/healthz` (`test_ac07_hot_reload.py::test_ac01_app_serves_healthz_and_roles`). Dashboard is a separate `streamlit run`; Ollama is external; no separate Edge process. |
+| AC2 role scoping | green | `tests/acceptance/test_ac02_role_scoping.py` |
+| AC3 exact tools | green | `tests/acceptance/test_ac03_exact_tools.py` |
+| AC4 argument limits | green | `tests/acceptance/test_ac04_argument_limits.py` |
+| AC5 attack replay | partial | GitHub: `tollgate replay github` leaks with taint off (PR body carries `SALARY_ALICE=182000`), blocks step 3 with `taint.flow: … tainted by github.issues.read #12` with taint on; `test_ac05_taint_replay.py`. **Supabase trace: in progress, not on `main`.** |
+| AC6 benign flow | green | `tests/acceptance/test_ac06_benign_flow.py` |
+| AC7 hot reload | green | `test_ac07_hot_reload.py`; checked by hand: adding `files: { tools: [fs.read] }` to role-1 shows `files.fs.read` on the next `tools/list`; an invalid file sets `/healthz` `policy.last_error`, old version kept; dashboard shows the REJECTED banner |
+| AC8 content | partial | Held-out injection recall **0.837** (target 0.85, **missed**), FPR **0.009** (target ≤ 0.05, met), same at all three profiles (`high` = 0.50). IBAN redacted, PESEL blocked: `test_ac08_pii.py`, `test_ac08_injection.py`. PII control held-out pass rate 0.978; a separate PII recall/FPR figure is not reported. |
+| AC9 normalisation | green | eval report: obfuscated recall 1.000 vs plain 1.000 with normalisation on (0.667 with it off) |
+| AC10 signatures | green | `tests/acceptance/test_ac10_signatures.py` |
+| AC11 budget + loops | green | `tests/acceptance/test_ac11_budget_loops.py` (429, `loop.cutoff`) |
+| AC12 model allow-list | green | `tests/acceptance/test_ac12_model_allowlist.py`; live: `qwen3:4b` for role-1 → 403 `model.denied` |
+| AC13 suite | green | `tollgate test`: 1355 cases, pass rate 0.920, FPR 0.035, posture **0.899**; `content.injection: off` → posture 0.727. `test_ac13_suite_summary.py`, `test_eval_posture.py`. Per-pattern P1–P10 coverage is not audited. |
+| AC14 dashboard | green | `dashboard/app.py` (verdicts, tainted sessions, budget burn, latency, posture, policy banner, JSONL/CSV export); `tests/test_dashboard_data.py` |
+| AC15 latency | partial | Tier 1 p95 **2.91 ms** (met). Tier 2 short text (≤ 64 tokens) p50 38 ms, **p95 84 ms** (target 80, just missed); all texts p95 1603 ms, so tier 2 is only fit for sync on short text. Sync share reported: 0.779. Hub checks are timed per event in the audit (`latency_ms.role/taint`) but not summarised. `tollgate test --perf` not built; numbers are in the eval report. |
+| AC16 deliverables | partial | README quick start: done. `docs/slides.md` outline: done, PDF not yet. `docs/architecture.md` and commented `policies/*.yaml` profiles: in progress. |
+
+**Count:** 11 green, 5 partial, 0 not built.
+
+**Known gaps, stated plainly:**
+- Injection recall 83.7% is below the 85% target. Misses concentrate in the `deepset` source (recall 0.371 held-out).
+- Tier 2 meets latency only on short text; long tool results are deferred, not blocked synchronously.
+- No approval flow: `action: approve` is accepted and treated as block (the message says so).
+- Supabase replay not merged at submission 1.
+- No separate Edge process: content checks run in the gateway process today.
 
 ---
 
