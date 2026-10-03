@@ -1,0 +1,52 @@
+# Signature feed source (the "externally managed system", P6). Served signed by `tollgate feed serve`;
+# edit with `tollgate feed publish --add 'id=...,pattern=...,action=block,tags=A;B'` (bumps version).
+# Gateways with `feed:` in policy.yaml pull it, verify the HMAC and write signatures.yaml.
+version: 1
+issued_at: '2026-10-03T00:00:00Z'
+signatures:
+- id: py_import_os
+  pattern: '__import__\(\s*[''"]os'
+  action: block
+  tags: [OWASP-LLM05, ATLAS-AML.T0050]
+- id: py_shell_exec
+  pattern: 'os\.system\(|subprocess\.(Popen|run)\('
+  action: block
+  tags: [OWASP-LLM05, ATLAS-AML.T0050]
+- id: pickle_load
+  pattern: 'pickle\.loads?\('
+  action: block
+  tags: [OWASP-LLM05, ATLAS-AML.T0011]
+- id: curl_pipe_shell
+  pattern: 'curl\s+[^|\n]*\|\s*(ba)?sh\b'
+  action: block
+  tags: [OWASP-LLM06, ATLAS-AML.T0050]
+- id: dan_jailbreak
+  pattern: 'Hello,?\s+ChatGPT\.\s+From now on you are going to act as (a )?DAN'
+  action: block
+  tags: [OWASP-LLM01, ATLAS-AML.T0054]
+- id: rm_rf_root
+  pattern: 'rm\s+-rf\s+/'
+  action: block
+  tags: [OWASP-LLM06, ATLAS-AML.T0048]
+# --- model supply chain ---
+# pickle GLOBAL opcode ("c<module>\n<name>") importing a code-exec callable; matches raw and JSON-escaped (\n) text
+- id: pickle_global_exec
+  pattern: 'c(__builtin__|builtins|os|posix|nt)(\n|\n)(eval|exec|system|popen)|csubprocess(\n|\n)'
+  action: block
+  tags: [ATLAS-AML.T0011, ATLAS-AML.T0010, unsafe-deserialization]
+- id: torch_load_unsafe
+  pattern: 'torch\.load\((?![^)]*weights_only\s*=\s*True)'
+  action: block
+  tags: [ATLAS-AML.T0010, unsafe-deserialization]
+- id: hf_trust_remote_code
+  pattern: 'trust_remote_code\s*=\s*True'
+  action: block
+  tags: [ATLAS-AML.T0010, supply-chain]
+- id: yaml_load_unsafe
+  pattern: 'yaml\.load\((?![^)]*SafeLoader)'
+  action: block
+  tags: [OWASP-LLM05, unsafe-deserialization]
+- id: langchain_palchain
+  pattern: '\bPALChain\b|\bPythonREPLTool\b|\bPythonAstREPLTool\b'
+  action: block
+  tags: [CVE-2023-36258, GHSA-2qmj-7962-cjq8, PYSEC-2023-98, CVE-2023-36188, GHSA-57fc-8q82-gfp3, CVE-2023-36095, GHSA-gwqq-6vq7-5j86]

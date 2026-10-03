@@ -25,7 +25,8 @@ flowchart LR
         end
         door["Model door /v1/chat/completions<br/>allow-list → budget 429 → prompt scan<br/>→ upstream → response scan"]
         audit[("audit/events.jsonl<br/>one AuditEvent per decision")]
-        admin["/healthz (pin_alerts) /admin/taint /admin/budget<br/>/admin/approvals (POST needs admin token)"]
+        puller["Feed puller (lifespan task)<br/>every interval_s: GET bundle,<br/>verify HMAC, newer version only"]
+        admin["/healthz (pin_alerts, feed) /admin/taint /admin/budget<br/>/admin/approvals (POST needs admin token)"]
     end
 
     subgraph src["Source MCPs (mocks, in-process)"]
@@ -37,6 +38,8 @@ flowchart LR
     policy[["policy.yaml<br/>(policies/strict|balanced|lenient)"]]
     ollama["Ollama<br/>qwen3:1.7b / qwen3:4b"]
     dash["Dashboard (Track B)"]
+    feedsrv["Signature feed server<br/>tollgate feed serve :8090<br/>GET /bundle.json (HMAC-signed)"]
+    sigs[["signatures.yaml"]]
 
     agent -->|"MCP over HTTP"| key --> role
     taint -->|"tool args"| edge
@@ -52,6 +55,9 @@ flowchart LR
     hub --> audit
     door --> audit
     audit --> dash
+    feedsrv -->|"pull"| puller
+    puller -->|"atomic write<br/>(tmp + os.replace)"| sigs
+    sigs -.->|"mtime reload"| t1
     admin --> dash
 ```
 
@@ -69,3 +75,4 @@ How a tool call flows, as built in `tollgate/gateway/__init__.py`:
 10. Measured (`tollgate perf`, `audit/perf.json`): Hub checks p95 about 0.5 ms, tier 1 p95 about 0.4 ms; tier 2 comes from `audit/eval.json`.
 11. A policy edit takes effect on the next call; an invalid file is rejected and the previous policy keeps running (`/healthz` shows the error).
 12. `tollgate up` runs the gateway in-process and the Streamlit dashboard as a subprocess (127.0.0.1:8501); the dashboard stops when the gateway exits.
+13. P6 signature feed (`tollgate/feed/`): `tollgate feed serve` is the externally managed system; it serves `feed/bundle_src.yaml` as `{version, issued_at, signatures, sig}`, `sig` = HMAC-SHA256 (`TOLLGATE_FEED_SECRET`) over the canonical JSON of the rest. `tollgate feed publish --add 'id=..,pattern=..,action=block,tags=A;B'` appends a rule and bumps the version. With `feed: {url, interval_s}` in the policy, a lifespan task pulls the bundle, rejects a bad signature (`/healthz` `feed.last_error`, file untouched), and writes a newer version to `content.signatures` atomically, stamped `# feed-version: N` so a restart does not rewrite it. Tier 1 picks the file up by mtime on the next scan. Without `feed:` the local file is authoritative. `tollgate up` also starts the feed server when `feed:` is set. The seed bundle adds model supply-chain rules: pickle `GLOBAL` opcodes, `torch.load` without `weights_only=True`, `trust_remote_code=True`, `yaml.load` without `SafeLoader`, and langchain PALChain / PythonREPLTool (CVE-2023-36258 / GHSA-2qmj-7962-cjq8, CVE-2023-36188, CVE-2023-36095).

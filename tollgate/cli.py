@@ -101,14 +101,55 @@ def dashboard(wait: bool = True):
     return p.wait() if wait else p
 
 
+def feed(sub: str) -> int:
+    """P6 signature feed: serve (the external system), publish --add 'id=..,pattern=..,action=..,tags=A;B', pull (once)."""
+    from tollgate.feed import Puller, build_feed_app, publish
+
+    feed_dir = _opt("--dir", "feed")
+    if sub == "serve":
+        import uvicorn
+        port = int(_opt("--port", "8090"))
+        print(f"Tollgate feed on http://127.0.0.1:{port}/bundle.json  (source {feed_dir}/bundle_src.yaml)", flush=True)
+        uvicorn.run(build_feed_app(feed_dir), host="127.0.0.1", port=port, log_level="warning")
+        return 0
+    if sub == "publish" and _opt("--add"):
+        print(f"published, feed version {publish(feed_dir, _opt('--add'))}")
+        return 0
+    if sub == "pull":
+        import asyncio
+        import json
+
+        from tollgate.gateway.policy import DEFAULT_PATH, load_policy
+        data = load_policy(_opt("--policy") or DEFAULT_PATH).data
+        url = _opt("--url") or (data.get("feed") or {}).get("url") or "http://127.0.0.1:8090/bundle.json"
+        target = (data.get("content") or {}).get("signatures") or "signatures.yaml"
+        puller = Puller(url)
+        wrote = asyncio.run(puller.pull(target))
+        print(json.dumps({**puller.state, "wrote": wrote, "target": target}))
+        return 0 if puller.state["last_error"] is None else 1
+    print("usage: tollgate feed {serve [--port 8090] [--dir feed]|publish --add 'id=..,pattern=..,action=block,tags=A;B'"
+          " [--dir feed]|pull [--url U] [--policy F]}", file=sys.stderr)
+    return 2
+
+
 def up() -> int:
-    """AC1 one command: gateway (in-process) + dashboard (subprocess); the dashboard stops when serve exits."""
-    p = dashboard(wait=False)
+    """AC1 one command: gateway (in-process) + dashboard (subprocess) + feed server (subprocess, if `feed:` is set)."""
+    import subprocess
+    from urllib.parse import urlparse
+
+    from tollgate.gateway.policy import DEFAULT_PATH, load_policy
+
+    procs = [dashboard(wait=False)]
+    url = (load_policy(_opt("--policy") or DEFAULT_PATH).data.get("feed") or {}).get("url")
+    if url:
+        procs.append(subprocess.Popen([sys.executable, "-m", "tollgate.cli", "feed", "serve",
+                                       "--port", str(urlparse(url).port or 8090)]))
     try:
         return serve()
     finally:
-        p.terminate()
-        p.wait(10)
+        for p in procs:
+            p.terminate()
+            p.wait(10)
 
 
 def key_issue() -> int:
@@ -155,8 +196,10 @@ def main() -> int:
         return up()
     if cmd == "dashboard":
         return dashboard()
+    if cmd == "feed":
+        return feed(sys.argv[2] if len(sys.argv) > 2 else "")
     print("usage: tollgate {up [--port P] [--policy F] [--dashboard-port D]|serve [--port P] [--policy F]|dashboard"
-          "|approve ID|deny ID [--port P]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]}",
+          "|approve ID|deny ID [--port P]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]|feed serve|publish|pull}",
           file=sys.stderr)
     return 2
 

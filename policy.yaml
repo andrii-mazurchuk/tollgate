@@ -41,6 +41,7 @@ taint:
 
 approval: { timeout_s: 30 }       # an `approve` verdict (roles.<role>.approval or block_flow.action: approve) waits this long for POST /admin/approvals/{id}, then fails closed
 loops: { max_identical_calls: 5 }   # same key + tool + args more than N times in a row -> loop.cutoff
+# feed: { url: http://127.0.0.1:8090/bundle.json, interval_s: 10 }   # P6: pull signed signatures from `tollgate feed serve` into content.signatures; off = local file is authoritative
 
 content:
   pii:       { iban: redact, pesel: block, card: redact, email: redact }
