@@ -152,3 +152,27 @@ def to_csv(events) -> str:
                    latency_ms=json.dumps(e.get("latency_ms") or {}))
         w.writerow(row)
     return buf.getvalue()
+
+
+APPROVAL_COLS = ("id", "ts", "role", "key_id", "tool", "reason", "status", "decided_at")
+
+
+def approvals_view(listing: dict | None) -> tuple[list[dict], list[dict]] | None:
+    """GET /admin/approvals -> (pending, recent) rows for the panel; None when the gateway is offline."""
+    if listing is None:
+        return None
+    rows = lambda k: [{c: i.get(c) for c in APPROVAL_COLS} for i in listing.get(k) or []]  # noqa: E731
+    return rows("pending"), rows("recent")
+
+
+def decision_message(code: int) -> str:
+    """POST /admin/approvals/{id} status -> what the panel says."""
+    return {200: "decision recorded", 401: "admin token rejected: set TOLLGATE_ADMIN_TOKEN to the gateway's token",
+            404: "unknown or already decided (approved, denied or timed out)"}.get(code, f"gateway error {code}")
+
+
+def pin_alerts(health: dict | None) -> list[str]:
+    """/healthz pin_alerts -> one line per changed tool."""
+    return [f"{a.get('tool')}: tool description changed: possible rug-pull "
+            f"({str(a.get('old'))[:12]} -> {str(a.get('new'))[:12]} at {a.get('ts')})"
+            for a in (health or {}).get("pin_alerts") or []]

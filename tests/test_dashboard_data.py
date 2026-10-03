@@ -89,3 +89,19 @@ def test_exports():
     assert [json.loads(x) for x in data.to_jsonl(EVENTS).splitlines()] == EVENTS
     rows = list(csv.DictReader(io.StringIO(data.to_csv(EVENTS))))
     assert len(rows) == 7 and rows[2]["rule"] == "taint.flow" and json.loads(rows[1]["latency_ms"])["t2"] == 40.0
+
+
+def test_approvals_view_and_offline():
+    item = {"id": "ap_1a2b", "ts": "t", "role": "role-2", "key_id": "k1", "tool": "tickets.reply",
+            "args_sha256": "ab", "reason": "taint.flow: x", "status": "pending", "decided_at": None}
+    pending, recent = data.approvals_view({"pending": [item], "recent": [{**item, "status": "deny"}]})
+    assert pending[0]["id"] == "ap_1a2b" and "args_sha256" not in pending[0] and recent[0]["status"] == "deny"
+    assert data.approvals_view({"pending": [], "recent": []}) == ([], [])
+    assert data.approvals_view(None) is None
+
+
+def test_decision_message_and_pin_alerts():
+    assert "token" in data.decision_message(401) and "already decided" in data.decision_message(404)
+    alerts = data.pin_alerts({"pin_alerts": [{"tool": "github.pr.create", "old": "a" * 64, "new": "b" * 64, "ts": "t"}]})
+    assert alerts == [f"github.pr.create: tool description changed: possible rug-pull ({'a' * 12} -> {'b' * 12} at t)"]
+    assert data.pin_alerts(None) == [] and data.pin_alerts({"pin_alerts": []}) == []

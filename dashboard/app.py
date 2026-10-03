@@ -1,9 +1,11 @@
-"""Tollgate dashboard (AC14). Read only: audit JSONL + eval.json + the gateway's GET endpoints.
+"""Tollgate dashboard (AC14). Reads audit JSONL + eval.json + the gateway's GET endpoints. The one write action is
+the approval panel's Approve/Deny (POST /admin/approvals/{id}, admin token from env TOLLGATE_ADMIN_TOKEN).
 
     uv run streamlit run dashboard/app.py
 """
 import json
 import os
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -16,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 AUDIT = Path(os.environ.get("TOLLGATE_AUDIT") or ROOT / "audit" / "events.jsonl")
 EVAL = ROOT / "audit" / "eval.json"
 URL = os.environ.get("TOLLGATE_URL", "http://127.0.0.1:8080").rstrip("/")
+ADMIN_TOKEN = os.environ.get("TOLLGATE_ADMIN_TOKEN") or "tollgate-admin-dev"  # never typed into the UI
 WINDOWS = {"15 min": 15, "1 h": 60, "24 h": 1440, "all": None}
 
 st.set_page_config(page_title="Tollgate", layout="wide")
@@ -28,6 +31,20 @@ def live(path: str):
             return json.load(r)
     except Exception:
         return None
+
+
+def decide(id: str, decision: str) -> str:
+    """The dashboard's only write: POST /admin/approvals/{id} with the admin token from env."""
+    req = urllib.request.Request(f"{URL}/admin/approvals/{id}", method="POST",
+                                 data=json.dumps({"decision": decision}).encode(),
+                                 headers={"Content-Type": "application/json", "Authorization": f"Bearer {ADMIN_TOKEN}"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return data.decision_message(r.status)
+    except urllib.error.HTTPError as e:
+        return data.decision_message(e.code)
+    except OSError:
+        return "gateway offline: approvals need the live gateway"
 
 
 def load_eval():
@@ -60,6 +77,30 @@ def page():
     if pol.get("last_error"):
         e = pol["last_error"]
         st.error(f"Policy reload REJECTED at {e.get('at')}: {e.get('message')}. Still enforcing {pol.get('version')}.")
+    for line in data.pin_alerts(health):
+        st.error(line)
+
+    # 1b. approvals (the only write action on this page)
+    st.subheader("Approvals (write action: Approve / Deny decides a parked tool call)")
+    view = data.approvals_view(live("/admin/approvals"))
+    if view is None:
+        st.info("Approvals need the live gateway (`uv run tollgate up`).")
+    else:
+        pending, recent = view
+        if not pending:
+            st.caption("no calls waiting for approval")
+        for item in pending:
+            c = st.columns([6, 1, 1])
+            c[0].markdown(f"**{item['id']}** `{item['tool']}` role `{item['role']}` key `{item['key_id']}` "
+                          f"since {item['ts']}  \n{item['reason']}")
+            for col, decision in ((c[1], "approve"), (c[2], "deny")):
+                if col.button(decision.title(), key=f"{decision}-{item['id']}",
+                              type="primary" if decision == "approve" else "secondary"):
+                    st.toast(f"{item['id']} {decision}: {decide(item['id'], decision)}")
+        if recent:
+            st.caption("Recent decisions")
+            st.dataframe(pd.DataFrame(recent), hide_index=True, width="stretch")
+
     c = st.columns(4)
     version = pol.get("version") or (all_events[-1].get("policy_version") if all_events else None)
     c[0].metric("Policy version", version or "-", help=f"loaded_at {pol.get('loaded_at', '-')}")
