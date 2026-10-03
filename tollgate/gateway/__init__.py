@@ -23,6 +23,8 @@ from starlette.routing import Mount, Route
 from tollgate.content import scan
 from tollgate.contract import SEVERITY, AuditEvent, Reason, Verdict
 from tollgate.gateway import audit, keys, model_door, taint
+from tollgate.gateway.approvals import Approvals, admin_ok
+from tollgate.gateway.pins import Pins
 from tollgate.gateway.policy import PolicyHolder
 
 
@@ -90,15 +92,15 @@ def apply_verdict(ev: AuditEvent, v: Verdict, point: str) -> None:
         ev.latency_ms[tier] = round(ev.latency_ms.get(tier, 0) + ms, 3)
     if SEVERITY[v.action] > SEVERITY[ev.verdict]:
         ev.verdict, ev.scan_point = v.action, point
-    if v.action in ("block", "approve"):  # approve not built yet: treated as block
+    if v.action in ("block", "approve"):  # ponytail: a content `approve` still blocks; route it to approvals if B emits it
         raise ToolError(f"content: {v.action} at {point}: " + "; ".join(f"{r.rule} ({r.detail})" for r in v.reasons))
 
 
 class RoleGate(Middleware):
     """Per-role scoping. Reads the policy on every request; denies on call too (list filtering does not block)."""
 
-    def __init__(self, role: str, policy: PolicyHolder, server: FastMCP):
-        self.role, self.policy, self.server = role, policy, server
+    def __init__(self, role: str, policy: PolicyHolder, server: FastMCP, approvals: Approvals, pins: Pins | None):
+        self.role, self.policy, self.server, self.approvals, self.pins = role, policy, server, approvals, pins
         self.last: dict[str, tuple[str, int]] = {}  # key_id -> (last call signature, times in a row)
 
     def role_policy(self) -> dict:
@@ -106,7 +108,8 @@ class RoleGate(Middleware):
 
     async def on_list_tools(self, context, call_next):
         rp = self.role_policy()
-        return [t for t in await call_next(context) if tool_allowed(rp, t)]
+        return [t for t in await call_next(context)
+                if tool_allowed(rp, t) and not (self.pins and self.pins.changed(t, self.role))]
 
     async def on_call_tool(self, context, call_next):
         name, args = context.message.name, context.message.arguments or {}
@@ -142,6 +145,8 @@ class RoleGate(Middleware):
         tool = await self.server.get_tool(name)
         if tool is None or not tool_allowed(rp, tool):
             deny("role.denied", f"{name} is not available to {self.role}")
+        if self.pins and self.pins.changed(tool, self.role):
+            deny("pin.changed", f"{name} description/schema changed since startup (possible rug pull); restart to re-pin")
         why = check_args((rp.get("constrain") or {}).get(name, {}), args)
         ev.latency_ms["role"] = round((time.perf_counter() - t0) * 1000, 3)
         if why:
@@ -158,8 +163,13 @@ class RoleGate(Middleware):
         t0 = time.perf_counter()
         blocked = taint.check(data, key_id, name)
         ev.latency_ms["taint"] = round((time.perf_counter() - t0) * 1000, 3)
+        approve = []  # (rule, why) that need a human before the call runs
         if blocked:
-            deny("taint.flow", blocked)
+            if ((data.get("taint") or {}).get("block_flow") or {}).get("action", "block") != "approve":
+                deny("taint.flow", blocked)
+            approve.append(("taint.flow", blocked))
+        if name in (rp.get("approval") or []):
+            approve.append(("role.approval", f"{name} needs approval for {self.role}"))
 
         cpol = content_policy(data, rp)
         v = scan(args_json, "tool_args", cpol)
@@ -169,6 +179,8 @@ class RoleGate(Middleware):
                 context.message.arguments = json.loads(v.redacted_text)
             except (TypeError, ValueError):
                 deny("content.redact_failed", "redacted arguments are not valid JSON")
+        if approve:
+            await self._approval(ev, approve, deny)
 
         result = await call_next(context)
         text = "".join(getattr(b, "text", "") for b in result.content)
@@ -193,17 +205,34 @@ class RoleGate(Middleware):
         taint.record(data, key_id, name, args)
         return result
 
+    async def _approval(self, ev: AuditEvent, why: list[tuple[str, str]], deny) -> None:
+        """Parks the call until an admin decides (POST /admin/approvals/{id}) or approval.timeout_s passes."""
+        reason = "; ".join(f"{r}: {d}" for r, d in why)
+        item = self.approvals.create(self.role, ev.key_id, ev.tool, ev.content_sha256, reason)
+        req = AuditEvent(**{**ev.__dict__, "reasons": [Reason(rule="approval.requested", tier=0,
+                                                               detail=f"{item['id']}: {reason}")],
+                            "verdict": "approve", "transforms": [], "latency_ms": {}})
+        audit.write(req)
+        timeout = float((self.policy.data.get("approval") or {}).get("timeout_s", 30))
+        status = await self.approvals.wait(item, timeout)
+        if status != "approve":
+            deny(f"approval.{'denied' if status == 'deny' else 'timeout'}",
+                 f"{item['id']} {status} ({reason})")
+        ev.verdict = "approve"
+        ev.reasons.append(Reason(rule="approval.approved", tier=0, detail=f"{item['id']}: {reason}"))
+
 
 def load_sources(policy: PolicyHolder) -> dict[str, FastMCP]:
     return {n: importlib.import_module(s["mock"]).mcp for n, s in policy.data["servers"].items() if "mock" in s}
 
 
-def build_role_server(role: str, policy: PolicyHolder, sources: dict[str, FastMCP] | None = None) -> FastMCP:
+def build_role_server(role: str, policy: PolicyHolder, sources: dict[str, FastMCP] | None = None,
+                      approvals: Approvals | None = None, pins: Pins | None = None) -> FastMCP:
     """Mounts every source; the gate decides per request, so a policy swap changes the next tools/list."""
     srv = FastMCP(f"tollgate-{role}")
     for name, src in (sources or load_sources(policy)).items():
         srv.add_provider(FastMCPProvider(create_proxy(src)).wrap_transform(Dotted(name)))
-    srv.add_middleware(RoleGate(role, policy, srv))
+    srv.add_middleware(RoleGate(role, policy, srv, approvals or Approvals(), pins))
     return srv
 
 
@@ -221,11 +250,14 @@ def require_key(role: str, app):
 
 def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
     """/mcp/{role}/ per role in the policy. ponytail: roles fixed at startup; new roles need a restart."""
-    sources = load_sources(policy)
-    apps = {r: build_role_server(r, policy, sources).http_app(path="/") for r in policy.data["roles"]}
+    sources, approvals, pins = load_sources(policy), Approvals(), Pins()
+    servers = {r: build_role_server(r, policy, sources, approvals, pins) for r in policy.data["roles"]}
+    apps = {r: s.http_app(path="/") for r, s in servers.items()}
 
     @contextlib.asynccontextmanager
     async def lifespan(_):
+        if servers:  # every role server mounts every source: one unfiltered list pins them all
+            pins.take(await next(iter(servers.values())).list_tools(run_middleware=False))
         async with contextlib.AsyncExitStack() as stack:
             for a in apps.values():
                 await stack.enter_async_context(a.router.lifespan_context(a))
@@ -234,7 +266,8 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
     async def healthz(_):
         st = policy.status()
         return JSONResponse({"ok": True, "policy": st, "roles": list(apps), "sources": list(sources),
-                             "policy_roles": list(policy.data.get("roles") or {})})
+                             "policy_roles": list(policy.data.get("roles") or {}),
+                             "pin_alerts": list(pins.alerts.values())})
 
     async def admin_taint(_):  # read-only; ponytail: no auth, bind to 127.0.0.1 only
         return JSONResponse(taint.STATE)
@@ -242,7 +275,26 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
     async def admin_budget(_):  # read-only, same caveat as /admin/taint
         return JSONResponse(model_door.budget(policy.data))
 
+    async def admin_approvals(_):  # read-only listing, same caveat as /admin/taint
+        return JSONResponse(approvals.listing())
+
+    async def admin_decide(request):
+        if not admin_ok(request.headers.get("authorization")):
+            return JSONResponse({"error": "admin token required (TOLLGATE_ADMIN_TOKEN)"}, 401)
+        try:
+            decision = (await request.json()).get("decision")
+        except ValueError:
+            decision = None
+        item = approvals.decide(request.path_params["id"], decision)
+        if item is None:
+            return JSONResponse({"error": "unknown or already decided id, or decision not approve|deny"}, 404)
+        return JSONResponse(item)
+
     routes = [Route("/healthz", healthz), Route("/admin/taint", admin_taint), Route("/admin/budget", admin_budget),
+              Route("/admin/approvals", admin_approvals),
+              Route("/admin/approvals/{id}", admin_decide, methods=["POST"]),
               Route("/v1/chat/completions", model_door.build_door(policy, upstream), methods=["POST"])]
     routes += [Mount(f"/mcp/{r}", app=require_key(r, a)) for r, a in apps.items()]
-    return Starlette(routes=routes, lifespan=lifespan)
+    app = Starlette(routes=routes, lifespan=lifespan)
+    app.state.approvals, app.state.pins = approvals, pins
+    return app

@@ -41,6 +41,7 @@ taint:                                         # session taint; a session = one 
   enabled: true                                # false = roles only (the "before" half of `tollgate replay`)
   block_flow: { from: private_data, to: public_sink, action: block }   # tainted + holds private -> public sink is blocked
 
+approval: { timeout_s: 30 }                    # `approve` verdicts wait this long for an admin decision (tollgate approve|deny <id>), then fail closed
 loops: { max_identical_calls: 5 }              # same key + tool + args more than N times in a row -> loop.cutoff (AC11)
 
 content:                                       # content pipeline (Track B semantics, mirrored from policy.yaml)

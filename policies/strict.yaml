@@ -41,6 +41,7 @@ taint:                                         # session taint; a session = one 
   enabled: true                                # always on
   block_flow: { from: private_data, to: public_sink, action: block }   # tainted + private -> public sink: hard block
 
+approval: { timeout_s: 30 }                    # `approve` verdicts wait this long for an admin decision, then fail closed
 loops: { max_identical_calls: 3 }              # cut runaway agents early (balanced: 5)
 
 content:                                       # content pipeline (Track B semantics)

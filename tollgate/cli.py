@@ -1,4 +1,4 @@
-"""`tollgate` command. Subcommands land as tracks build them (serve: A, test: B, replay: A, key: A)."""
+"""`tollgate` command. Subcommands land as tracks build them (up/serve/dashboard/approve/deny/replay/key: A, test: B)."""
 import sys
 
 
@@ -58,8 +58,57 @@ def serve() -> int:
     from tollgate.gateway.model_door import DEFAULT_UPSTREAM
     print(f"  model door: {base}/v1/chat/completions  -> {os.environ.get('TOLLGATE_UPSTREAM') or DEFAULT_UPSTREAM}")
     print(f"  health: {base}/healthz   taint: {base}/admin/taint   budget: {base}/admin/budget", flush=True)
+    print(f"  approvals: {base}/admin/approvals   (tollgate approve|deny <id>)", flush=True)
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
     return 0
+
+
+def decide(id: str, decision: str) -> int:
+    """POST /admin/approvals/{id} with the admin token (env TOLLGATE_ADMIN_TOKEN, else the dev constant)."""
+    import json
+    import os
+    import urllib.error
+    import urllib.request
+
+    from tollgate.gateway.approvals import ADMIN_DEV_TOKEN
+
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{_opt('--port', '8080')}/admin/approvals/{id}", method="POST",
+        data=json.dumps({"decision": decision}).encode(),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {os.environ.get('TOLLGATE_ADMIN_TOKEN') or ADMIN_DEV_TOKEN}"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            print(r.read().decode())
+            return 0
+    except urllib.error.HTTPError as e:
+        print(f"{e.code}: {e.read().decode()}", file=sys.stderr)
+        return 1
+
+
+DASHBOARD = ["-m", "streamlit", "run", "dashboard/app.py", "--server.headless", "true", "--server.address", "127.0.0.1",
+             "--browser.gatherUsageStats", "false", "--server.port"]
+
+
+def dashboard(wait: bool = True):
+    """Streamlit dashboard as a subprocess of this Python. wait=False returns the Popen (used by `up`)."""
+    import subprocess
+    from pathlib import Path
+
+    port = _opt("--dashboard-port", "8501")
+    p = subprocess.Popen([sys.executable, *DASHBOARD, port], cwd=Path(__file__).resolve().parents[1])
+    print(f"  dashboard: http://127.0.0.1:{port}", flush=True)
+    return p.wait() if wait else p
+
+
+def up() -> int:
+    """AC1 one command: gateway (in-process) + dashboard (subprocess); the dashboard stops when serve exits."""
+    p = dashboard(wait=False)
+    try:
+        return serve()
+    finally:
+        p.terminate()
+        p.wait(10)
 
 
 def key_issue() -> int:
@@ -100,7 +149,14 @@ def main() -> int:
         return serve()
     if cmd == "key" and sys.argv[2:3] == ["issue"]:
         return key_issue()
-    print("usage: tollgate {serve [--port P] [--policy F]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]}",
+    if cmd in ("approve", "deny") and len(sys.argv) > 2:
+        return decide(sys.argv[2], cmd)
+    if cmd == "up":
+        return up()
+    if cmd == "dashboard":
+        return dashboard()
+    print("usage: tollgate {up [--port P] [--policy F] [--dashboard-port D]|serve [--port P] [--policy F]|dashboard"
+          "|approve ID|deny ID [--port P]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]}",
           file=sys.stderr)
     return 2
 

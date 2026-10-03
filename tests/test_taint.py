@@ -24,10 +24,11 @@ def test_blocks_only_when_tainted_and_holding_private():
     assert taint.check(POLICY, "k", "gh.pr") is None
 
 
-def test_approve_is_block_for_now():
+def test_check_returns_message_for_approve_too():
+    """The caller turns the message into a block or an approval request (tests/acceptance/test_helpers.py)."""
     taint.reset("k")
     taint.record(POLICY, "k", "gh.issue", {"number": 1})
     taint.record(POLICY, "k", "gh.read", {})
     msg = taint.check({**POLICY, "taint": {"block_flow": {"action": "approve"}}}, "k", "gh.pr")
-    assert "approve not built" in msg
+    assert msg.startswith("blocked: session tainted by")
     taint.reset("k")
