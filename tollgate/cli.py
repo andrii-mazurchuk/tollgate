@@ -48,6 +48,9 @@ def serve() -> int:
     logging.basicConfig(level=logging.WARNING)  # policy reloads/rejections log at WARNING/ERROR
     port = int(_opt("--port", "8080"))
     holder = load_policy(_opt("--policy") or DEFAULT_PATH)
+    if "--scripted-model" in sys.argv:  # model door -> in-process scripted hijacked LLM (offline demo)
+        import os
+        os.environ["TOLLGATE_UPSTREAM"] = "scripted"
     app = build_app(holder)
     base = f"http://127.0.0.1:{port}"
     print(f"Tollgate on {base}  policy {holder.status()['version']} ({holder.path})")
@@ -60,6 +63,44 @@ def serve() -> int:
     print(f"  health: {base}/healthz   taint: {base}/admin/taint   budget: {base}/admin/budget", flush=True)
     print(f"  approvals: {base}/admin/approvals   (tollgate approve|deny <id>)", flush=True)
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    return 0
+
+
+def agent() -> int:
+    """Demo agent through both doors. --scripted without --base: in-process gateway + scripted hijacked model."""
+    import asyncio
+
+    import httpx2
+
+    from tollgate.agent import run
+    from tollgate.gateway.keys import issue
+
+    rest, i = sys.argv[2:], 0
+    while i < len(rest) and rest[i].startswith("--"):
+        i += 1 if rest[i] == "--scripted" else 2
+    task = rest[i] if i < len(rest) else "check the open issues on acme/website and handle them"
+    role, model, base = _opt("--role", "role-2"), _opt("--model", "qwen3:4b"), _opt("--base")
+    key = issue(role)
+    print(f"[agent] role={role} model={model} task={task!r}")
+    if base or "--scripted" not in sys.argv:
+        asyncio.run(run(task, role, model, base or "http://127.0.0.1:8080", key))
+        return 0
+
+    import os
+
+    from tollgate.gateway import build_app
+    from tollgate.gateway.policy import DEFAULT_PATH, load_policy
+
+    os.environ["TOLLGATE_UPSTREAM"] = "scripted"
+    app = build_app(load_policy(_opt("--policy") or DEFAULT_PATH))
+
+    def factory(**kw):
+        return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t", **kw)
+
+    async def go():
+        async with app.router.lifespan_context(app):
+            await run(task, role, model, "http://t", key, factory=factory)
+    asyncio.run(go())
     return 0
 
 
@@ -188,6 +229,8 @@ def main() -> int:
         return perf(int(_opt("--n", "200")))
     if cmd == "serve":
         return serve()
+    if cmd == "agent":
+        return agent()
     if cmd == "key" and sys.argv[2:3] == ["issue"]:
         return key_issue()
     if cmd in ("approve", "deny") and len(sys.argv) > 2:
@@ -198,7 +241,8 @@ def main() -> int:
         return dashboard()
     if cmd == "feed":
         return feed(sys.argv[2] if len(sys.argv) > 2 else "")
-    print("usage: tollgate {up [--port P] [--policy F] [--dashboard-port D]|serve [--port P] [--policy F]|dashboard"
+    print("usage: tollgate {up [--port P] [--policy F] [--dashboard-port D]|serve [--port P] [--policy F] [--scripted-model]"
+          "|agent [--role R] [--model M] [--base URL] [--scripted] TASK|dashboard"
           "|approve ID|deny ID [--port P]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]|feed serve|publish|pull}",
           file=sys.stderr)
     return 2
