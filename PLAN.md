@@ -1,5 +1,29 @@
 # PLAN.md
 
+## Status at checkpoint 20:21 (tag `checkpoint-2010`)
+
+**The whole 15h schedule below is built.** M0 was done at 16:53, M1 at 17:25, the M2 scope at about 19:00, and red-teaming at 19:30. `submission-1` is tagged, and the repo is pushed (private) to `andrii-mazurchuk/tollgate`.
+
+**Tests:**
+- 207 fast tests pass, plus 6 slow ones.
+- All 53 acceptance tests pass.
+- AC1–AC16: 14 green, 2 partial. AC8 injection recall is 0.837 against 0.85. AC15 tier 2 short-text p95 is 84–141 ms against 80 ms.
+
+**Open, to review with Andrey before building:**
+1. Content-triggered taint: a tool-result injection flag taints the session.
+2. A "Known limits" section in the docs.
+3. Live Ollama: install, live agent run, tier 3 judge.
+4. Target misses (AC8, AC15).
+5. Optional: Edge as a separate process, admin UI, OSV auto-sync.
+
+**TDD loop unchanged:**
+1. Write a failing test.
+2. Make it green.
+3. Run `scripts/smoke.sh` + `pytest -m "not slow"`.
+4. Merge to main and push.
+
+The schedule below is the historical plan.
+
 15h build, one operator (Andrey) driving **two Claude sessions**, one per track. The spec and AC1–AC16 are in `TOLLGATE.md`.
 The planning record is the PU map "Tollgate build plan locked". Progress is tracked with **git tags only**.
 
