@@ -4,22 +4,27 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tollgate Edge</title>
+<script>try { const t = localStorage.getItem("tg.theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <div class="shell">
   <nav class="nav" aria-label="Views">
-    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Tollgate</span></div>
-    <a href="#sessions" data-view="sessions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Sessions</span></a>
-    <a href="#analytics" data-view="analytics"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-7"/></svg><span>Analytics</span></a>
-    <a href="#setup" data-view="setup"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M15 7l5 5-5 5"/></svg><span>Setup</span></a>
-    <a href="#scenario" data-view="scenario"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span>Scenario</span></a>
+    <div class="brand"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6z"/></svg>Tollgate</div>
+    <a href="#/overview" data-view="overview"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4zM14 20h6v-9h-6zM4 20h6v-3H4zM14 7h6V4h-6z"/></svg>Overview</a>
+    <a href="#/sessions" data-view="sessions"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Sessions</a>
+    <a href="#/events" data-view="events"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4h11l-1.5 4L16 12H5"/></svg>Events</a>
+    <a href="#/setup" data-view="setup"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M15 7l5 5-5 5"/></svg>Setup</a>
+    <a href="#/scenario" data-view="scenario"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Scenario</a>
     <div class="nav-foot">Local edge</div>
   </nav>
   <div class="main">
     <header class="top">
-      <button id="health" class="health" type="button" aria-live="polite"><span class="dot"></span><span class="msg">Checking…</span></button>
+      <button id="health" class="health" type="button" aria-live="polite"><span class="dot"></span><span class="msg ell">Checking…</span></button>
+      <span class="spacer"></span>
+      <div id="range" class="seg" role="group" aria-label="Time range"></div>
       <div id="status" class="status" aria-label="Status"></div>
+      <button id="theme" class="icon-btn" type="button" aria-label="Switch light or dark" title="Switch light or dark"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg></button>
     </header>
     <main id="view" tabindex="-1"></main>
   </div>

@@ -153,14 +153,17 @@ def _in(events, a, b) -> list[dict]:
 
 
 def series(events: list[dict], start: datetime | None, now: datetime) -> tuple[list[dict], int]:
-    """Buckets from the range and the data spread: the chart starts at the first event (not an empty range start),
-    spans at least a minute and has 20-40 bars, so a burst of a few seconds is not one lonely bar."""
-    first = min((_ts(e) for e in events), default=now)
+    """Buckets from the range and the data spread: the chart spans the data in the range (first event to a little
+    after the last, at least 30 s) in 20-40 bars, so a burst of a few seconds is not one lonely bar in an empty hour."""
+    if not events:
+        return [], 60
+    first, last = min(map(_ts, events)), max(map(_ts, events))
     a = max(start, first) if start else first
-    span = max(60.0, (now - a).total_seconds())
+    end = min(now, last + max(timedelta(seconds=10), (last - a) / 4))
+    span = max(30.0, (end - a).total_seconds())
     b = next((x for x in BUCKETS if span / x <= 40), 86400 * math.ceil(span / 86400 / 40))
-    t0 = (now.timestamp() - span) // b * b
-    rows = [{"t": _iso(t0 + i * b), **dict.fromkeys(ACTIONS, 0)} for i in range(int((now.timestamp() - t0) // b) + 1)]
+    t0 = a.timestamp() // b * b
+    rows = [{"t": _iso(t0 + i * b), **dict.fromkeys(ACTIONS, 0)} for i in range(int((a.timestamp() + span - t0) // b) + 1)]
     for e in events:
         i = int((_ts(e).timestamp() - t0) // b)
         if 0 <= i < len(rows):
@@ -208,7 +211,7 @@ def events_list(events: list[dict], rng: str = "today", filters: dict | None = N
     now = now or datetime.now(timezone.utc)
     items = [_item(e, labels) for e in sorted(_in(events, window(rng, now)[0], now), key=_ts, reverse=True) if kind(e)]
     facets = {"action": sorted({x["kind"] for x in items}), "agent": sorted({x["role"] for x in items if x["role"]}),
-              "check": sorted({x["check"] for x in items})}
+              "check": sorted({x["check"] for x in items}), "names": {x["role"]: x["agent"] for x in items}}
     f = {"action": "kind", "agent": "role", "check": "check"}
     for k, v in (filters or {}).items():
         if k in f and v:
