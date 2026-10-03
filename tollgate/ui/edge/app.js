@@ -1,4 +1,4 @@
-// Tollgate local edge UI v2. Vanilla JS, no build step, no network beyond this gateway.
+// Tollgate local edge UI v3. Vanilla JS, no build step, no network beyond this gateway.
 "use strict";
 
 const API = "/edge/api";
@@ -13,7 +13,7 @@ const MASK_RE = /\[(?:EMAIL|SECRET|PESEL|NIP|SIG|INJ|IBAN:[^\]]*|CARD:[^\]]*)\]/
 const PART = { args: ["Arguments the agent sent", "What the tool received"], result: ["Original result", "What the agent got"],
   prompt: ["Original prompt", "What the model got"], response: ["Original reply", "What the agent got"] };
 
-const ui = { view: "overview", range: load("range") || "today", since: load("since") || "", tab: "overview",
+const ui = { view: "overview", settings: null, ev: null, range: load("range") || "today", since: load("since") || "", tab: "overview",
   stepMode: "list", f: {}, q: "", trace: null, running: false };
 
 function load(k) { try { return localStorage.getItem("tg." + k); } catch { return null; } }
@@ -124,9 +124,15 @@ function themeNow() {
   return t || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 }
 function renderThemeBtn() { document.getElementById("theme").replaceChildren(icon(themeNow() === "dark" ? "sun" : "moon")); }
+function applyTheme(t) {
+  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  save("theme", t === "system" ? "" : t); renderThemeBtn();
+}
 document.getElementById("theme").addEventListener("click", () => {
   const t = themeNow() === "dark" ? "light" : "dark";
-  document.documentElement.dataset.theme = t; save("theme", t); renderThemeBtn();
+  applyTheme(t);
+  fetch(API + "/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ theme: t }) })
+    .then(r => r.json()).then(j => { if (j.settings) ui.settings = j.settings; if (ui.view === "setup") route(false); }).catch(() => {});
 });
 
 /* ---------- Overview ---------- */
@@ -172,7 +178,8 @@ function hbars(rows, label, count) {
   if (!rows.length) return h("div", { class: "empty" }, "Nothing in this time range.");
   const max = Math.max(...rows.map(count));
   return h("div", { class: "hbars card-b" }, rows.map(r => h("div", { class: "hbar", title: label(r) },
-    h("div", { class: "fill", style: `width:${100 * count(r) / max}%` }), h("span", { class: "lab" }, label(r)), h("span", { class: "num" }, n(count(r))))));
+    h("span", { class: "lab" }, label(r)), h("span", { class: "num" }, n(count(r))),
+    h("div", { class: "track" }, h("div", { class: "fill", style: `width:${100 * count(r) / max}%` })))));
 }
 
 function eventsTable(items, withCheck) {
@@ -207,31 +214,43 @@ async function renderOverview() {
         o.needs_look.length ? eventsTable(o.needs_look, true) : h("div", { class: "empty" }, "Nothing blocked or flagged in this time range."))));
 }
 
-/* ---------- Sessions ---------- */
-async function renderSessions() {
+/* ---------- Sessions: master-detail on one screen ---------- */
+const OUTCOME_KIND = { block: "blocked", redact: "masked", approve: "waiting" };
+const stateIcons = st => {
+  const xs = (st || "clean").split("+"), words = xs.map(x => STATE[x] || x).join(" + ");
+  return h("span", { class: "state", title: words, "aria-label": words }, xs.map(x => icon(STATE_ICON[x] || "dash")));
+};
+const lastOutcome = v => v === "allow" ? h("span", { class: "muted" }, "Allowed") : badge(OUTCOME_KIND[v]);
+
+async function renderSessions(sidArg, stepArg) {
   const { sessions } = await api("/sessions");
   const head = pageHead("Sessions", "Every agent session on this laptop. A session is one key: what it read stays with it.");
   if (!sessions.length) return view().replaceChildren(head, h("div", { class: "card" }, emptyState("No sessions yet. ")));
-  view().replaceChildren(head, h("div", { class: "card" }, h("table", { class: "t" },
-    h("colgroup", {}, h("col", {}), h("col", { style: "width:88px" }), h("col", { style: "width:120px" }), h("col", { style: "width:104px" }),
-      h("col", { style: "width:72px" }), h("col", { style: "width:72px" }), h("col", { style: "width:260px" }), h("col", { style: "width:112px" })),
-    h("thead", {}, h("tr", {}, ["Agent", "Role", "Started", "Duration", "Steps", "Status", "State", "Last outcome"].map((t, i) => h("th", { class: i === 4 ? "r" : null }, t)))),
-    h("tbody", {}, sessions.map(x => h("tr", { class: "link", tabindex: "0", onclick: () => (location.hash = stepHref(x.id)),
-      onkeydown: ev => { if (ev.key === "Enter") location.hash = stepHref(x.id); } },
-      h("td", { title: `${x.agent} ${x.label || ""} (${x.id})` }, x.agent, h("span", { class: "sub-l" }, x.label || x.id)),
-      h("td", { class: "muted" }, x.role),
+  const sid = sidArg || (ui.trace && sessions.some(x => x.id === ui.trace.sid) ? ui.trace.sid : sessions[0].id);
+  const pick = id => { ui.tab = ui.tab || "overview"; location.hash = stepHref(id); };
+  const list = h("section", { class: "card pane", "data-keep": "slist" }, h("table", { class: "t" },
+    h("colgroup", {}, h("col", {}), h("col", { style: "width:76px" }), h("col", { style: "width:52px" }), h("col", { style: "width:52px" }), h("col", { style: "width:96px" })),
+    h("thead", {}, h("tr", {}, ["Agent", "Started", "Steps", "State", "Last"].map((t, i) => h("th", { class: i === 2 ? "r" : null }, t)))),
+    h("tbody", {}, sessions.map(x => h("tr", { class: "link" + (x.id === sid ? " sel" : ""), tabindex: "0", "aria-selected": String(x.id === sid),
+      onclick: () => pick(x.id), onkeydown: ev => { if (ev.key === "Enter") pick(x.id); } },
+      h("td", { title: `${x.agent} ${x.label || ""} (${x.id})` }, h("div", { class: "two" }, h("span", { class: "ell" }, x.agent, x.active ? h("span", { class: "live", title: "Active" }) : null),
+        h("span", { class: "ell muted small" }, x.label || x.id))),
       h("td", { class: "num" }, time(x.first_ts)),
-      h("td", { class: "num" }, dur(x.duration_s)),
       h("td", { class: "num r" }, n(x.n)),
-      h("td", { class: "muted" }, x.active ? "Active" : "Ended"),
-      h("td", {}, stateEl(x.state)),
-      h("td", {}, x.last_verdict === "allow" ? h("span", { class: "muted" }, "Allowed") : badge({ block: "blocked", redact: "masked", approve: "waiting" }[x.last_verdict]))))))));
+      h("td", {}, stateIcons(x.state)),
+      h("td", {}, lastOutcome(x.last_verdict)))))));
+  const right = h("section", { class: "card pane", "data-keep": "sdetail" });
+  view().replaceChildren(head, h("div", { class: "md" }, list, right));
+  let d;
+  try { d = await api("/sessions/" + encodeURIComponent(sid)); } catch (err) {
+    right.replaceChildren(h("div", { class: "empty" }, String(err.message).startsWith("404") ? "This session is not on this laptop any more." : "Could not load this session."));
+    return;
+  }
+  drawSession(right, d, stepArg);
 }
 
-/* ---------- Session trace page ---------- */
-async function renderTrace(sid, stepArg) {
-  const d = await api("/sessions/" + encodeURIComponent(sid));
-  const tl = d.timeline, x = d.session;
+function drawSession(box, d, stepArg) {
+  const tl = d.timeline, x = d.session, sid = x.id;
   let idx = -1;
   if (stepArg && stepArg.startsWith("t_")) idx = tl.findIndex(e => e.trace_id === stepArg);
   else if (stepArg) idx = Number(stepArg) - 1;
@@ -241,18 +260,14 @@ async function renderTrace(sid, stepArg) {
   }
   ui.trace = { sid, idx, d };
   if (stepArg !== String(idx + 1)) history.replaceState(null, "", stepHref(sid, idx + 1));
-  const counts = x.counts;
+  const c = x.counts;
   const strip = h("div", { class: "strip" }, [
     ["Agent", x.agent], ["Role", x.role], ["Started", time(x.first_ts)], ["Duration", dur(x.duration_s)], ["Steps", n(x.n)],
-    ["Blocked", n(counts.block)], ["Masked", n(counts.redact)], ["Status", x.active ? "Active" : "Ended"], ["State", stateEl(x.state)],
+    ["Blocked", n(c.block)], ["Masked", n(c.redact)], ["State", stateEl(x.state)],
   ].map(([k, v]) => h("div", {}, h("div", { class: "k" }, k), h("div", { class: "v" }, v))));
-  const listBox = h("section", { class: "card" });
-  const detailBox = h("section", { class: "card" });
-  view().replaceChildren(
-    h("a", { class: "back", href: "#/sessions" }, icon("back"), "Sessions"),
-    pageHead(x.label || x.agent, `Session ${x.id}`), strip,
-    h("div", { class: "trace" }, listBox, detailBox));
-  const draw = () => { drawSteps(listBox, tl, draw); drawDetail(detailBox, tl[ui.trace.idx]); };
+  const steps = h("div", { class: "steps" }), detail = h("div", { class: "detail" });
+  box.replaceChildren(h("div", { class: "pane-h" }, h("h2", {}, x.label || x.agent), h("span", { class: "muted small mono ell", title: sid }, sid), h("span", { class: "muted small", style: "margin-left:auto" }, x.active ? "Active" : "Ended")), strip, steps, detail);
+  const draw = () => { drawSteps(steps, tl, draw); drawDetail(detail, tl[ui.trace.idx]); };
   draw();
 }
 
@@ -319,7 +334,9 @@ function tabOverview(e, x) {
 
 function tabIO(e) {
   const parts = Object.entries(e.text || {});
-  if (!parts.length) return [h("div", { class: "empty" }, "The full text of this action is not stored on this laptop.")];
+  if (!parts.length) return [h("div", { class: "empty" }, ui.settings && !ui.settings.keep_text
+    ? ["Keep full text is off in ", h("a", { href: "#/setup" }, "Setup"), ", so the text of new actions is not stored on this laptop."]
+    : "The full text of this action is not stored on this laptop.")];
   return parts.map(([name, t]) => {
     const [origL, sentL] = PART[name] || [name, name];
     const stopped = e.verdict === "block" && name === "args";
@@ -348,8 +365,10 @@ function tabSent(e, x) {
       .map(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]))];
 }
 
-/* ---------- Events ---------- */
-async function renderEvents() {
+/* ---------- Events: master-detail on one screen ---------- */
+const evHref = tid => "#/events" + (tid ? "/" + encodeURIComponent(tid) : "");
+
+async function renderEvents(tidArg) {
   const q = new URLSearchParams({ range: ui.range, ...Object.fromEntries(Object.entries(ui.f).filter(([, v]) => v)) });
   const d = await api("/events?" + q);
   const words = { action: v => KIND[v] || v, agent: v => d.facets.names[v] || v, check: v => v };
@@ -361,44 +380,131 @@ async function renderEvents() {
   const search = h("input", { class: "search", type: "search", placeholder: "Search events", "aria-label": "Search events", value: ui.q,
     oninput: ev => { ui.q = ev.target.value; clearTimeout(renderEvents.t); renderEvents.t = setTimeout(() => route(false).then(() => {
       const el = document.querySelector(".search"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }), 200); } });
-  view().replaceChildren(pageHead("Events", "Only what Tollgate blocked, masked or flagged. Filters combine."),
+  const tid = items.some(x => x.trace_id === (tidArg || ui.ev)) ? (tidArg || ui.ev) : items[0]?.trace_id;
+  ui.ev = tid;
+  if (tid && tidArg !== tid) history.replaceState(null, "", evHref(tid));
+  const pick = t => { location.hash = evHref(t); };
+  const list = h("section", { class: "card pane", "data-keep": "elist" },
     h("div", { class: "filters" }, search, group("action", "Action"), group("agent", "Agent"), group("check", "Check")),
-    h("div", { class: "card" }, items.length ? eventsTable(items, true) : h("div", { class: "empty" }, "No events match.")));
+    items.length ? h("table", { class: "t" },
+      h("colgroup", {}, h("col", { style: "width:100px" }), h("col", {}), h("col", { style: "width:80px" })),
+      h("thead", {}, h("tr", {}, h("th", {}, "Action"), h("th", {}, "What happened"), h("th", { class: "r" }, "Time"))),
+      h("tbody", {}, items.map(x => h("tr", { class: "link" + (x.trace_id === tid ? " sel" : ""), tabindex: "0", "aria-selected": String(x.trace_id === tid),
+        onclick: () => pick(x.trace_id), onkeydown: ev => { if (ev.key === "Enter") pick(x.trace_id); } },
+        h("td", {}, badge(x.kind)),
+        h("td", { title: `${x.action} · ${x.tool} · ${x.agent}` }, h("div", { class: "two" }, h("span", { class: "ell" }, x.action), h("span", { class: "ell muted small" }, x.tool, " · ", x.agent))),
+        h("td", { class: "num muted r" }, time(x.ts))))))
+      : h("div", { class: "empty" }, "No events match."));
+  const right = h("section", { class: "card pane", "data-keep": "edetail" });
+  view().replaceChildren(pageHead("Events", "Only what Tollgate blocked, masked or flagged. Filters combine."), h("div", { class: "md" }, list, right));
+  const item = items.find(x => x.trace_id === tid);
+  if (!item) return right.replaceChildren(h("div", { class: "empty" }, "Select an event to see what happened."));
+  let e;
+  try { e = (await api("/sessions/" + encodeURIComponent(item.session_id))).timeline.find(x => x.trace_id === tid); } catch { e = null; }
+  if (!e) return right.replaceChildren(h("div", { class: "empty" }, "The details of this event are not on this laptop any more."));
+  const x = e.explain;
+  const kv = rows => h("dl", { class: "kv" }, rows.filter(Boolean).map(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]));
+  right.replaceChildren(
+    h("div", { class: "detail-h" }, h("h2", {}, x.sentence),
+      h("div", { class: "meta" }, h("span", { class: "num" }, time(e.ts)), badge(e.kind), h("span", {}, item.agent),
+        h("a", { href: stepHref(item.session_id, tid), style: "margin-left:auto", onclick: () => { ui.tab = "overview"; } }, "Open in session"))),
+    h("div", { class: "tabpane" },
+      kv([["What happened", x.sentence], ["Check", item.check], ["Action", (e.action || "").split(": ").slice(1).join(": ") || e.action], ["Effect on the session", x.effect], ["Why", x.why], ["What you can do", x.todo],
+        ["Session", h("a", { href: stepHref(item.session_id, tid) }, item.session_label || item.session_id)]]),
+      Object.keys(e.text || {}).length ? h("div", { class: "sect" }, h("h3", {}, "Input and output on this laptop"), tabIO(e)) : null));
 }
 
-/* ---------- Setup ---------- */
+/* ---------- Setup: the full local agent setup ---------- */
+const managed = () => h("span", { class: "managed" }, icon("lock"), "Managed by your security team");
+const list = xs => xs.length ? xs.join(", ") : "–";
+
 async function renderSetup() {
-  const [c, st] = await Promise.all([api("/setup"), api("/status").catch(() => null)]);
+  const [c, a, st, se] = await Promise.all([api("/setup"), api("/agent"), api("/status").catch(() => null), api("/settings")]);
+  ui.settings = se.settings;
   const result = h("div", {});
   const testBtn = h("button", { class: "btn primary", onclick: async () => {
     testBtn.disabled = true; result.replaceChildren(h("p", { class: "muted small" }, "Asking the gateway for your tools…"));
     try {
       const t = await api("/setup/test");
       result.replaceChildren(t.ok
-        ? h("div", { style: "margin-top:8px" }, h("div", {}, `Connected. Your agent can use ${t.tools.length} tools:`),
-          h("div", { class: "toolchips" }, t.tools.map(x => h("span", { class: "badge", title: x.name }, x.plain))))
+        ? h("div", { class: "small", style: "margin-top:8px" }, `Connected. Your agent sees ${t.tools.length} tools.`)
         : h("div", { style: "margin-top:8px" }, badge("blocked", "Failed"), " ", t.error));
     } catch (err) { result.replaceChildren(h("div", { style: "margin-top:8px" }, badge("blocked", "Failed"), " ", String(err.message))); }
     testBtn.disabled = false;
   } }, "Test connection");
-  const field = (l, v, btn) => h("div", { class: "field" }, h("span", {}, l), h("code", { title: v }, v), btn || h("span", {}));
+  const field = (l, v, btn) => h("div", { class: "field" }, h("span", {}, l), typeof v === "string" ? h("code", { title: v }, v) : h("span", {}, v), btn || h("span", {}));
   const copyBtn = text => h("button", { class: "btn sm", onclick: ev => copy(text, ev.currentTarget) }, "Copy");
-  const t2 = st ? { off: "Off", ready: "Loaded", "loads on first use": "Not loaded yet (loads on first use)" }[st.classifier] || st.classifier : "Unknown";
-  view().replaceChildren(pageHead("Setup", `Point your agent at Tollgate. It runs as ${c.agent} (${c.role}).`),
+  const health = st ? [h("span", { class: "cdot" + (st.health.level === "alert" ? " off" : "") }), " ", st.health.message] : [h("span", { class: "cdot off" }), " Unreachable"];
+  const snippets = h("details", { class: "snips" }, h("summary", {}, "Client config snippets: Claude Code, Cursor, OpenAI SDK"),
+    Object.entries(c.snippets).map(([name, sn]) => h("div", { class: "snip" },
+      h("div", { class: "row" }, h("h3", { style: "margin:0;color:var(--ink)" }, name), h("button", { class: "btn sm", onclick: ev => copy(sn.replaceAll("{KEY}", c.key), ev.currentTarget) }, "Copy")),
+      h("pre", {}, sn.replaceAll("{KEY}", c.key_masked)))));
+
+  const toolRow = t => h("tr", {}, h("td", { title: t.name }, t.plain, h("span", { class: "sub-l mono" }, t.name)),
+    h("td", {}, t.write ? "Write" : "Read"), h("td", { class: "muted", title: (t.limits || []).join("; ") }, (t.limits || []).join("; ") || "No extra limits"));
+  const servers = a.servers.map(s => h("div", { class: "srv" },
+    h("div", { class: "srv-h" }, h("h3", {}, s.name), h("span", { class: "muted small" },
+      s.reachable ? `${s.allowed.length} allowed · ${s.denied.length} hidden from this role` + (s.access === "read" ? " · read-only tools only" : "") : "Not reachable by this role")),
+    s.allowed.length ? h("table", { class: "t" }, h("colgroup", {}, h("col", {}), h("col", { style: "width:72px" }), h("col", { style: "width:40%" })),
+      h("thead", {}, h("tr", {}, h("th", {}, "Allowed tool"), h("th", {}, "Kind"), h("th", {}, "Limits"))), h("tbody", {}, s.allowed.map(toolRow))) : null,
+    s.denied.length ? h("div", { class: "denied" }, h("span", { class: "muted small" }, s.reachable ? "Hidden from this role:" : "Tools on this server:"),
+      s.denied.map(t => h("span", { class: "badge", title: t.name }, icon("x"), t.plain))) : null));
+
+  const b = a.budget || {};
+  const kv = rows => h("dl", { class: "kv" }, rows.filter(Boolean).map(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]));
+  const inj = a.content.injection;
+
+  const ceil = se.ceiling;
+  const saveMsg = h("span", { class: "small muted", role: "status" });
+  const post = async patch => {
+    try {
+      const r = await fetch(API + "/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+      ui.settings = j.settings; saveMsg.textContent = "Saved."; saveMsg.className = "small muted";
+      if ("theme" in patch) applyTheme(j.settings.theme);
+    } catch (err) { saveMsg.textContent = String(err.message); saveMsg.className = "small err"; }
+  };
+  const keep = h("input", { type: "checkbox", id: "keep", checked: se.settings.keep_text, disabled: !ceil.keep_text && !se.settings.keep_text,
+    onchange: ev => post({ keep_text: ev.target.checked }) });
+  const ret = h("input", { type: "number", id: "ret", class: "num-in", min: 1, max: ceil.retention, value: se.settings.retention,
+    onchange: ev => post({ retention: Number(ev.target.value) }) });
+  const theme = h("select", { id: "thm", class: "sel-in", onchange: ev => post({ theme: ev.target.value }) },
+    ["system", "light", "dark"].map(t => h("option", { value: t, selected: se.settings.theme === t }, { system: "Match the system", light: "Light", dark: "Dark" }[t])));
+
+  view().replaceChildren(pageHead("Setup", `How ${a.agent} (${a.role}) is connected and what it may do. Policy ${a.policy.version}, profile ${a.policy.profile}.`),
     h("div", { class: "stack" },
       h("div", { class: "grid2" },
         card("Connection", null, h("div", { class: "card-b" },
-          field("Server", c.server), field("MCP URL", c.mcp_url, copyBtn(c.mcp_url)), field("Model URL", c.model_url, copyBtn(c.model_url)),
+          field("Server", c.server), field("Health", health), field("MCP URL", c.mcp_url, copyBtn(c.mcp_url)), field("Model URL", c.model_url, copyBtn(c.model_url)),
           field("Key", c.key_masked, h("button", { class: "btn sm", onclick: ev => copy(c.key, ev.currentTarget) }, "Copy key")),
-          field("Injection check", t2),
-          h("div", { style: "margin-top:8px" }, testBtn), result)),
-        card("What stays here, what is sent", null, h("div", { class: "card-b" }, h("dl", { class: "kv" },
-          h("dt", {}, "Stays on this laptop"), h("dd", {}, h("ul", { class: "plain" }, h("li", {}, "Full text of prompts, arguments and results"), h("li", {}, "The original of every masked item"), h("li", {}, "Your key"))),
-          h("dt", {}, "Sent to the server"), h("dd", {}, h("ul", { class: "plain" }, h("li", {}, "Decision and reason for each action"), h("li", {}, "Tool name, time, session state"), h("li", {}, "A fingerprint (SHA-256) of the text, never the text"))))))),
-      card("Config snippets", h("span", { class: "muted small" }, "The key is shown masked; Copy puts the real key on your clipboard."),
-        Object.entries(c.snippets).map(([name, sn]) => h("div", { class: "snip" },
-          h("div", { class: "row" }, h("h3", { style: "margin:0;color:var(--ink)" }, name), h("button", { class: "btn sm", onclick: ev => copy(sn.replaceAll("{KEY}", c.key), ev.currentTarget) }, "Copy")),
-          h("pre", {}, sn.replaceAll("{KEY}", c.key_masked)))))));
+          field("Expiry", h("span", {}, "No expiry. Your security team can revoke it.")),
+          h("div", { style: "margin-top:8px" }, testBtn), result), snippets),
+        card("Local settings", h("span", { class: "muted small" }, "Can only be stricter than the company policy"), h("div", { class: "card-b" },
+          h("div", { class: "field set" }, h("label", { for: "keep" }, "Keep full text"), h("span", { class: "small muted" }, ceil.keep_text ? "Store prompts, arguments and results on this laptop for the Input/Output tabs." : "Turned off by the company policy."), keep),
+          h("div", { class: "field set" }, h("label", { for: "ret" }, "Retention"), h("span", { class: "small muted" }, `Keep the text of the last N calls, at most ${n(ceil.retention)}.`), ret),
+          h("div", { class: "field set" }, h("label", { for: "thm" }, "Theme"), h("span", { class: "small muted" }, "This screen only."), theme),
+          h("div", { style: "margin-top:8px;min-height:20px" }, saveMsg),
+          h("h3", { style: "margin-top:8px" }, "What stays here, what is sent"),
+          kv([["Stays on this laptop", "Full text of prompts, arguments and results; originals of masked items; your key."],
+            ["Sent to the server", "Decision and reason, tool name, time, session state, and a SHA-256 fingerprint of the text."]])))),
+      card("MCP servers and tools", managed(), h("div", { class: "card-b" }, servers)),
+      h("div", { class: "grid2" },
+        card("Models and budget", managed(), h("div", { class: "card-b" }, kv([
+          ["Models allowed", list(a.models)],
+          ["Tokens today", b.limit == null ? `${n(b.used)} used · no limit` : `${n(b.used)} of ${n(b.limit)} used · ${n(Math.max(0, b.limit - b.used))} left`],
+        ]), b.limit ? h("div", { class: "meter", title: `${Math.round(100 * b.used / b.limit)}% used` }, h("i", { style: `width:${Math.min(100, 100 * b.used / b.limit)}%` })) : null)),
+        card("Content checks in force", managed(), h("div", { class: "card-b" }, kv([
+          ["Masked", list(a.content.masked)], ["Blocked", list(a.content.blocked)], a.content.asks.length ? ["Asks a human", list(a.content.asks)] : null,
+          ["Injection check", `${inj.profile} profile. ${inj.words}`],
+          ["Signatures", `${n(a.content.signatures.count)} known attacks · ${a.content.signatures.source}${a.content.signatures.version != null ? " v" + a.content.signatures.version : ""}`],
+        ])))),
+      card("Data-flow labels", managed(), h("div", { class: "card-b" }, h("p", { class: "flow" }, h("strong", {}, "Rule: "), a.flow_rule.sentence,
+        " Action: ", a.flow_rule.action === "approve" ? "ask a human" : "block", ".")),
+        h("table", { class: "t" }, h("colgroup", {}, h("col", {}), h("col", { style: "width:160px" }), h("col", { style: "width:44%" })),
+          h("thead", {}, h("tr", {}, h("th", {}, "Tool"), h("th", {}, "Label"), h("th", {}, "Why"))),
+          h("tbody", {}, a.labels.map(l => h("tr", {}, h("td", { title: l.tool }, l.plain, h("span", { class: "sub-l mono" }, l.tool)),
+            h("td", {}, l.words.join(", ")), h("td", { class: "muted", title: l.why }, l.why))))))));
 }
 
 /* ---------- Scenario ---------- */
@@ -446,14 +552,17 @@ async function route(focus) {
   ui.view = VIEWS[parts[0]] ? parts[0] : "overview";
   document.querySelectorAll(".nav a").forEach(a => a.dataset.view === ui.view ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
   renderRange();
+  const keep = Object.fromEntries([...document.querySelectorAll("[data-keep]")].map(el => [el.dataset.keep, el.scrollTop]));
   try {
-    if (ui.view === "sessions" && parts[1]) await renderTrace(parts[1], parts[2]);
+    if (ui.view === "sessions") await renderSessions(parts[1], parts[2]);
+    else if (ui.view === "events") await renderEvents(parts[1]);
     else await VIEWS[ui.view]();
   } catch (err) {
     view().replaceChildren(h("div", { class: "notice" }, h("span", { class: "cdot" }),
       String(err.message).startsWith("404") ? "This session is not on this laptop any more." : "Could not reach the gateway. The page retries when it is back.",
       h("button", { class: "btn sm", style: "margin-left:auto", onclick: () => route(false) }, "Retry")));
   }
+  document.querySelectorAll("[data-keep]").forEach(el => { if (keep[el.dataset.keep]) el.scrollTop = keep[el.dataset.keep]; });
   if (focus) view().focus({ preventScroll: true });
 }
 window.addEventListener("hashchange", () => route(true));
@@ -476,6 +585,7 @@ function live() {
 renderThemeBtn();
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderThemeBtn);
 refreshStatus();
+api("/settings").then(j => { ui.settings = j.settings; applyTheme(j.settings.theme); }).catch(() => {});
 route(false);
 live();
 setInterval(refreshStatus, 15000);

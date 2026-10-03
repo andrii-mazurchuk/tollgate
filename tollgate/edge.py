@@ -326,7 +326,7 @@ def agent(data: dict, role: str, source_tools: dict, feed_state: dict, used: dic
                     "asks": [k for k, v in acts.items() if v == "approve"],
                     "injection": {"profile": data.get("mode"), "low": lo, "high": hi,
                                   "words": f"Blocks when the classifier is at least {round(hi * 100)}% sure; "
-                                           + (f"flags from {round(lo * 100)}%." if lo < hi else "nothing is only flagged.")
+                                           + (f"flags from {round(lo * 100)}%." if lo < hi else "below that, text passes.")
                                            + (" Hidden links that leak data are blocked." if inj.get("md_exfil", "block") == "block" else "")},
                     "signatures": {"version": feed_state.get("version"), "count": n_sig,
                                    "source": "threat feed" if feed_state.get("url") else "local file"}},
