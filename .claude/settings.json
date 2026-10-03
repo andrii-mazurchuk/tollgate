@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(bun *)",
+      "Bash(bunx *)",
+      "Bash(uv *)",
+      "Bash(python *)",
+      "Bash(pytest *)",
+      "Bash(bash scripts/*)",
+      "Bash(curl http://localhost*)",
+      "Bash(curl -s http://localhost*)",
+      "Bash(curl http://127.0.0.1*)",
+      "Bash(curl -s http://127.0.0.1*)"
+    ],
+    "additionalDirectories": [
+      "C:/Projects/heack-yea-2026/rebel-a",
+      "C:/Projects/heack-yea-2026/rebel-b"
+    ]
+  }
+}
