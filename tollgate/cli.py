@@ -202,7 +202,9 @@ def key_issue() -> int:
         return 2
     key = issue(role, key_id)
     print(key)
-    print(f"MCP URL: http://127.0.0.1:{_opt('--port', '8080')}/mcp/{role}/")
+    base = f"http://127.0.0.1:{_opt('--port', '8080')}"
+    print(f"MCP URL: {base}/mcp/{role}/")
+    print(f"Model door: {base}/v1/chat/completions")
     print(f"Header:  Authorization: Bearer {key}")
     return 0
 
@@ -217,7 +219,9 @@ def main() -> int:
             args.remove("--eval-only")
         else:
             import pytest
-            rc = pytest.main(["-q", *args])
+            from pathlib import Path
+            root = Path(__file__).resolve().parents[1]  # collect the repo's tests, not the CWD's
+            rc = pytest.main(["-q", "--rootdir", str(root), str(root / "tests"), *args])
         from tollgate.eval.runner import main as evaluate
         print("\n== tollgate eval ==")
         evaluate()

@@ -87,3 +87,14 @@ async def test_gateway_healthz_reports_feed_and_policy_validates_it():
     data["feed"] = {"url": 5}
     with pytest.raises(ValueError, match="feed"):
         validate(data)
+
+
+def test_relative_signatures_path_resolves_against_repo_root(tmp_path, monkeypatch, caplog):
+    """`tollgate serve` from outside the repo: policy's `signatures: signatures.yaml` still loads the repo file."""
+    from tollgate.content import signatures
+
+    monkeypatch.chdir(tmp_path)
+    assert signatures.rules("signatures.yaml")
+    with caplog.at_level("WARNING"):
+        assert signatures.rules("no-such-signatures.yaml") == []
+    assert "no-such-signatures.yaml" in caplog.text

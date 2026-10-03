@@ -26,7 +26,7 @@ needs_model = pytest.mark.skipif(not _cached(), reason="tier 2 model not in the 
 
 @pytest.fixture(scope="module")
 def result():
-    with open("policy.yaml", encoding="utf-8") as f:
+    with open(runner.ROOT / "policy.yaml", encoding="utf-8") as f:
         return runner.run(yaml.safe_load(f))
 
 

@@ -11,7 +11,7 @@ pytestmark = [pytest.mark.track_b, pytest.mark.slow]
 
 @pytest.fixture(scope="module")
 def policy():
-    with open("policy.yaml", encoding="utf-8") as f:
+    with open(runner.ROOT / "policy.yaml", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
