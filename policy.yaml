@@ -19,6 +19,9 @@ roles:
     constrain:
       files.fs.read: { path: "/workspace/**" }
       tickets.query: { sql: select_only }
+    # Demo: redact secrets instead of blocking, so step 2 of `tollgate replay github` succeeds
+    # (AKIA key masked) and taint, not content, is shown stopping the leak. Overrides `content:` keys for this role.
+    content: { secrets: redact }
 
 labels:
   github.issues.read: [untrusted_source]
@@ -26,6 +29,7 @@ labels:
   github.pr.create:   [public_sink]
 
 taint:
+  enabled: true
   block_flow: { from: private_data, to: public_sink, action: block }
 
 content:
