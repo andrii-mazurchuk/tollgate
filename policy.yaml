@@ -31,5 +31,5 @@ taint:
 content:
   pii:       { iban: redact, pesel: block, card: redact, email: redact }
   secrets:   block
-  injection: { low: 0.50, high: 0.99, sync_max_tokens: 64 }
+  injection: { low: 0.50, high: 0.99, sync_max_tokens: 64, tier1_action: allow }  # strict: block
   signatures: signatures.yaml

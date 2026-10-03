@@ -9,6 +9,20 @@ _INVISIBLE = re.compile("[­​-‏‪-‮⁠-⁤⁦-⁩﻿]")
 _B64_RUN = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{24,}={0,2}(?![A-Za-z0-9+/=])")
 MAX_B64_RUNS = 32
 MAX_B64_LEN = 65536
+# Cyrillic/Greek lookalikes -> Latin, 1:1 so spans are preserved
+_HOMOGLYPHS = str.maketrans(
+    "аеорсухіјѕԁӏкмАВЕКМНОРСТХІЈЅαονικτρΑΒΕΖΗΙΚΜΝΟΡΤΥΧ",
+    "aeopcyxijsdlkmABEKMHOPCTXIJSaoviktpABEZHIKMNOPTYX",
+)
+_WORD = re.compile(r"\w+")
+
+
+def _fold_word(m: re.Match) -> str:
+    w = m.group()
+    # only mixed-script words: pure Cyrillic/Greek text is left alone
+    if any("a" <= c.lower() <= "z" for c in w):
+        return w.translate(_HOMOGLYPHS)
+    return w
 
 
 def normalise(text: str) -> tuple[str, list[str]]:
@@ -19,8 +33,11 @@ def normalise(text: str) -> tuple[str, list[str]]:
     stripped = _INVISIBLE.sub("", nfkc)
     if stripped != nfkc:
         transforms.append("zero_width")
-    # ponytail: no homoglyph folding / hex / URL decoding yet; add with AC9 (obfuscated-variant recall).
-    return stripped, transforms
+    folded = _WORD.sub(_fold_word, stripped)
+    if folded != stripped:
+        transforms.append("homoglyph")
+    # ponytail: homoglyphs folded only in mixed-script words (all-lookalike Cyrillic words slip); no hex / URL decoding yet; add with AC9.
+    return folded, transforms
 
 
 def base64_runs(text: str) -> list[tuple[int, int, str]]:

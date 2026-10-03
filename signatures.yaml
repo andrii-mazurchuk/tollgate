@@ -1,6 +1,26 @@
-# External attack-signature feed (P6). Hot reloaded by Track B. One entry per known attack.
-# - id: sig.example
-#   pattern: 'regex here'
-#   action: block
-#   tags: [OWASP-LLM01]
-[]
+# External attack-signature feed (P6). Hot reloaded by Track B on mtime change. One entry per known attack.
+# Fields: id (rule becomes sig.<id>), pattern (Python regex, case-insensitive), action, tags.
+- id: py_import_os
+  pattern: '__import__\(\s*[''"]os'
+  action: block
+  tags: [OWASP-LLM05, ATLAS-AML.T0050]
+- id: py_shell_exec
+  pattern: 'os\.system\(|subprocess\.(Popen|run)\('
+  action: block
+  tags: [OWASP-LLM05, ATLAS-AML.T0050]
+- id: pickle_load
+  pattern: 'pickle\.loads?\('
+  action: block
+  tags: [OWASP-LLM05, ATLAS-AML.T0011]
+- id: curl_pipe_shell
+  pattern: 'curl\s+[^|\n]*\|\s*(ba)?sh\b'
+  action: block
+  tags: [OWASP-LLM06, ATLAS-AML.T0050]
+- id: dan_jailbreak
+  pattern: 'Hello,?\s+ChatGPT\.\s+From now on you are going to act as (a )?DAN'
+  action: block
+  tags: [OWASP-LLM01, ATLAS-AML.T0054]
+- id: rm_rf_root
+  pattern: 'rm\s+-rf\s+/'
+  action: block
+  tags: [OWASP-LLM06, ATLAS-AML.T0048]
