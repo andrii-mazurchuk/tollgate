@@ -38,8 +38,9 @@ labels:                                        # taint labels per tool
 
 taint:                                         # session taint; a session = one issued role key
   enabled: true                                # still on: it costs ~0.005 ms per call (audit/perf.json)
-  block_flow: { from: private_data, to: public_sink, action: approve }   # intent: a human approves; approval is not built yet, so approve acts as block (the message says so)
+  block_flow: { from: private_data, to: public_sink, action: approve }   # the call waits for a human: GET /admin/approvals, then approve/deny with the admin token
 
+approval: { timeout_s: 120 }                   # a human has 2 minutes to click approve (dashboard / tollgate approve <id>); then approval.timeout
 loops: { max_identical_calls: 10 }             # tolerate retries and polling agents
 
 content:                                       # content pipeline (Track B semantics)

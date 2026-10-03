@@ -35,14 +35,11 @@ def record(policy: dict, key_id: str, tool: str, args: dict) -> None:
 
 
 def check(policy: dict, key_id: str, tool: str) -> str | None:
-    """Before a call. Returns the block message, or None to allow."""
+    """Before a call. Returns the block message, or None to allow. block_flow.action (block|approve) is applied by the caller."""
     t = policy.get("taint") or {}
     if t.get("enabled") is False or "public_sink" not in _labels(policy, tool):
         return None
     s = STATE.get(key_id)
     if not s or not (s["tainted"] and s["holds_private"]):
         return None
-    msg = f"blocked: session tainted by {s['tainted']}; private data from {s['holds_private']}"
-    if (t.get("block_flow") or {}).get("action", "block") == "approve":
-        msg += " (approve not built yet; treated as block)"
-    return msg
+    return f"blocked: session tainted by {s['tainted']}; private data from {s['holds_private']}"

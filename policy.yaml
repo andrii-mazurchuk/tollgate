@@ -39,6 +39,7 @@ taint:
   enabled: true
   block_flow: { from: private_data, to: public_sink, action: block }
 
+approval: { timeout_s: 30 }       # an `approve` verdict (roles.<role>.approval or block_flow.action: approve) waits this long for POST /admin/approvals/{id}, then fails closed
 loops: { max_identical_calls: 5 }   # same key + tool + args more than N times in a row -> loop.cutoff
 
 content:

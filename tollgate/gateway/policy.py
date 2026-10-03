@@ -81,6 +81,8 @@ def validate(p) -> dict:
                 raise ValueError(f"roles.{role}.constrain.{tool}: bad constraint (want {{arg: glob|select_only}})")
         if not all(isinstance(m, str) for m in r.get("models") or []) or not isinstance(r.get("models") or [], list):
             raise ValueError(f"roles.{role}.models: need a list of model names")
+        if not isinstance(r.get("approval") or [], list) or not all(isinstance(t, str) for t in r.get("approval") or []):
+            raise ValueError(f"roles.{role}.approval: need a list of tool names")
         tpd = (r.get("budget") or {}).get("tokens_per_day")
         if tpd is not None and (not isinstance(tpd, int) or isinstance(tpd, bool) or tpd < 0):
             raise ValueError(f"roles.{role}.budget.tokens_per_day: need a non-negative integer")
@@ -89,6 +91,9 @@ def validate(p) -> dict:
         raise ValueError("taint.block_flow.action: need block|approve")
     if "enabled" in t and not isinstance(t["enabled"], bool):
         raise ValueError("taint.enabled: need true|false")
+    ts = (p.get("approval") or {}).get("timeout_s", 30)
+    if not isinstance(ts, (int, float)) or isinstance(ts, bool) or ts <= 0:
+        raise ValueError("approval.timeout_s: need a number > 0")
     mic = (p.get("loops") or {}).get("max_identical_calls", 5)
     if not isinstance(mic, int) or isinstance(mic, bool) or mic < 1:
         raise ValueError("loops.max_identical_calls: need an integer >= 1")
