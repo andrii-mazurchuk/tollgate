@@ -113,6 +113,24 @@ Order on the page, top to bottom: status line → KPI strip → trend → (reaso
 4. **Setup**
 5. **Scenario**
 
+### Local edge, revision 3 (review of v2, 2026-10-03 23:10)
+
+**Verdict:** style and conventions are much better. Keep them.
+
+**Changes:**
+1. **Sessions = one screen (master–detail).**
+   - The session list stays on the left.
+   - Clicking a session opens its detail **in the right pane of the same screen**: session metadata at the top right, then the steps and the tabs.
+   - No separate session page.
+2. **Events: the same pattern.** The event list on the left, the selected event's detail in the right pane (with a link into its session).
+3. **Setup becomes the full local agent setup**: everything about how this agent is connected and what it may do:
+   - connection (server, key, expiry, clients and config snippets, test);
+   - **MCP servers this agent reaches** and, per server, **allowed tools** (read/write, limits such as SELECT only and /workspace only) and **denied tools** (hidden from this role);
+   - models allowed and the token budget (used / left);
+   - data-flow labels per tool (outside text / private data / public destination) and what the data-flow rule does;
+   - content checks in force (what is masked, what is blocked, injection strictness, signature feed version);
+   - **local settings this layer may change**: keep full text locally on/off, retention, theme. Local settings may only make things *stricter or more private*, never looser than the company policy, which stays authoritative and read-only here.
+
 ## Server console (security lead)
 
 **Purpose:** govern and oversee **all peers** (laptops/edges running agents) and all agents in the company. This is the complex side and the primary UI.
