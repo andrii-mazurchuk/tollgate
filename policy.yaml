@@ -46,5 +46,6 @@ loops: { max_identical_calls: 5 }   # same key + tool + args more than N times i
 content:
   pii:       { iban: redact, pesel: block, card: redact, email: redact }
   secrets:   block
-  injection: { low: 0.50, high: 0.50, sync_max_tokens: 64, sync_points: [prompt], tier1_action: allow, tool_result_action: flag }  # strict: block. sync_points: always sync at any length (the model door pays seconds anyway). high swept on the 70% split (audit/eval.json): strict 0.50 (FPR<=10%), lenient 0.50 (FPR<=2%); below low is not allowed. tool_result_action: flag = a t2 hit on a tool result is recorded, taint stops the flow (strict: block)
+  injection: { low: 0.50, high: 0.50, sync_max_tokens: 64, sync_points: [prompt], tier1_action: allow, tool_result_action: flag, sample_chunks: 3 }  # strict: block. sync_points: always sync at any length (the model door pays seconds anyway). high swept on the 70% split (audit/eval.json): strict 0.50 (FPR<=10%), lenient 0.50 (FPR<=2%); below low is not allowed. tool_result_action: flag = a t2 hit on a tool result is recorded, taint stops the flow (strict: block)
   signatures: signatures.yaml
+  max_scan_chars: 100000  # longer inputs: head + tail scanned, reason content.truncated (ReDoS / latency bound)

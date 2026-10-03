@@ -10,6 +10,9 @@ ROOT = Path(__file__).resolve().parents[2]  # policy paths are relative to the r
 
 log = logging.getLogger(__name__)
 _ACTIONS = ("allow", "redact", "approve", "block")
+MAX_PATTERN = 500
+# a quantified group whose body is itself quantified: (a+)+, (\w*)*, (x+y?){2,}; catastrophic backtracking
+_NESTED = re.compile(r"\((?:[^()\\]|\\.)*[+*}](?:[^()\\]|\\.)*\)\s*(?:[+*]|\{\d*,)")
 _missing: set[str] = set()
 _cache: dict[str, tuple[int, list, list[str]]] = {}  # path -> (mtime_ns, rules, errors)
 
@@ -25,7 +28,10 @@ def _load(path: str) -> tuple[list, list[str]]:
             sid, action = str(e["id"]), e.get("action", "block")
             if action not in _ACTIONS:
                 raise ValueError(f"bad action {action!r}")
-            rx = re.compile(e["pattern"], re.I)
+            pat = str(e["pattern"])
+            if len(pat) > MAX_PATTERN or _NESTED.search(pat):  # ReDoS guard: the feed is external input
+                raise ValueError("pattern rejected: too long or nested quantifier (ReDoS risk)")
+            rx = re.compile(pat, re.I)
             tags = ",".join(map(str, e.get("tags") or []))
             rules.append((f"sig.{sid}", rx, action, f"signature {sid}" + (f" [{tags}]" if tags else "")))
         except Exception as exc:  # skip and record, never crash the scan
