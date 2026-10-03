@@ -154,7 +154,11 @@ Example from the alignment session: role-1 = read on A; role-2 = read and write 
    Spans already matched by an earlier rule are not re-reported by later rules.
 3. **Tier 2, classifier:**
    - model: `protectai/deberta-v3-base-prompt-injection-v2` (Apache-2.0), ONNX on CPU
-   - input: 512-token chunks with overlap; the score is the highest chunk score
+   - runtime: the repo's own `onnx/model.onnx` (fp32, 739 MB) via onnxruntime + tokenizers; no torch. Labels: 0 = SAFE, 1 = INJECTION
+   - input: 256-token chunks, 32 overlap; the score is the highest chunk score
+   - **measured on the demo laptop (i7-1255U):** about 50 ms p95 at 30 tokens, about 0.5 s at 256 tokens, 1–2 s at 512 tokens. Naive int8 quantisation breaks it (an injection scored 0.02), so it is not used.
+   - **so tier 2 is gated.** It runs synchronously on short text (≤ 64 tokens) and on any text tier 1 escalates. Other long tool results get tier 2 asynchronously (audit only), because taint still protects the flow.
+   - it catches Polish injections (1.00), but it false-positives on benign instruction-like text ("ignore the previous version's config…" scored 0.9985). Start with `high` at 0.99 and tune it on the clean corpus.
    - the policy sets `low` and `high` thresholds per profile
 4. **Tier 3, judge (helper):** Qwen3Guard-Gen-0.6B via Ollama, only for scores between `low` and `high`.
 5. **Fusion:** the most severe action wins (block > approve > redact > allow). Redaction replaces only the span. The verdict carries all reasons and the latency of each tier.
@@ -196,7 +200,7 @@ taint:
 content:
   pii:       { iban: redact, pesel: block, card: redact, email: redact }
   secrets:   block
-  injection: { low: 0.50, high: 0.80 }
+  injection: { low: 0.50, high: 0.99, sync_max_tokens: 64 }
   signatures: signatures.yaml
 
 loops: { max_identical_calls: 5 }
@@ -296,7 +300,7 @@ Each criterion is checked by a command or by an action a judge can repeat.
 | AC12 | A model not in the role's `models` list is rejected | test case |
 | AC13 | `tollgate test` runs ≥ 500 cases (positive and negative, every P1–P10 covered) and prints pass rate, FPR and posture score. Disabling a control lowers the posture score. | command |
 | AC14 | Dashboard shows live verdicts, tainted sessions, budget burn, per-tier latency, posture score. Audit exports to JSONL and CSV. | manual |
-| AC15 | Latency at p95: Hub checks < 5 ms; tier 1 < 5 ms; tier 2 < 50 ms on CPU | `tollgate test --perf` |
+| AC15 | Latency at p95: Hub checks < 5 ms; tier 1 < 5 ms; tier 2 < 80 ms on short text (≤ 64 tokens); share of calls reaching tier 2 synchronously reported | `tollgate test --perf` |
 | AC16 | Deliverables: architecture diagram, documented `policy.yaml` with 3 profiles and budgets, 10-slide PDF, README quick start | files exist |
 
 Targets in AC8, AC9 and AC15 are proposals. They stand until the first held-out measurement, and then get adjusted with justification.
@@ -372,6 +376,7 @@ Stack:
 | 2026-10-03 | Full Python, one process for the MVP, team of one |
 | 2026-10-03 | Content targets per AC8 until measured |
 | 2026-10-03 | Stack: fastmcp 4.0.10 (pinned): `create_proxy` + `mount(tool_names=…)`, `Middleware.on_list_tools/on_call_tool`, one Starlette app mounting `/mcp/{role}`, in-memory `Client` for tests |
+| 2026-10-03 | Tier 2: protectai fp32 ONNX (no torch), 256-token chunks, gated (short text + tier 1 escalations sync, the rest async), `high` 0.99. Llama-Prompt-Guard-2 rejected (gated, missed Polish). |
 | 2026-10-03 | Taint keyed by role key, not MCP session ID (not stable in the current protocol) |
 | 2026-10-03 | Two parallel tracks: A Gateway, B Content and evidence; git tags only; submission 1 = docs + code snapshot |
 

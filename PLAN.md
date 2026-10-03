@@ -36,9 +36,9 @@ Shared files are `tollgate/contract.py`, `API_CONTRACT.md`, `PLAN.md`, `policy.y
 | 0–1 | 16:40–17:40 | M0 spike: mock github MCP + fastmcp proxy (AC: m0 test) | Tier 1 start: normalise, PII validators |
 | 1–2.5 | –19:10 | Policy loader, `/mcp/{role}`, role keys, exact tools, argument limits (AC2–AC4) | PII + secrets done (AC8 PII part) |
 | 2.5–3.5 | –20:10 | Taint keyed by role key, GitHub replay (AC5, AC6) | Injection rules, `signatures.yaml` hot reload (AC10) |
-| 3.5–5 | –21:40 | Wire `scan()` on args/results, audit JSONL writer | Corpora download + own cases, eval runner |
+| 3.5–5 | –21:40 | Wire `scan()` on args/results, audit JSONL writer | Corpora download + own cases, eval runner. **Pre-fetch the tier 2 model now** (739 MB) |
 | 5–6.3 | –23:00 | Hot reload + invalid-file guard (AC7); merge; smoke | **Docs snapshot** (README, TOLLGATE, description); `tollgate test` summary (AC13 small) |
-| 7–8.5 | 23:40–01:10 | Model door: Ollama proxy, model allow-list (AC12) | Tier 2 classifier, thresholds, held-out metrics (AC8, AC9) |
+| 7–8.5 | 23:40–01:10 | Model door: Ollama proxy, model allow-list (AC12) | Tier 2 classifier (gated, per TOLLGATE §4.5; tested sketch in the PU ticket), thresholds, held-out metrics (AC8, AC9). Cache scores in eval: 500 cases × up to 0.5 s. |
 | 8.5–10 | –02:40 | Token budgets, loop cut-off (AC11) | Posture score; suite grows live (AC13) |
 | 10–12 | –04:40 | Supabase trace, perf (AC15), one-command `tollgate serve` (AC1) | Dashboard over audit JSONL (AC14) |
 | 12–13 | –05:40 | Commented `policy.yaml` with 3 profiles, architecture diagram | 10 slides, demo script |
