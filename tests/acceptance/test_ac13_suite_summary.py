@@ -21,7 +21,7 @@ def result(policy):
 
 
 def test_ac13_suite_summary(result):
-    assert result["overall"]["n"] >= 500
+    assert result["cases_run"] >= 500 and result["overall"]["n"] < result["cases_run"]  # report is held-out only
     assert {"pii", "secrets", "injection", "signatures", "obfuscation"} <= set(result["controls"])
     text = runner.report(result)
     for needle in ("pass rate", "FPR", "posture"):
