@@ -6,6 +6,8 @@
 
 Agent calls go through the Edge (content checks) and the Hub (per-role gate) to the source MCPs. LLM calls go through the model door (prompt scanned before any upstream call) to Ollama or the offline scripted model. `policy.yaml` hot-reloads into both; the signed feed updates Edge signatures; every decision lands in the audit JSONL. Two UIs read it: the local edge `/edge` (developer laptop, full text stays local) and the server console `/console` (security lead, fingerprints only). The simplified picture predates the UIs: its "Dashboard" box is now the console and edge UI, and "human approval" is API-only (`/admin/approvals`).
 
+**Deployment.** One binary in two roles. The local enforcer runs on each laptop: hooks and MCP go to localhost, full text never leaves the machine, it works offline, and a solo developer needs nothing more. The optional control plane adds enrollment, roles, policy, revocation, the threat feed and fleet audit (fingerprints only). The demo runs both on one machine; splitting into `--role edge|hub` with policy sync is the next step. The developer's interface is the deny message inside the agent (reason, what to do, link to the step on the local edge); `tollgate open` opens the details on demand.
+
 ## Detailed
 
 ```mermaid

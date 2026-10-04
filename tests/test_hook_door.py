@@ -70,6 +70,13 @@ async def test_github_mcp_style_attack_through_hooks_only(monkeypatch):
         # the link opens that exact step: the edge's session view holds this trace id
         d = (await c.get(f"/edge/api/sessions/{sid}")).json()
         assert ev["trace_id"] in [x["trace_id"] for x in d["timeline"]]
+        # `tollgate open TRACE_ID` resolves the session from the audit log and opens the same URL
+        import webbrowser
+        from tollgate import cli
+        opened = []
+        monkeypatch.setattr(webbrowser, "open", opened.append)
+        monkeypatch.setattr(cli.sys, "argv", ["tollgate", "open", ev["trace_id"]])
+        assert cli.open_ui([ev["trace_id"]]) == 0 and opened == [url]
         assert ev["door"] == "hook" and ev["tool"] == "builtin.Bash" and ev["verdict"] == "block"
         assert [x["rule"] for x in ev["reasons"]] == ["taint.flow"] and ev["session_id"] == keys.verify(k)[1]
         assert ev["state_before"] == ev["state_after"] == "untrusted+holds_private" and ev["trace_id"]
