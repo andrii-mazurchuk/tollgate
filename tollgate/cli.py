@@ -247,7 +247,7 @@ def connect(client: str) -> int:
     role, pid = _opt("--role"), _opt("--peer")
     if client not in (*conn.AGENTS, "print") or not role or not pid:
         print(f"usage: tollgate connect {'|'.join(conn.AGENTS)}|print --role R --peer P [--port N] [--host H]"
-              " [--write [--dir PATH]]", file=sys.stderr)
+              " [--write [--dir PATH]] [--fast]", file=sys.stderr)
         return 2
     try:
         key = peers.mint(pid, role, load_policy(_opt("--policy") or DEFAULT_PATH).data["roles"])
@@ -268,7 +268,7 @@ def connect(client: str) -> int:
     if "--write" in sys.argv:
         where = Path(_opt("--dir") or (Path.home() / ".hermes" if client == "hermes" else "."))
     try:
-        print(conn.connect(client, key, role, base, where))
+        print(conn.connect(client, key, role, base, where, fast="--fast" in sys.argv))
     except ValueError as e:  # TOML/JSON in the user's file we can't merge into: nothing was written
         print(f"not written: {e}", file=sys.stderr)
         return 1

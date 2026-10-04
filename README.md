@@ -118,14 +118,16 @@ Held-out 30% split (`sha256(id) % 100 >= 70`); thresholds tuned on the other 70%
 One command per agent launch on an enrolled laptop (`--peer` from `seed-fleet` or the console). It mints a key, prints the agent's MCP entry (the role's tools, remote HTTP) and its hooks, plus the `TOLLGATE_KEY` line to set (PowerShell and bash). Add `--write` to merge them into the project's config in `--dir` (default: current folder): unrelated keys are kept, a short diff is printed, and the key is never written to a file, only referenced as `TOLLGATE_KEY`.
 
 ```bash
-uv run tollgate connect claude-code --role role-2 --peer <id> --write   # .mcp.json + .claude/settings.json (native http hooks -> /hook)
+uv run tollgate connect claude-code --role role-2 --peer <id> --write   # .mcp.json + .claude/settings.json (fail-closed hooks -> /hook; --fast = native http)
 uv run tollgate connect codex       --role role-2 --peer <id> --write   # .codex/config.toml ([features] hooks = true; trust once via /hooks)
 uv run tollgate connect cursor      --role role-2 --peer <id> --write   # .cursor/mcp.json + .cursor/hooks.json (failClosed)
 uv run tollgate connect gemini      --role role-2 --peer <id> --write   # .gemini/settings.json (BeforeTool / AfterTool / BeforeAgent)
 uv run tollgate connect hermes      --role role-2 --peer <id>           # ~/.hermes/config.yaml snippet (--write merges it)
 ```
 
-**What gets checked.** The MCP entry exposes the role's MCP tools. The hooks see **every** tool call the agent makes, built-ins included (shell, file read/write, web fetch), each result (secrets and PII masked) and the user's prompt (injection blocked), against the same policy and session taint. Codex, Cursor, Gemini CLI and Hermes run `tollgate hook <agent> <event>` (the venv's absolute python, so it works from any folder), which maps their hook JSON onto Claude Code's and back. It fails **closed**: hub unreachable, bad key or a 5xx is a deny ("Tollgate unreachable: …"). Claude Code's native http hook is fail-open on a connection error (per its docs); where that matters, use a command hook running `tollgate hook claude-code <Event>`. Use `--host`/`--port` for a remote hub.
+**What gets checked.** The MCP entry exposes the role's MCP tools. The hooks see **every** tool call the agent makes, built-ins included (shell, file read/write, web fetch), each result (secrets and PII masked) and the user's prompt (injection blocked), against the same policy and session taint. Every agent (Claude Code included) runs `tollgate hook <agent> <event>` (the venv's absolute python, so it works from any folder), which maps their hook JSON onto Claude Code's and back. It fails **closed**: hub unreachable, bad key or a 5xx is a deny ("Tollgate unreachable: …"). `connect claude-code --fast` uses Claude Code's native http hooks instead: no process start per call, but fail-open on a connection error (per its docs).
+
+**Verified with a real Claude Code session** (headless, Haiku): `curl` → read `payroll.txt` → `git push` was denied by the hook with Tollgate's reason; the audit shows the session go clean → untrusted → untrusted + holds private → blocked. Use `--host`/`--port` for a remote hub.
 
 **Company-wide enforcement** ([docs/connectivity.md](docs/connectivity.md)): Claude Code `managed-settings.json` with `allowManagedHooksOnly`, `allowManagedMcpServersOnly` and `allowedHttpHookUrls`; Codex `requirements.toml` with managed hooks and the MCP allowlist; Cursor enterprise `hooks.json`.
 

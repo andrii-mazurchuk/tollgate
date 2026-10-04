@@ -162,9 +162,12 @@ def test_connect_prints_config(monkeypatch, capsys, peer, agent):
     assert "http://127.0.0.1:9001/mcp/role-2/" in body
     files = dict(conn.configs(agent, "http://127.0.0.1:9001", "role-2"))
     if agent == "claude-code":
-        h = files[".claude/settings.json"]["hooks"]["PreToolUse"][0]
-        assert h["matcher"] == "*" and h["hooks"][0]["type"] == "http"
-        assert h["hooks"][0]["url"] == "http://127.0.0.1:9001/hook" and h["hooks"][0]["allowedEnvVars"] == ["TOLLGATE_KEY"]
+        h = files[".claude/settings.json"]["hooks"]["PreToolUse"][0]  # default: fail-closed command hook via the shim
+        assert h["matcher"] == "*" and h["hooks"][0]["type"] == "command"
+        assert "hook claude-code PreToolUse --url http://127.0.0.1:9001" in h["hooks"][0]["command"]
+        f = dict(conn.configs(agent, "http://127.0.0.1:9001", "role-2", fast=True))[".claude/settings.json"]
+        hf = f["hooks"]["PreToolUse"][0]["hooks"][0]  # --fast: native http hook (fails open)
+        assert hf["type"] == "http" and hf["url"] == "http://127.0.0.1:9001/hook" and hf["allowedEnvVars"] == ["TOLLGATE_KEY"]
         assert files[".mcp.json"]["mcpServers"]["tollgate"]["headers"]["Authorization"] == "Bearer ${TOLLGATE_KEY}"
     elif agent == "codex":
         t = tomllib.loads(files[".codex/config.toml"])

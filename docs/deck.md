@@ -179,9 +179,9 @@ salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
 </div>
 
 <div style="margin-top:26px">
-<span class="badge">✓ Claude Code</span><span class="badge">✓ any MCP client</span><span class="badge soon">coming: Codex · Cursor · Gemini CLI · Hermes</span>
+<span class="badge">✓ Claude Code</span><span class="badge">✓ Codex</span><span class="badge">✓ Cursor</span><span class="badge">✓ Gemini CLI</span><span class="badge">✓ Hermes</span><span class="badge">✓ any MCP server</span>
 </div>
-<p class="mute" style="font-size:24px;margin:10px 0 0">Built-in tools too (shell, files, web), via hooks: in progress.</p>
+<p class="mute" style="font-size:24px;margin:10px 0 0">Built-in tools too: shell, files, web. Via hooks.</p>
 
 ---
 

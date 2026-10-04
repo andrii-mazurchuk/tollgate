@@ -178,20 +178,22 @@ def hook_command(agent: str, event: str, base: str) -> str:
     return f'"{Path(sys.executable).as_posix()}" -m tollgate.cli hook {agent} {event} --url {base}'
 
 
-def configs(agent: str, base: str, role: str) -> list[tuple[str, object]]:
+def configs(agent: str, base: str, role: str, fast: bool = False) -> list[tuple[str, object]]:
     """(path relative to --dir, content) per file. JSON/YAML content is a dict, Codex's TOML is text. The key is
     never in here: every agent reads it from the TOLLGATE_KEY env var."""
     mcp = f"{base}/mcp/{role}/"
     cmd = lambda ev: hook_command(agent, ev, base)  # noqa: E731
     if agent == "claude-code":
+        # default: command hook via the shim, which fails CLOSED; native http hooks are faster but fail open (--fast)
         http = {"type": "http", "url": f"{base}/hook", "timeout": TIMEOUT,
                 "headers": {"Authorization": "Bearer ${TOLLGATE_KEY}"}, "allowedEnvVars": ["TOLLGATE_KEY"]}
+        hk = (lambda ev: http) if fast else (lambda ev: {"type": "command", "command": cmd(ev), "timeout": TIMEOUT})  # noqa: E731
         return [(".mcp.json", {"mcpServers": {"tollgate": {
                     "type": "http", "url": mcp, "headers": {"Authorization": "Bearer ${TOLLGATE_KEY}"}}}}),
                 (".claude/settings.json", {"hooks": {
-                    "PreToolUse": [{"matcher": "*", "hooks": [http]}],
-                    "PostToolUse": [{"matcher": "*", "hooks": [http]}],
-                    "UserPromptSubmit": [{"hooks": [http]}]}})]
+                    "PreToolUse": [{"matcher": "*", "hooks": [hk("PreToolUse")]}],
+                    "PostToolUse": [{"matcher": "*", "hooks": [hk("PostToolUse")]}],
+                    "UserPromptSubmit": [{"hooks": [hk("UserPromptSubmit")]}]}})]
     if agent == "codex":
         hooks = "".join(f'\n[[hooks.{ev}]]\n[[hooks.{ev}.hooks]]\ntype = "command"\n'
                         f"command = '{cmd(ev)}'\ntimeout = {TIMEOUT}\n" for ev in CLAUDE_EVENTS)
@@ -276,9 +278,9 @@ def write(root: Path, path: str, content) -> str:
 
 
 NOTES = {
-    "claude-code": "Claude Code: hooks are native http hooks (no shim). Its http hooks are NON-blocking when the hub is "
-                   "unreachable (docs: connection failure = non-blocking error); for fail-closed use a command hook "
-                   "running `tollgate hook claude-code <Event>` instead.",
+    "claude-code": "Claude Code: hooks run `tollgate hook claude-code <Event>`, which fails CLOSED (hub down = call "
+                   "denied). --fast uses Claude Code's native http hooks instead: no process start per call, but they "
+                   "fail OPEN (docs: a connection failure is a non-blocking error).",
     "codex": "Codex: `[features] hooks = true` is set; the project's .codex/ is read only for trusted projects, and "
              "non-managed hooks must be reviewed and trusted once with /hooks in the CLI.",
     "cursor": "Cursor: hooks use failClosed, so a crashed shim blocks too. Restart Cursor after writing hooks.json.",
@@ -295,9 +297,9 @@ def env_lines(key: str) -> str:
             f"# bash/zsh:                  export TOLLGATE_KEY='{key}'")
 
 
-def connect(agent: str, key: str, role: str, base: str, write_dir: Path | None) -> str:
+def connect(agent: str, key: str, role: str, base: str, write_dir: Path | None, fast: bool = False) -> str:
     """The text `tollgate connect <agent>` prints; with write_dir, also merges the files there."""
-    files = configs(agent, base, role)
+    files = configs(agent, base, role, fast)
     parts = [f"Tollgate for {agent}: role {role}, MCP {base}/mcp/{role}/, hooks -> {base}/hook",
              "Set the key in the shell that launches the agent (the configs only reference the env var):",
              env_lines(key), ""]
