@@ -7,7 +7,7 @@ pytestmark = [pytest.mark.track_a]
 async def test_m0_proxy_passthrough():
     """M0 gate: a role server with full access to the mock github lists exactly its tools under dotted names, and a
     tools/call round-trips unchanged (in-memory fastmcp Client)."""
-    from mocks.github import mcp as github
+    from tollgate.mocks.github import mcp as github
     from tollgate.gateway import build_role_server
     from tollgate.gateway.policy import PolicyHolder, validate
 

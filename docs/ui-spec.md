@@ -4,7 +4,7 @@
 
 | UI | Views, as built | Code |
 |---|---|---|
-| **Server console** `/console` | **built:** Overview (live access map on top, KPIs, trend, attacks stopped) · Peers & roles · Sessions (fingerprints) · **Try it** (dry-run content check of any text for a role and scan point) · Policy (view, profile switch, Edit access) · Threat feed (list, publish) · Self-test (results, run) · Users (admin only) · Export (JSONL/CSV, top bar) · sign-in / owner setup / invite accept | `tollgate/console.py`, `console_auth.py`, `console_feed.py`, `console_try.py`, `console_map.py`, `telemetry.py`, `tollgate/ui/console/` |
+| **Server console** `/console` | **built:** Overview (live access map on top, KPIs, trend, attacks stopped) · Peers & roles · Sessions (fingerprints) · **Try it** (dry-run content check of any text for a role and scan point) · Policy (view, profile switch, Edit access) · Threat feed (list, publish) · Self-test (results, run) · Users (admin only) · Export (JSONL/CSV, top bar) · sign-in / owner setup / invite accept | `tollgate/console/` (`__init__.py`, `auth.py`, `threat_feed.py`, `try_it.py`, `access_map.py`), `tollgate/telemetry.py`, `tollgate/ui/console/` |
 | **Local edge** `/edge` | **built:** Overview · Sessions (master–detail trace) · Events · Setup (incl. local settings). On demand only (opened by the deny link or `tollgate open`). | `tollgate/edge.py`, `tollgate/ui/edge/` |
 | Removed | **Scenario** view (fallback: `scripts/demo_claude.py`, `tollgate replay github`, `tollgate agent --scripted`); the early **Streamlit dashboard** (superseded by `/console`); approvals UI (API/CLI only) | — |
 

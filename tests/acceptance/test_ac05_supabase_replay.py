@@ -8,7 +8,7 @@ pytestmark = [pytest.mark.track_a]
 async def test_ac05_supabase_replay(tmp_path, monkeypatch):
     """AC5 part 2: Supabase trace (ticket -> SELECT customers -> reply) leaks with taint off, is blocked with taint on."""
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "events.jsonl"))
-    from mocks.tickets import replies, reset
+    from tollgate.mocks.tickets import replies, reset
     from tollgate.gateway.policy import PolicyHolder, load_policy
     from tollgate.gateway.replay import SUPABASE_TRACE, run_trace
 

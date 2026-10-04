@@ -172,7 +172,7 @@ def test_wheel_ships_defaults_and_runs_outside_the_repo(tmp_path):
                                     capture_output=True, text=True, encoding="utf-8")
     code = ("from importlib.resources import files; from tollgate import paths, scenario; "
             "assert not paths.checkout(); assert (files('tollgate')/'_defaults'/'policies'/'strict.yaml').is_file(); "
-            "assert scenario.load()['agents']; import mocks.github")
+            "assert scenario.load()['agents']; import tollgate.mocks.github")
     assert subprocess.run([str(py), "-c", code], cwd=tmp_path, env=env).returncode == 0
     r = run("init")
     assert r.returncode == 0 and (tmp_path / "h" / "policy.yaml").is_file(), r.stderr

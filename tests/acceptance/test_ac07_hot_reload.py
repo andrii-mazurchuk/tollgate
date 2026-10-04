@@ -18,7 +18,7 @@ def _write(path, text, bump):
 async def test_ac07_hot_reload(tmp_path, monkeypatch):
     """AC7: A policy edit applies on the next call without restart; an invalid file is rejected and the old policy kept."""
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "events.jsonl"))
-    from mocks.github import PRS
+    from tollgate.mocks.github import PRS
     from tollgate.gateway import build_app
     from tollgate.gateway.keys import issue
     from tollgate.gateway.policy import DEFAULT_PATH, load_policy

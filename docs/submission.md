@@ -75,10 +75,10 @@ The full judge guide (PowerShell and bash, ad-hoc prompts, live policy edits) is
 | Architecture | `docs/architecture.md` | done |
 | Policy with 3 profiles | `policy.yaml` (balanced); `policies/strict.yaml`, `balanced.yaml`, `lenient.yaml` | done |
 | Gateway: role MCPs, taint, pinning, model door, hot reload, peers and keys | `tollgate/gateway/`, `tollgate/cli.py` | done |
-| UIs: local edge and server console | `tollgate/edge.py`, `tollgate/console*.py`, `tollgate/ui/` | done |
+| UIs: local edge and server console | `tollgate/edge.py`, `tollgate/console/`, `tollgate/ui/` | done |
 | Demo agent (scripted hijacked model or Ollama) | `tollgate/agent/` | done |
 | Content pipeline and signed signature feed | `tollgate/content/`, `signatures.yaml`, `tollgate/feed/` | done |
 | Eval suite, corpus, red-team sets, latency bench | `tollgate/eval/`, `tests/corpus/`, `tollgate perf` | done |
 | Automated tests | `tests/` | 397 fast + 11 slow |
-| Mock MCP servers | `mocks/` (github, tickets, files) | done |
+| Mock MCP servers | `tollgate/mocks/` (github, tickets, files) | done |
 | License | `LICENSE` (MIT) | done |

@@ -5,7 +5,7 @@ import httpx2
 import pytest
 
 from tests.test_console import _app
-from tollgate import console_map
+from tollgate.console import access_map as console_map
 from tollgate.gateway import peers
 
 NOW = datetime(2026, 10, 4, 10, 0, tzinfo=timezone.utc)

@@ -7,7 +7,7 @@ pytestmark = [pytest.mark.track_a]
 async def test_redacted_structured_result_keeps_output_schema(tmp_path, monkeypatch):
     """A list-returning tool whose result is redacted still satisfies its output schema (no client RuntimeError)."""
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "events.jsonl"))
-    from mocks.tickets import reset
+    from tollgate.mocks.tickets import reset
     from tollgate.gateway import build_role_server, taint
     from tollgate.gateway.policy import load_policy
 

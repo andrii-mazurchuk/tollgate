@@ -1,4 +1,4 @@
-# The Acme golden scenario (SCENARIO.md), as runnable steps. Run by the edge UI (Scenario view),
+# The Acme golden scenario (docs/process/SCENARIO.md), as runnable steps. Used by `tollgate seed-fleet`,
 # tests/test_scenario_acme.py and nothing else. Each `session` is one role key: steps sharing it share taint.
 # A step with `fresh: true` starts its session with a new key. `$prev` = the previous output in the same session.
 # kind: list_tools | call | wrong_url | chat | chat_until_budget. `operator: true` = done in the Server console.

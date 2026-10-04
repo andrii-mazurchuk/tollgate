@@ -1,10 +1,9 @@
-"""Runs the Acme scenario (scenario/acme.yaml) step by step through the real gateway over HTTP (in-process ASGI),
+"""Runs the Acme scenario (tollgate/scenario.yaml) step by step through the real gateway over HTTP (in-process ASGI),
 as the step's role, with one key per scenario session. Used by `tollgate seed-fleet` and tests/test_scenario_acme.py."""
 import copy
 import json
 import os
 from pathlib import Path
-from tollgate import paths
 
 import httpx2
 import yaml
@@ -15,7 +14,7 @@ from fastmcp.exceptions import ToolError
 from tollgate import explain
 from tollgate.gateway import keys, model_door, taint
 
-PATH = paths.default("scenario/acme.yaml")
+PATH = Path(__file__).with_name("scenario.yaml")
 
 
 def load(path: Path = PATH) -> dict:
@@ -71,7 +70,7 @@ class Runner:
 
     def reset(self) -> None:
         """Fresh mocks and keys; taint of scenario keys dropped; only the tokens the scenario spent are given back."""
-        from mocks import files, github, tickets
+        from tollgate.mocks import files, github, tickets
         github.PRS.clear()
         tickets.reset()
         files.FS.clear()
@@ -120,7 +119,7 @@ class Runner:
         return res
 
     async def _run(self, step: dict) -> dict:
-        from mocks.github import PRS
+        from tollgate.mocks.github import PRS
         key = self.key(step)
         role, key_id = keys.verify(key)
         kind = step["kind"]
@@ -165,7 +164,7 @@ FS0: dict = {}
 
 
 def _snapshot_fs():
-    from mocks import files
+    from tollgate.mocks import files
     FS0.update(copy.deepcopy(files.FS))
 
 

@@ -15,7 +15,7 @@ from tests.conftest import ADMIN
 WRITE = {**ADMIN, "Content-Type": "application/json"}  # writes need the admin token (or a session) and JSON
 import yaml
 
-from tollgate import console_feed
+from tollgate.console import threat_feed as console_feed
 
 pytestmark = pytest.mark.track_b
 ROOT = Path(__file__).resolve().parents[1]

@@ -16,7 +16,7 @@ Not published yet (decided 2026-10-04: the demo and README use the GitHub one-li
 ## Before the first publish (code changes)
 - `pyproject.toml`: `name = "tollgate-ai"`, then `uv lock`.
 - `install.ps1` / `install.sh`: the uninstall line uses the tool name: `uv tool uninstall tollgate` → `tollgate-ai`. A machine that already has the old `tollgate` tool: `uv tool uninstall tollgate` once.
-- Move `mocks/` under `tollgate/` (or drop it from `[tool.hatch.build.targets.wheel] packages`), so the wheel does not install a top-level `mocks` module into users' environments.
+- (done 2026-10-04: the mocks live in `tollgate/mocks/`, so the wheel installs only the `tollgate` package.)
 - README Install: add `uv tool install tollgate-ai` (and `uvx --from tollgate-ai tollgate doctor`).
 - Full suite + `bash scripts/smoke.sh` green; commit.
 

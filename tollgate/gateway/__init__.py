@@ -293,7 +293,8 @@ def load_sources(policy: PolicyHolder) -> dict[str, FastMCP]:
     UPSTREAMS.clear()  # reflects the last loaded policy (one build_app per process)
     for n, s in policy.data["servers"].items():
         if "mock" in s:
-            out[n] = importlib.import_module(s["mock"]).mcp
+            mod = s["mock"]  # older policy copies say `mocks.X`; the mocks live in tollgate.mocks
+            out[n] = importlib.import_module("tollgate." + mod if mod.startswith("mocks.") else mod).mcp
             continue
         client = upstream_client(n, s)
         # target only, never headers/env: they may hold expanded secrets

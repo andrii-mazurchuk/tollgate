@@ -10,7 +10,7 @@ Every role gets its own MCP server, generated from one policy file, that exposes
 ## Which track am I?
 | Worktree | Track | Owns | Branches |
 |---|---|---|---|
-| `rebel/` | **A: Gateway** | `tollgate/gateway/`, `mocks/`, `tollgate/cli.py` | `a/<feature>` |
+| `rebel/` | **A: Gateway** | `tollgate/gateway/`, `tollgate/mocks/`, `tollgate/cli.py` | `a/<feature>` |
 | `rebel-b/` | **B: Content and evidence** | `tollgate/content/`, `tollgate/eval/`, `tests/corpus/`, `signatures.yaml` | `b/<feature>` |
 
 **Never edit the other track's folders.** Shared files are `tollgate/contract.py`, `docs/process/API_CONTRACT.md`, `docs/process/PLAN.md`, `policy.yaml` (per the section ownership in the contract) and `tests/test_smoke.py`. Change them only on `main`, in small commits, and say so in your reply so the operator can tell the other session.

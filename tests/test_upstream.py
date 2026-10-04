@@ -89,7 +89,7 @@ def policy(tmp_path, monkeypatch, http_upstream):
             "up": {"command": sys.executable, "args": [str(script)], "env": {"UP_TAG": "${TG_UP_TAG}"}},
             "web": {"url": http_upstream, "headers": {"Authorization": "Bearer ${TG_WEB_TOKEN}"}},
             "dead": {"url": f"http://127.0.0.1:{dead.getsockname()[1]}/mcp"},
-            "files": {"mock": "mocks.files"},
+            "files": {"mock": "tollgate.mocks.files"},
         },
         "roles": {"dev": {"servers": {"up": {"access": "rw"}, "web": {"access": "read"}, "dead": {"access": "rw"},
                                       "files": {"access": "read"}},

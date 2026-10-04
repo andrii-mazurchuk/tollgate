@@ -6,7 +6,7 @@ pytestmark = [pytest.mark.track_a]
 async def test_ac06_benign_flow(tmp_path, monkeypatch):
     """AC6: Read a public issue, then open a PR with no private read: allowed."""
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "events.jsonl"))
-    from mocks.github import PRS
+    from tollgate.mocks.github import PRS
     from tollgate.gateway.policy import load_policy
     from tollgate.gateway.replay import run_trace
 

@@ -28,7 +28,7 @@ def _holder(mutate=None):
 async def test_underscore_alias_of_tool_name_denied():
     """`github.pr_create` resolved to the same source tool as `github.pr.create`, skipping labels (taint), approval
     lists and argument limits, which are keyed by the dotted name."""
-    from mocks.github import PRS
+    from tollgate.mocks.github import PRS
     from tollgate.gateway import build_role_server
 
     def rw_files(d):
@@ -58,7 +58,7 @@ async def test_path_tricks_blocked(path):
 
 
 async def test_sql_tricks_never_write():
-    from mocks import tickets
+    from tollgate.mocks import tickets
     from tollgate.gateway import build_role_server
 
     tickets.reset()
@@ -123,7 +123,7 @@ async def test_bad_auth_headers_get_401_not_500():
 
 async def test_approved_call_rechecks_current_policy():
     """A call parked for approval, then the role loses the tool: an approve must not run it under the old policy."""
-    from mocks.github import PRS
+    from tollgate.mocks.github import PRS
     from tollgate.gateway.approvals import Approvals
     from tollgate.gateway import build_role_server
 

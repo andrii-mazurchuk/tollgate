@@ -41,7 +41,7 @@ def calls(i: int) -> list[tuple[str, str, dict]]:
 
 
 async def _run(policy: PolicyHolder, n: int) -> tuple[dict, list[float]]:
-    from mocks import tickets
+    from tollgate.mocks import tickets
 
     srv = build_role_server("role-2", policy)
     wall: dict[str, list[float]] = {}

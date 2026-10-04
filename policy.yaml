@@ -5,9 +5,9 @@ mode: balanced
 #                               # minted per agent launch (tollgate connect) on an enrolled laptop pass the doors
 
 servers:
-  github:  { mock: mocks.github }
-  tickets: { mock: mocks.tickets }
-  files:   { mock: mocks.files }
+  github:  { mock: tollgate.mocks.github }
+  tickets: { mock: tollgate.mocks.tickets }
+  files:   { mock: tollgate.mocks.files }
   # Real upstreams (docs/connectivity.md), next to the mocks. Commented out so the demo stays offline;
   # the name must not clash with a mock, and roles.<role>.servers must grant it like any other server.
   # gh:    { url: "https://api.githubcopilot.com/mcp/", headers: { Authorization: "Bearer ${GITHUB_TOKEN}" } }

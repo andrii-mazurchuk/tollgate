@@ -7,8 +7,8 @@ def replay(name: str) -> int:
     import asyncio
     import copy
 
-    from mocks import tickets
-    from mocks.github import PRS
+    from tollgate.mocks import tickets
+    from tollgate.mocks.github import PRS
     from tollgate.gateway.policy import PolicyHolder, load_policy
     from tollgate.gateway.replay import TRACES, run_trace
 
@@ -287,7 +287,7 @@ def connect(client: str) -> int:
     return 0
 
 
-# owner, device, roles, scenario steps (scenario/acme.yaml) its agents run; each fresh session is one launch = one key
+# owner, device, roles, scenario steps (tollgate/scenario.yaml) its agents run; each fresh session is one launch = one key
 FLEET = [
     ("Andrey Mazurchuk", "andrey-thinkpad", ["role-2"], ["3.1", "3.2", "3.3", "3.4a", "3.4b"]),
     ("Marta Kowalska", "marta-macbook", ["role-2"], ["2.1", "2.2", "2.3", "2.4", "2.5"]),

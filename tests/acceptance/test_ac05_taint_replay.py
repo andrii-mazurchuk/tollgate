@@ -8,7 +8,7 @@ pytestmark = [pytest.mark.track_a]
 async def test_ac05_taint_replay(tmp_path, monkeypatch):
     """AC5: GitHub attack trace leaks with taint disabled and is blocked with the named cause with taint enabled."""
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "events.jsonl"))
-    from mocks.github import PRS
+    from tollgate.mocks.github import PRS
     from tollgate.gateway.policy import PolicyHolder, load_policy
     from tollgate.gateway.replay import GITHUB_TRACE, run_trace
 

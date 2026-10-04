@@ -8,9 +8,9 @@ mode: lenient                                  # profile name; a label for the d
 #                               # minted per agent launch (tollgate connect) on an enrolled laptop pass the doors
 
 servers:                                       # source MCP servers the gateway proxies (tool names become <server>.<tool>)
-  github:  { mock: mocks.github }              # in-process mock GitHub: issues.read, repo.read, pr.create
-  tickets: { mock: mocks.tickets }             # in-process mock helpdesk (SQLite): read, reply, query
-  files:   { mock: mocks.files }               # in-process mock filesystem: fs.list, fs.read, fs.write, fs.delete
+  github:  { mock: tollgate.mocks.github }              # in-process mock GitHub: issues.read, repo.read, pr.create
+  tickets: { mock: tollgate.mocks.tickets }             # in-process mock helpdesk (SQLite): read, reply, query
+  files:   { mock: tollgate.mocks.files }               # in-process mock filesystem: fs.list, fs.read, fs.write, fs.delete
 
 roles:                                         # one virtual MCP per role at /mcp/<role>/, reachable only with that role's key
   role-1:                                      # read-only analyst

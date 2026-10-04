@@ -79,7 +79,7 @@ def test_tool_names_and_sentence():
 async def test_gateway_writes_trace_and_local_text(tmp_path, monkeypatch):
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "events.jsonl"))
     monkeypatch.setenv("TOLLGATE_T2", "off")
-    from mocks import tickets
+    from tollgate.mocks import tickets
     from tollgate.gateway import local_text
     from tollgate.gateway.policy import load_policy
     from tollgate.gateway.replay import run_trace

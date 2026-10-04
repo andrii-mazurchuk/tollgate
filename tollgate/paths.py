@@ -6,7 +6,7 @@ package runs from (repo-relative, as in dev, tests and the judges' clone), else 
 Linux $XDG_DATA_HOME/tollgate (~/.local/share/tollgate), macOS ~/Library/Application Support/Tollgate,
 Windows %LOCALAPPDATA%\\Tollgate. The per-file env overrides (TOLLGATE_AUDIT, _PEERS, _ACCOUNTS, _SECRET_FILE) win.
 
-Read-only defaults (the files `tollgate init` copies into HOME, scenario/acme.yaml) ship inside the wheel under
+Read-only defaults (the files `tollgate init` copies into HOME) ship inside the wheel under
 tollgate/_defaults (pyproject force-include); in a checkout they are the repo files themselves.
 """
 import os

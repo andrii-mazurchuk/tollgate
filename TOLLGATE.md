@@ -211,7 +211,7 @@ mode: balanced                    # strict | balanced | lenient
 servers:
   github:  { url: http://localhost:7001/mcp }
   tickets: { url: http://localhost:7002/mcp }
-  files:   { command: ["python", "-m", "mocks.files"] }
+  files:   { command: ["python", "-m", "tollgate.mocks.files"] }
 
 roles:
   role-1:

@@ -22,7 +22,7 @@ from tollgate.content import signatures as sigs
 from tollgate.feed import _STAMP, SRC, add, check_signatures
 from tollgate.util import iso_z, now_z
 
-ROOT = Path(__file__).resolve().parents[1]  # source tree: tests/corpus + the eval run (dev checkout only)
+ROOT = Path(__file__).resolve().parents[2]  # source tree: tests/corpus + the eval run (dev checkout only)
 FEED_HOWTO = ("Publishing needs a signature feed. Add `feed: {url: http://127.0.0.1:8090/bundle.json, interval_s: 10}` "
               "to policy.yaml (optionally `dir:` for the feed's source folder, default `feed/`) and run "
               "`tollgate feed serve`.")

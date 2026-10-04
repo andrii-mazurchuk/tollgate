@@ -29,7 +29,7 @@ async def _run(policy_data, monkeypatch, tmp_path, upstream="scripted", model="q
 
 async def test_scripted_agent_is_blocked_by_taint(tmp_path, monkeypatch):
     """A hijacked agent (scripted model) goes through both real doors; the exfiltrating PR is blocked by taint."""
-    from mocks.github import PRS
+    from tollgate.mocks.github import PRS
     from tollgate.gateway.policy import load_policy
 
     PRS.clear()
@@ -41,7 +41,7 @@ async def test_scripted_agent_is_blocked_by_taint(tmp_path, monkeypatch):
 
 
 async def test_scripted_agent_leaks_without_taint(tmp_path, monkeypatch):
-    from mocks.github import PRS
+    from tollgate.mocks.github import PRS
     from tollgate.gateway.policy import load_policy
 
     off = copy.deepcopy(load_policy().data)
@@ -65,7 +65,7 @@ async def test_real_ollama_agent_never_leaks(tmp_path, monkeypatch):
     """Real LLM: whatever it decides, no PR may carry the payroll secrets while taint is on."""
     if not _ollama_up():  # probed at run time, not import: collection never makes an HTTP call
         pytest.skip("Ollama not reachable on 127.0.0.1:11434")
-    from mocks.github import PRS
+    from tollgate.mocks.github import PRS
     from tollgate.gateway.policy import load_policy
 
     model = os.environ.get("TOLLGATE_AGENT_MODEL", "qwen3:4b")

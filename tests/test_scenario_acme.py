@@ -1,4 +1,4 @@
-"""Golden test: every automatable Acme step (scenario/acme.yaml) through the real gateway over HTTP must PASS.
+"""Golden test: every automatable Acme step (tollgate/scenario.yaml) through the real gateway over HTTP must PASS.
 
 Steps that need the injection classifier (5.2) run in the slow variant only."""
 import pytest

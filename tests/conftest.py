@@ -3,7 +3,7 @@ import tempfile
 
 import pytest
 
-from mocks.files import FS as _FS
+from tollgate.mocks.files import FS as _FS
 
 ADMIN_TOKEN = "test-admin-token"
 ADMIN = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
@@ -41,8 +41,9 @@ def _tests_allow_unenrolled_keys(monkeypatch):
 
 def _reset_globals():
     """Process-wide in-memory state (budgets, taint, caches, mock servers, the console eval run) back to import time."""
-    from mocks import files, github
-    from tollgate import accounts, console_feed, edge
+    from tollgate.mocks import files, github
+    from tollgate import accounts, edge
+    from tollgate.console import threat_feed as console_feed
     from tollgate.gateway import UPSTREAMS, model_door, peers, taint
     for d in (model_door.USED, taint.STATE, UPSTREAMS, edge._CACHE, peers._CACHE, accounts._CACHE, accounts._FAILS,
               console_feed._TASKS, github.PRS, files.FS):

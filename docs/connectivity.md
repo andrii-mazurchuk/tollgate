@@ -98,7 +98,7 @@ MCP tools called through the hook (`mcp__tollgate__…`) were already checked by
 servers:
   github:   { url: "https://api.githubcopilot.com/mcp/", headers: { Authorization: "Bearer ${GITHUB_TOKEN}" } }
   files:    { command: "bunx", args: ["@modelcontextprotocol/server-filesystem", "/workspace"] }
-  tickets:  { mock: mocks.tickets }
+  tickets:  { mock: tollgate.mocks.tickets }
 ```
 Tollgate connects to each upstream (through a fastmcp client or proxy) and keeps exposing only the role's tools under `/mcp/{role}/`, with every check unchanged. `${VAR}` is expanded from the environment; secrets never go into policy.yaml.
 

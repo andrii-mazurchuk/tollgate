@@ -15,7 +15,7 @@ from tollgate.gateway import model_door, peers
 from tollgate.gateway.approvals import admin_ok
 from tollgate.util import iso_z, valid_range
 
-UI = Path(__file__).resolve().parent / "ui" / "console"
+UI = Path(__file__).resolve().parents[1] / "ui" / "console"
 ONLINE = timedelta(minutes=5)
 ATTACK = ("inj.", "t2.", "sig.", "taint.")
 UNENROLLED = telemetry.UNENROLLED  # the id of the row grouping legacy keys (no peer)
@@ -106,7 +106,7 @@ def health(events, app, policy) -> dict:
 
 
 def routes(policy) -> list:
-    from tollgate.console_auth import gate as admin  # signed-in user; writes: admin + CSRF + same origin
+    from tollgate.console.auth import gate as admin  # signed-in user; writes: admin + CSRF + same origin
 
     def by(request) -> str:  # attribution; nobody to name before the first account exists
         return "" if request.state.who == "loopback" else f" by {request.state.who}"
@@ -269,7 +269,7 @@ def routes(policy) -> list:
         accounts.log(request.state.who, "Edited access: " + "; ".join(sentences))
         return JSONResponse({"status": policy_status(policy), "backup": backup, "sentences": sentences})
 
-    from tollgate import console_auth  # sign-in + Users (no gate on /auth/*; Users is admin-only)
+    from tollgate.console import auth as console_auth  # sign-in + Users (no gate on /auth/*; Users is admin-only)
     api = console_auth.routes() + [Route("/status", admin(status)), Route("/overview", admin(get_overview)),
            Route("/policy", admin(get_policy)), Route("/policy/profile", admin(set_profile), methods=["POST"]),
            Route("/policy/access", admin(set_access), methods=["POST"]),
@@ -279,11 +279,11 @@ def routes(policy) -> list:
            Route("/enroll-token", admin(enroll_token), methods=["POST"]),
            Route("/roles/{role}", admin(get_role)),
            Route("/sessions", admin(list_sessions)), Route("/sessions/{id}", admin(one_session))]
-    from tollgate import console_feed  # revision 3: Threat feed + Self-test
+    from tollgate.console import threat_feed as console_feed  # revision 3: Threat feed + Self-test
     api += console_feed.routes(policy, admin)
-    from tollgate import console_try  # Try it: dry-run content check
+    from tollgate.console import try_it as console_try  # Try it: dry-run content check
     api += console_try.routes(policy, admin)
-    from tollgate import console_map  # Overview access map
+    from tollgate.console import access_map as console_map  # Overview access map
     api += console_map.routes(policy, admin)
     api.append(Route("/export", admin(telemetry.export)))  # exportable audit log (CSV | JSONL)
     return [Mount("/console/api", routes=api), Route("/console", lambda r: RedirectResponse("/console/")),

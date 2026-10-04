@@ -36,7 +36,7 @@ def _events(path):
 @pytest.mark.parametrize("decision", ["approve", "deny"])
 async def test_approval_decision(tmp_path, monkeypatch, decision):
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "events.jsonl"))
-    from mocks.github import PRS
+    from tollgate.mocks.github import PRS
     from tollgate.gateway import build_app
     from tests.conftest import ADMIN_TOKEN as ADMIN_DEV_TOKEN
     from tollgate.gateway.keys import issue
@@ -72,7 +72,7 @@ async def test_approval_decision(tmp_path, monkeypatch, decision):
 
 async def test_approval_rejects_role_key(tmp_path, monkeypatch):
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "events.jsonl"))
-    from mocks.github import PRS
+    from tollgate.mocks.github import PRS
     from tollgate.gateway import build_app
     from tollgate.gateway.keys import issue
 
@@ -93,7 +93,7 @@ async def test_approval_rejects_role_key(tmp_path, monkeypatch):
 async def test_taint_approve_times_out(tmp_path, monkeypatch):
     """lenient's `block_flow.action: approve` waits for a human; nobody answers -> approval.timeout, no leak."""
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "events.jsonl"))
-    from mocks.github import PRS
+    from tollgate.mocks.github import PRS
     from tollgate.gateway.policy import PolicyHolder, load_policy
     from tollgate.gateway.replay import run_trace
 
@@ -108,7 +108,7 @@ async def test_taint_approve_times_out(tmp_path, monkeypatch):
 
 async def test_pin_changed_hides_tool(tmp_path, monkeypatch):
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "events.jsonl"))
-    from mocks.github import mcp as github
+    from tollgate.mocks.github import mcp as github
     from tollgate.gateway import build_app
     from tollgate.gateway.keys import issue
     from tollgate.gateway.policy import load_policy
