@@ -212,6 +212,27 @@ def key_issue() -> int:
     return 0
 
 
+def open_ui(args: list[str]) -> int:
+    """`tollgate open [edge|console] [TRACE_ID] [--port N]`: browser on the UI, or on one step's details."""
+    import webbrowser
+
+    from tollgate import edge, explain
+
+    pos = [a for i, a in enumerate(args) if not a.startswith("--") and (i == 0 or args[i - 1] != "--port")]
+    ui = pos.pop(0) if pos and pos[0] in ("edge", "console") else "edge"
+    base = f"http://127.0.0.1:{_opt('--port', '8080')}"
+    url = f"{base}/{ui}/"
+    if pos:
+        ev = next((e for e in reversed(edge.load_events()) if e.get("trace_id") == pos[0]), None)
+        if not ev:
+            print(f"trace {pos[0]} not in the audit log", file=sys.stderr)
+            return 1
+        url = explain.details_url(base, edge._sid(ev), pos[0], ui)
+    print(url)  # headless: copy it by hand
+    webbrowser.open(url)
+    return 0
+
+
 def enroll_token() -> int:
     from tollgate.gateway import peers
     t = peers.enroll_token()
@@ -372,6 +393,8 @@ def main() -> int:
     if cmd == "hook":
         from tollgate.connect import main as hook
         return hook(sys.argv[2:])
+    if cmd == "open":
+        return open_ui(sys.argv[2:])
     if cmd == "seed-fleet":
         return seed_fleet()
     if cmd == "feed":
@@ -379,7 +402,7 @@ def main() -> int:
     print("usage: tollgate {up [--port P] [--policy F] [--scripted-model] [--streamlit [--dashboard-port D]]|serve [--port P] [--policy F] [--scripted-model]"
           "|agent [--role R] [--model M] [--base URL] [--scripted] TASK|dashboard"
           "|approve ID|deny ID [--port P]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]|feed serve|publish|pull"
-          "|enroll-token|enroll TOKEN --owner O --device D|connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--write]|hook AGENT EVENT|seed-fleet}",
+          "|enroll-token|enroll TOKEN --owner O --device D|connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--write]|hook AGENT EVENT|open [edge|console] [TRACE_ID] [--port N]|seed-fleet}",
           file=sys.stderr)
     return 2
 

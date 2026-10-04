@@ -79,12 +79,14 @@ def build_hook(policy):
         if kind != "UserPromptSubmit" and name.startswith(PASS_THROUGH):
             return JSONResponse({"hookSpecificOutput": {"hookEventName": kind, "permissionDecision": "allow"}}
                                 if kind == "PreToolUse" else {})
-        return JSONResponse(decide(policy.data, policy.version, ident, kind, name, body))
+        base = str(request.base_url).rstrip("/")  # the port the agent reached us on: the details link uses it
+        return JSONResponse(decide(policy.data, policy.version, ident, kind, name, body, base))
 
     return hook
 
 
-def decide(data: dict, version: str, ident: tuple[str, str], kind: str, name: str, body: dict) -> dict:
+def decide(data: dict, version: str, ident: tuple[str, str], kind: str, name: str, body: dict,
+           base: str = "") -> dict:
     role, key_id = ident
     rp = (data.get("roles") or {}).get(role) or {}
     ti = body.get("tool_input") if isinstance(body.get("tool_input"), dict) else {}
@@ -172,6 +174,9 @@ def decide(data: dict, version: str, ident: tuple[str, str], kind: str, name: st
 
     reason = _sentence(ev, ti.get("command", ""))
     stop = ev.verdict in ("block", "approve")  # nobody to ask after the fact: approve stops like block
+    if stop:  # the deny message is the developer's UI: what to do next + the step on the local edge
+        r = explain.main_reason({"reasons": [{"rule": x.rule} for x in ev.reasons]})
+        reason += explain.next_step(r and r["rule"], base, ev.session_id, ev.trace_id)
     if kind == "UserPromptSubmit":
         return {"decision": "block", "reason": reason} if stop else {}
     if kind == "PreToolUse":

@@ -129,7 +129,16 @@ uv run tollgate connect hermes      --role role-2 --peer <id>           # ~/.her
 
 **Verified with a real Claude Code session** (headless, Haiku): `curl` → read `payroll.txt` → `git push` was denied by the hook with Tollgate's reason; the audit shows the session go clean → untrusted → untrusted + holds private → blocked. Use `--host`/`--port` for a remote hub.
 
+**Developer UX: the deny message is the interface.** A blocked call comes back inside the agent with the reason, what to do, and a link to that exact step on the local edge, e.g. ``Tollgate: this session read text written by outsiders and holds private data, so `git push origin main` could leak it. What you can do: Start a new session (new key) for this task, without reading untrusted text. Details: http://127.0.0.1:8080/edge/#/sessions/<session>/<trace>``. `uv run tollgate open [edge|console] [TRACE_ID] [--port N]` opens the edge/console (or that step) in the browser and prints the URL.
+
 **Company-wide enforcement** ([docs/connectivity.md](docs/connectivity.md)): Claude Code `managed-settings.json` with `allowManagedHooksOnly`, `allowManagedMcpServersOnly` and `allowedHttpHookUrls`; Codex `requirements.toml` with managed hooks and the MCP allowlist; Cursor enterprise `hooks.json`.
+
+## Deployment
+
+- **Local enforcer** (every laptop): the agent's hooks and MCP entry point at localhost. Prompts, tool text and results never leave the laptop; it works offline. A solo developer needs nothing else.
+- **Optional control plane** (company): enrollment, roles, policy, revocation, the threat feed, and fleet audit as fingerprints only (the `/console`).
+
+Same binary, two roles; the demo runs both on one machine. Next step: split into `--role edge|hub` with policy sync from the hub.
 
 ## Docs
 

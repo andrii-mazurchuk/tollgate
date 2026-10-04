@@ -16,7 +16,7 @@ from fastmcp import Client, FastMCP
 from fastmcp.client.transports import SSETransport, StdioTransport, StreamableHttpTransport
 from fastmcp.exceptions import ToolError
 from fastmcp.server import create_proxy
-from fastmcp.server.dependencies import get_http_headers
+from fastmcp.server.dependencies import get_http_headers, get_http_request
 from fastmcp.server.middleware import Middleware
 from fastmcp.server.providers.fastmcp_provider import FastMCPProvider
 from fastmcp.server.transforms.namespace import Namespace
@@ -26,6 +26,7 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
+from tollgate import explain
 from tollgate.content import scan
 from tollgate.feed import Puller
 from tollgate.contract import SEVERITY, AuditEvent, Reason, Verdict
@@ -146,6 +147,15 @@ class RoleGate(Middleware):
         texts: dict = {"args": {"original": args_json, "sent": args_json, "spans": []}}
         try:
             return await self._decide(context, call_next, name, args, args_json, auth, ident, key_id, data, ev, texts)
+        except ToolError as e:
+            r = explain.main_reason({"reasons": [{"rule": x.rule} for x in ev.reasons]})
+            if ev.verdict in ("block", "approve") and r:  # what to do + the step on the local edge (HTTP only)
+                try:
+                    base = str(get_http_request().base_url).rstrip("/")
+                except RuntimeError:  # in-process client: no URL to link to
+                    base = ""
+                raise ToolError(str(e) + "." + explain.next_step(r["rule"], base, key_id, ev.trace_id)) from e
+            raise
         finally:
             st = taint.state(key_id)
             ev.tainted, ev.holds_private = bool(st["tainted"]), bool(st["holds_private"])
