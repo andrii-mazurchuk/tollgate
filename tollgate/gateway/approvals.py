@@ -19,6 +19,12 @@ def admin_ok(authorization: str | None) -> bool:
     return bool(given) and hmac.compare_digest(given, token)
 
 
+def admin_request(request) -> bool:
+    """Admin reads: loopback (the dashboard, the console) or the admin token. ponytail: behind a reverse proxy every
+    client looks loopback; send the token from the UI then."""
+    return bool(request.client and request.client.host in ("127.0.0.1", "::1", "localhost"))         or admin_ok(request.headers.get("authorization"))
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
