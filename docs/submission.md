@@ -20,7 +20,7 @@ May 2025: an AI agent read one GitHub issue and published its owner's private co
 
 Tollgate is a local AI control layer for agents that use MCP tools and LLMs. One policy file generates a virtual MCP server per role that exposes exactly the tools that role may use. Every tool call, tool result and prompt is checked on the machine: normalisation, PII and secret validators, injection rules, an HMAC-signed signature feed and an on-device classifier. Session taint blocks the private-to-public flow once a session has read untrusted content, and names the cause. Fail-closed hooks cover built-in tools (shell, files, web) in Claude Code, Codex, Cursor, Gemini CLI and Hermes. A model door enforces model allow-lists, token budgets and loop cut-offs. Laptops enroll once, the admin sets their roles, and every agent launch gets its own revocable key. A server console shows an access map of attacks stopped, sessions as fingerprints (the text stays on the laptop), live policy edits, the threat feed and a self-test.
 
-On a held-out 30% of 1,411 cases: injection recall 0.837 (our 0.85 target, missed) at 0.9% false positives, posture score 0.931, hub checks under 1 ms p95. 388 automated tests; judges run everything with `uv run tollgate test`.
+On a held-out 30% of 1,411 cases: injection recall 0.837 (our 0.85 target, missed) at 0.9% false positives, posture score 0.931, hub checks under 1 ms p95. 408 automated tests; judges run everything with `uv run tollgate test`.
 
 ## The problem
 

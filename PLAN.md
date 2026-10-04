@@ -5,7 +5,7 @@
 **The whole 15h schedule below is built.** M0 was done at 16:53, M1 at 17:25, the M2 scope at about 19:00, and red-teaming at 19:30. `submission-1` is tagged, and the repo is public at https://github.com/andrii-mazurchuk/tollgate (MIT). Since then: local edge UI `/edge`, server console `/console` (access map, peers, key per launch, revocation, sessions, Try it, policy view/switch/edit, threat feed, self-test, JSONL/CSV export), console accounts (Admin/Viewer), the hook door (`/hook`, `tollgate hook`, `tollgate connect` for Claude Code, Codex, Cursor, Gemini CLI, Hermes), hardening (per-install secrets, fail-closed hooks, Host/Origin guards), `seed-fleet`.
 
 **Tests:**
-- 378 fast tests pass, plus 10 slow ones (`uv run pytest -q -m "not slow"`).
+- 397 fast tests pass, plus 11 slow ones (`uv run pytest -q -m "not slow"`).
 - All 53 acceptance tests pass (48 fast + 5 slow).
 - AC1–AC16: 14 green, 2 partial. AC8 injection recall is 0.837 against 0.85 (FPR 0.009). AC15 tier 2 short-text p95 is ~65–90 ms against 80 ms (borderline).
 
