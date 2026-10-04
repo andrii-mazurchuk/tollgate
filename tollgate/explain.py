@@ -61,6 +61,9 @@ RULES: dict[str, tuple[str, str]] = {
                               "Send the data in a simpler format."),
     "content.truncated": ("The text was very long, so only its start and end were checked.",
                           "Nothing to do; send shorter text for a full check."),
+    "content.chunked": ("The text was long, so it was checked in parts.", "Nothing to do."),
+    "content.too_large": ("The text was too large to check, so it was stopped.", "Send a smaller piece of text."),
+    "content.scan_error": ("The content check failed internally, so the text was stopped.", "Tell your security lead."),
     "content.error": ("The content check failed internally and let the text through.", "Tell your security lead."),
     "pii.iban": ("A bank account number (IBAN) was found.", _DATA),
     "pii.pesel": ("A Polish national ID number (PESEL) was found.", "Remove the ID number from the text."),
@@ -101,7 +104,7 @@ RULES: dict[str, tuple[str, str]] = {
 
 FALLBACK = ("A Tollgate check flagged this call.", "See the technical details.")
 # rules that only add information; they are not the reason for a verdict
-INFO = ("t2.deferred", "t2.sampled", "t2.unavailable", "content.truncated")
+INFO = ("t2.deferred", "t2.sampled", "t2.unavailable", "content.truncated", "content.chunked")
 
 
 def rule(rule_id: str) -> tuple[str, str]:

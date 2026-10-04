@@ -102,7 +102,7 @@ def test_benign_base64_not_flagged():
 
 def test_scan_never_raises():
     v = scan(None, "prompt", POLICY)  # type: ignore[arg-type]
-    assert v.action == "allow" and rules(v) == ["content.error"]
+    assert v.action == "block" and rules(v) == ["content.scan_error"]  # fail closed
 
 
 def test_validators():

@@ -13,7 +13,7 @@ verdict = scan(text: str, point: ScanPoint, policy: dict) -> Verdict
 - `point`: `"prompt" | "response" | "tool_args" | "tool_result"`.
 - `policy`: the `content:` section of `policy.yaml`, already parsed by A's loader. B never reads the file itself, except `signatures.yaml`, whose path is given in `policy["signatures"]`.
 - For `tool_args`, A passes `json.dumps(arguments)`. For `tool_result`, A passes the joined text content.
-- `scan()` must be pure and safe to call on every request: no network and no exceptions. If it fails internally, it returns `allow` with reason `content.error`.
+- `scan()` must be pure and safe to call on every request: no network and no exceptions. If it fails internally, it returns `block` with reason `content.scan_error` (fail closed). Text over `max_scan_chars` is scanned in chunks (reason `content.chunked`); over 2 MB it is blocked unscanned (`content.too_large`).
 - Until B merges, the stub in `tollgate/content/__init__.py` returns `Verdict(action="allow")`.
 
 `Verdict` example:

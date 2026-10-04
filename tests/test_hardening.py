@@ -65,6 +65,35 @@ async def test_bash_in_dangerous_state_only_read_only_allowlist_passes(monkeypat
         assert _decision(await _hook(c, fresh, "PreToolUse", "Bash", {"command": "git push"})) == "allow"
 
 
+CPOL = {"pii": {"email": "redact"}, "secrets": "block"}
+
+
+def test_secret_in_the_middle_of_long_text_blocks():
+    from tollgate.content import scan
+    text = "ok " * 22_000 + "aws_key AKIAIOSFODNN7EXAMPLE here " + "ok " * 22_000
+    v = scan(text, "tool_result", CPOL)
+    assert v.action == "block" and "secret.aws_key" in [r.rule for r in v.reasons]
+
+
+def test_redaction_in_long_text_keeps_every_chunk():
+    from tollgate.content import scan
+    v = scan("a " * 60_000 + "mail jan@acme.pl now " + "b " * 60_000, "tool_result", CPOL)
+    assert v.action == "redact" and "jan@acme.pl" not in v.redacted_text and len(v.redacted_text) > 200_000
+
+
+def test_too_large_and_errors_fail_closed(monkeypatch):
+    from tollgate import content, explain
+    assert content.scan("x" * 2_100_000, "tool_result", CPOL).action == "block"
+    assert content.scan("x" * 2_100_000, "tool_result", CPOL).reasons[0].rule == "content.too_large"
+
+    def boom(*a, **k):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(content, "find", boom)
+    v = content.scan("hello", "tool_result", CPOL)
+    assert v.action == "block" and v.reasons[0].rule == "content.scan_error"
+    assert "content.too_large" in explain.RULES and "content.scan_error" in explain.RULES
+
+
 def test_bash_sink_labels_widened():
     from tollgate.gateway.hooks import labels
     from tollgate.gateway.policy import load_policy
