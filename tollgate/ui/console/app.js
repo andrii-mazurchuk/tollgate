@@ -141,13 +141,13 @@ function latencyCard(L) {
       h("td", { class: "num r muted" }, r.target ? `≤ ${r.target} ms` : "–"))))));
 }
 async function renderOverview() {
-  const o = await api("/overview?range=" + ui.range);
+  const [o, map] = await Promise.all([api("/overview?range=" + ui.range), mapCard()]);
   const k = o.kpis;
   const tiles = [["checked", "Actions checked"], ["blocked", "Blocked"], ["attacks", "Attacks stopped"], ["peers_online", "Peers online"]];
   const d = (key, x) => key === "peers_online" && x.prev == null ? "right now" : delta(x, ui.range);
   const hasData = k.checked.value > 0;
   setExportCount(k.checked.value);
-  view().replaceChildren(h("div", { class: "stack" },
+  view().replaceChildren(h("div", { class: "stack" }, map,
     h("div", { class: "kpis" }, tiles.map(([key, l]) => h("div", { class: "card kpi" },
       h("div", { class: "l" }, l), h("div", { class: "v" }, n(k[key].value)), h("div", { class: "d" }, d(key, k[key]))))),
     card("Actions over time", h("div", { class: "legend" }, h("span", {}, h("i", { class: "f-allow" }), "Allowed"),
@@ -167,6 +167,7 @@ async function renderOverview() {
           h("td", { title: x.agent }, x.agent),
           h("td", { title: x.tool }, x.tool))))
         : h("div", { class: "empty" }, "No attacks in this time range."))));
+  drawMap();
 }
 
 /* ---------- Peers & roles: Peers tab ---------- */

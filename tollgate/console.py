@@ -278,6 +278,8 @@ def routes(policy) -> list:
     api += console3.routes(policy, admin)
     from tollgate import console_try  # Try it: dry-run content check
     api += console_try.routes(policy, admin)
+    from tollgate import console_map  # Overview access map
+    api += console_map.routes(policy, admin)
     api.append(Route("/export", admin(telemetry.export)))  # exportable audit log (CSV | JSONL)
     return [Mount("/console/api", routes=api), Route("/console", lambda r: RedirectResponse("/console/")),
             Mount("/console", app=StaticFiles(directory=UI, html=True))]
