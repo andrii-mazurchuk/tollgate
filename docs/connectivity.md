@@ -98,6 +98,8 @@ servers:
 ```
 Tollgate connects to each upstream (through a fastmcp client or proxy) and keeps exposing only the role's tools under `/mcp/{role}/`, with every check unchanged. `${VAR}` is expanded from the environment; secrets never go into policy.yaml.
 
+Shape (checked by `validate`): exactly one of `mock:`, `url:` (+ `headers:`, `transport: http|sse`) or `command:` (+ `args:`, `env:`, `cwd:`). A missing `${VAR}` stops startup with an error naming the variable, never its value. Upstream tools appear as `<server>.<tool>` with `_` turned into `.` (filesystem's `read_text_file` is `files.read.text.file`), so `tools:`, `constrain:` and `labels:` use that spelling. Each upstream is probed once at startup; one that does not answer is logged, reported in `/healthz` (`upstreams`) and shown as unreachable in the role detail, and the other servers keep working. Stdio processes are kept alive for the hub's lifetime and stopped on shutdown. Verified with `bunx @modelcontextprotocol/server-filesystem <dir>` (bun runs the npm package; no npx needed).
+
 ## Sources
 - **Claude Code:**
   - https://code.claude.com/docs/en/hooks

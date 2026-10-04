@@ -5,12 +5,15 @@ import json
 import time
 from datetime import datetime, timezone
 import importlib
+import logging
+import os
 import posixpath
 import re
 from pathlib import PurePosixPath
 from urllib.parse import unquote
 
-from fastmcp import FastMCP
+from fastmcp import Client, FastMCP
+from fastmcp.client.transports import SSETransport, StdioTransport, StreamableHttpTransport
 from fastmcp.exceptions import ToolError
 from fastmcp.server import create_proxy
 from fastmcp.server.dependencies import get_http_headers
@@ -30,6 +33,8 @@ from tollgate.gateway import audit, keys, local_text, model_door, taint, trace
 from tollgate.gateway.approvals import Approvals, admin_ok, admin_request
 from tollgate.gateway.pins import Pins
 from tollgate.gateway.policy import PolicyHolder
+
+log = logging.getLogger("tollgate.gateway")
 
 
 def build_gateway(github) -> FastMCP:
@@ -245,8 +250,71 @@ class RoleGate(Middleware):
         ev.reasons.append(Reason(rule="approval.approved", tier=0, detail=f"{item['id']}: {reason}"))
 
 
+UPSTREAMS: dict[str, dict] = {}  # name -> {kind, target, reachable, error, client}; real (non-mock) servers only
+
+
+def expand(value, where: str):
+    """`${VAR}` from the environment, recursively. Missing -> error naming the var (never its value)."""
+    if isinstance(value, dict):
+        return {k: expand(v, f"{where}.{k}") for k, v in value.items()}
+    if isinstance(value, list):
+        return [expand(v, f"{where}[{i}]") for i, v in enumerate(value)]
+
+    def var(m):
+        if m.group(1) not in os.environ:
+            raise ValueError(f"{where}: environment variable {m.group(1)} is not set")
+        return os.environ[m.group(1)]
+    return re.sub(r"\$\{(\w+)\}", var, value) if isinstance(value, str) else value
+
+
+def upstream_client(name: str, spec: dict) -> Client:
+    s = expand({k: v for k, v in spec.items() if k in ("url", "headers", "command", "args", "env", "cwd")},
+               f"servers.{name}")
+    if "url" in s:
+        tr = (SSETransport if spec.get("transport") == "sse" else StreamableHttpTransport)(s["url"], headers=s.get("headers"))
+    else:
+        tr = StdioTransport(s["command"], s.get("args") or [], env=s.get("env"), cwd=s.get("cwd"))
+    return Client(tr, timeout=30, init_timeout=10)
+
+
 def load_sources(policy: PolicyHolder) -> dict[str, FastMCP]:
-    return {n: importlib.import_module(s["mock"]).mcp for n, s in policy.data["servers"].items() if "mock" in s}
+    """`mock:` modules in-process; `url:`/`command:` upstreams as fastmcp proxies (connected in build_app's lifespan)."""
+    out = {}
+    UPSTREAMS.clear()  # reflects the last loaded policy (one build_app per process)
+    for n, s in policy.data["servers"].items():
+        if "mock" in s:
+            out[n] = importlib.import_module(s["mock"]).mcp
+            continue
+        client = upstream_client(n, s)
+        # target only, never headers/env: they may hold expanded secrets
+        UPSTREAMS[n] = {"kind": "url" if "url" in s else "command", "target": s.get("url") or s.get("command"),
+                        "reachable": None, "error": None, "client": client}
+        out[n] = create_proxy(client, name=n)
+    return out
+
+
+async def connect_upstreams(stack: contextlib.AsyncExitStack, sources: dict, timeout: float = 10) -> None:
+    """Probes each upstream once. Unreachable: logged, kept in UPSTREAMS, swapped for an empty source in `sources`
+    (console/edge list nothing); role servers keep the proxy, so a call retries it. Stdio processes stop on exit."""
+    for n, u in UPSTREAMS.items():
+        if n not in sources:
+            continue
+        tr = u["client"].transport
+        if isinstance(tr, StdioTransport):
+            stack.push_async_callback(tr.disconnect)
+        try:
+            async with asyncio.timeout(timeout):
+                async with sources[n].client_factory() as c:  # the proxy's own client: stdio is not respawned
+                    await c.list_tools()
+            u["reachable"], u["error"] = True, None
+        except Exception as e:  # noqa: BLE001 - any failure means "down", never a crashed hub
+            u["reachable"], u["error"] = False, f"{type(e).__name__}: {e}"[:300]
+            log.error("upstream %s (%s) unreachable: %s", n, u["target"], u["error"])
+            sources[n] = FastMCP(n)
+
+
+def upstream_status() -> dict:
+    return {n: {k: u[k] for k in ("kind", "target", "reachable", "error")} for n, u in UPSTREAMS.items()}
 
 
 def build_role_server(role: str, policy: PolicyHolder, sources: dict[str, FastMCP] | None = None,
@@ -290,9 +358,10 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
 
     @contextlib.asynccontextmanager
     async def lifespan(_):
-        if servers:  # every role server mounts every source: one unfiltered list pins them all
-            pins.take(await next(iter(servers.values())).list_tools(run_middleware=False))
         async with contextlib.AsyncExitStack() as stack:
+            await connect_upstreams(stack, sources)
+            if servers:  # every role server mounts every source: one unfiltered list pins them all
+                pins.take(await next(iter(servers.values())).list_tools(run_middleware=False))
             for a in apps.values():
                 await stack.enter_async_context(a.router.lifespan_context(a))
             task = asyncio.create_task(feed_loop())
@@ -304,6 +373,7 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
     async def healthz(_):
         st = policy.status()
         return JSONResponse({"ok": True, "policy": st, "roles": list(apps), "sources": list(sources),
+                             "upstreams": upstream_status(),
                              "policy_roles": list(policy.data.get("roles") or {}),
                              "pin_alerts": list(pins.alerts.values()), "feed": feed.state})
 
