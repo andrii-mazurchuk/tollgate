@@ -6,6 +6,7 @@ import threading
 
 log = logging.getLogger(__name__)
 REPO = "protectai/deberta-v3-base-prompt-injection-v2"
+REVISION = "90c9989b1a342275dd0d1a95aad283c04e075671"  # pinned commit: a pushed model change is not picked up silently
 CHUNK, OVERLAP = 256, 32
 CACHE: dict[str, list[float]] | None = None  # sha256(text) -> [score, ms]; set by the eval runner only
 MS = 0.0  # with CACHE set: model ms summed over score() calls; the eval runner resets it per case
@@ -26,10 +27,10 @@ def _load():
                     from huggingface_hub import hf_hub_download
                     from tokenizers import Tokenizer
 
-                    tok = Tokenizer.from_file(hf_hub_download(REPO, "onnx/tokenizer.json"))
+                    tok = Tokenizer.from_file(hf_hub_download(REPO, "onnx/tokenizer.json", revision=REVISION))
                     so = ort.SessionOptions()
                     so.intra_op_num_threads = 4
-                    sess = ort.InferenceSession(hf_hub_download(REPO, "onnx/model.onnx"), so, providers=["CPUExecutionProvider"])
+                    sess = ort.InferenceSession(hf_hub_download(REPO, "onnx/model.onnx", revision=REVISION), so, providers=["CPUExecutionProvider"])
                     _model = (tok, sess, tok.token_to_id("[CLS]"), tok.token_to_id("[SEP]"))
                 except Exception as exc:  # no model / no runtime: tier 2 reports unavailable, never raises
                     log.warning("tier 2 unavailable: %s", exc)

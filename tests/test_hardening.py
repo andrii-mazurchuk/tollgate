@@ -180,6 +180,21 @@ def test_select_only_still_allows_plain_selects():
     assert check_args({"sql": "select_only"}, {"sql": "SELECT name FROM copy_jobs"}) is None
 
 
+def test_tier2_download_is_pinned(monkeypatch):
+    import huggingface_hub
+    from tollgate.content import tier2
+    calls = []
+
+    def fake(repo, f, **kw):
+        calls.append(kw)
+        raise OSError("offline")
+    monkeypatch.delenv("TOLLGATE_T2", raising=False)
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", fake)
+    monkeypatch.setattr(tier2, "_model", None)
+    assert tier2._load() is None
+    assert calls and all(len(kw.get("revision") or "") == 40 for kw in calls)
+
+
 def test_bash_sink_labels_widened():
     from tollgate.gateway.hooks import labels
     from tollgate.gateway.policy import load_policy

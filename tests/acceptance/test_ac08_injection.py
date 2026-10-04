@@ -7,7 +7,7 @@ Prompts are scored at any length (`sync_points: [prompt]`), so held-out recall n
 import pytest
 import yaml
 
-from tollgate.content.tier2 import REPO
+from tollgate.content.tier2 import REPO, REVISION
 from tollgate.eval import runner
 
 
@@ -15,7 +15,7 @@ def _cached() -> bool:
     try:
         from huggingface_hub import try_to_load_from_cache
 
-        return isinstance(try_to_load_from_cache(REPO, "onnx/model.onnx"), str)
+        return isinstance(try_to_load_from_cache(REPO, "onnx/model.onnx", revision=REVISION), str)
     except Exception:
         return False
 

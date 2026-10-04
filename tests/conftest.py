@@ -45,9 +45,9 @@ def pytest_collection_modifyitems(items):
     try:
         from huggingface_hub import hf_hub_download
 
-        from tollgate.content.tier2 import REPO
+        from tollgate.content.tier2 import REPO, REVISION
         for f in ("onnx/tokenizer.json", "onnx/model.onnx"):
-            hf_hub_download(REPO, f)
+            hf_hub_download(REPO, f, revision=REVISION)
         repl = None
     except Exception as exc:
         repl = pytest.mark.skip(reason=f"tier 2 model unavailable (download failed: {type(exc).__name__}: {exc})").mark
