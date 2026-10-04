@@ -62,7 +62,7 @@ def serve() -> int:
     print(f"  model door: {base}/v1/chat/completions  -> {os.environ.get('TOLLGATE_UPSTREAM') or DEFAULT_UPSTREAM}")
     print(f"  health: {base}/healthz   taint: {base}/admin/taint   budget: {base}/admin/budget", flush=True)
     print(f"  approvals: {base}/admin/approvals   (tollgate approve|deny <id>)", flush=True)
-    print(f"  edge UI: {base}/edge", flush=True)
+    print(f"  edge UI: {base}/edge   console: {base}/console", flush=True)
     # open /edge tabs hold an endless SSE stream; without a cap uvicorn waits on it forever at Ctrl+C
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning", timeout_graceful_shutdown=1)
     return 0
@@ -176,13 +176,14 @@ def feed(sub: str) -> int:
 
 
 def up() -> int:
-    """AC1 one command: gateway (in-process) + dashboard (subprocess) + feed server (subprocess, if `feed:` is set)."""
+    """AC1 one command: gateway (in-process, with /console and /edge) + feed server (subprocess, if `feed:` is set).
+    The superseded Streamlit dashboard starts only with --streamlit."""
     import subprocess
     from urllib.parse import urlparse
 
     from tollgate.gateway.policy import DEFAULT_PATH, load_policy
 
-    procs = [dashboard(wait=False)]
+    procs = [dashboard(wait=False)] if "--streamlit" in sys.argv else []
     url = (load_policy(_opt("--policy") or DEFAULT_PATH).data.get("feed") or {}).get("url")
     if url:
         procs.append(subprocess.Popen([sys.executable, "-m", "tollgate.cli", "feed", "serve",
@@ -361,7 +362,7 @@ def main() -> int:
         return seed_fleet()
     if cmd == "feed":
         return feed(sys.argv[2] if len(sys.argv) > 2 else "")
-    print("usage: tollgate {up [--port P] [--policy F] [--dashboard-port D]|serve [--port P] [--policy F] [--scripted-model]"
+    print("usage: tollgate {up [--port P] [--policy F] [--scripted-model] [--streamlit [--dashboard-port D]]|serve [--port P] [--policy F] [--scripted-model]"
           "|agent [--role R] [--model M] [--base URL] [--scripted] TASK|dashboard"
           "|approve ID|deny ID [--port P]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]|feed serve|publish|pull"
           "|enroll-token|enroll TOKEN --owner O --device D|connect claude-code|cursor|print --role R --peer P|seed-fleet}",
