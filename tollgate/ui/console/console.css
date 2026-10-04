@@ -160,3 +160,12 @@ dialog.dlg.mid { width: 640px; }
 .chg + .chg { margin-top: 12px; }
 .chg h3 .sub-l { margin-left: 6px; font-weight: 400; color: var(--muted); font-size: 11px; }
 .dlg-b .warnbox { margin: 12px 0; }
+
+/* Export menu (top bar) and the Overview latency card */
+details.xp .dd-pop { width: 240px; }
+details.xp .dd-opt { grid-template-columns: minmax(0, 1fr) auto; text-decoration: none; color: var(--ink); }
+.xp-n { padding: 6px 8px 4px; border-top: 1px solid var(--line); margin-top: 4px; }
+.lat { display: grid; grid-template-columns: 200px minmax(0, 1fr); align-items: start; border-top: 1px solid var(--line); }
+.lat > .kpi { border-right: 1px solid var(--line); height: 100%; }
+.lat td.over { color: var(--red); font-weight: 600; }
+@media (max-width: 720px) { .lat { grid-template-columns: minmax(0, 1fr); } .lat > .kpi { border-right: 0; } }

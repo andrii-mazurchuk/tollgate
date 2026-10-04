@@ -83,8 +83,9 @@ document.getElementById("theme").addEventListener("click", () => applyTheme(them
 function renderBar() {
   if (ui.view === "overview") {
     return bar(h("div", { class: "seg", role: "group", "aria-label": "Time range" }, Object.entries(RANGES).map(([k, l]) => h("button", { type: "button", "aria-pressed": String(ui.range === k),
-      onclick: () => { ui.range = k; save("c.range", k); renderBar(); route(false); } }, l))));
+      onclick: () => { ui.range = k; save("c.range", k); renderBar(); route(false); } }, l))), ...exportMenu());
   }
+  if (ui.view === "sessions") return bar(...exportMenu());
   if (ui.view === "peers" || ui.view === "roles") {
     return bar(h("div", { class: "seg", role: "group", "aria-label": "Peers or roles" }, [["peers", "Peers"], ["roles", "Roles"]].map(([k, l]) =>
       h("button", { type: "button", "aria-pressed": String(ui.view === k), onclick: () => { location.hash = k === "peers" ? peerHref(ui.peer) : roleHref(ui.role); } }, l))),
@@ -98,13 +99,53 @@ function renderBar() {
   bar();
 }
 
+/* ---------- Export: a plain download link carrying the view's range (Overview) or filters (Sessions) ---------- */
+function exportQuery() {
+  if (ui.view !== "sessions") return new URLSearchParams({ range: ui.range });
+  const p = new URLSearchParams({ range: "all" });
+  for (const k of ["peer", "role", "state"]) if (sel(k).length) p.set(k, sel(k).join(","));
+  if (ui.sq) p.set("q", ui.sq);
+  return p;
+}
+const setExportCount = c => { const el = document.getElementById("xcount"); if (el) el.textContent = `${n(c)} event${c === 1 ? "" : "s"}`; };
+function exportMenu() {
+  const opt = (fmt, l, sub) => h("a", { class: "dd-opt", href: `${API}/export?format=${fmt}`, download: "",
+    onclick: ev => { ev.currentTarget.href = `${API}/export?format=${fmt}&${exportQuery()}`; ev.currentTarget.closest("details").open = false; } },
+    h("span", {}, l), h("span", { class: "muted small" }, sub));
+  const d = h("details", { class: "dd xp" }, h("summary", { class: "btn" }, "Export", icon("chev")),
+    h("div", { class: "dd-pop" }, opt("csv", "CSV", "spreadsheet"), opt("jsonl", "JSONL", "one event per line"),
+      h("div", { class: "muted small xp-n" }, "Decisions and fingerprints only; the text never leaves the laptop.")));
+  d.addEventListener("toggle", () => {
+    if (!d.open) return;
+    const r = d.querySelector("summary").getBoundingClientRect(), pop = d.querySelector(".dd-pop");
+    pop.style.left = Math.max(8, Math.min(r.right - 240, innerWidth - 248)) + "px"; pop.style.top = (r.bottom + 4) + "px";
+  });
+  return [h("span", { id: "xcount", class: "bar-t num" }), d];
+}
+
 /* ---------- Overview ---------- */
+// p95 above target is the one thing here that turns red (AC15 targets come from the API)
+const lms = v => v == null ? "–" : v < 1 ? `${v.toFixed(2)} ms` : v < 10 ? `${v.toFixed(1)} ms` : `${Math.round(v)} ms`;
+function latencyCard(L) {
+  const head = h("span", { class: "muted small" }, "Hub ≤ 5 ms · tier 1 ≤ 5 ms · classifier ≤ 80 ms");
+  if (!L || !L.n) return card("Latency", head, h("div", { class: "empty" }, "No timed actions in this time range."));
+  const rows = [{ label: "Hub checks (role + data flow)", ...L.hub }, ...L.stages.map(s => ({ label: STAGE[s.name] || s.name, ...s })),
+    { label: "Tier 1 scan", ...L.tier1 }, { label: "Classifier (tier 2)", ...L.classifier }].filter(r => r.n).sort((a, b) => b.p95 - a.p95);
+  return card("Latency", head, h("div", { class: "lat" },
+    h("div", { class: "kpi" }, h("div", { class: "l" }, "End to end, p95"), h("div", { class: "v" }, lms(L.total.p95)),
+      h("div", { class: "d" }, `p50 ${lms(L.total.p50)} · ${n(L.n)} actions`)),
+    tbl([null, "84px", "84px", "84px"], ["Check", ["p50", "r"], ["p95", "r"], ["Target", "r"]], rows.map(r => h("tr", {},
+      h("td", {}, r.label), h("td", { class: "num r" }, lms(r.p50)),
+      h("td", { class: "num r" + (r.over ? " over" : ""), title: r.over ? "Above target" : "" }, lms(r.p95)),
+      h("td", { class: "num r muted" }, r.target ? `≤ ${r.target} ms` : "–"))))));
+}
 async function renderOverview() {
   const o = await api("/overview?range=" + ui.range);
   const k = o.kpis;
   const tiles = [["checked", "Actions checked"], ["blocked", "Blocked"], ["attacks", "Attacks stopped"], ["peers_online", "Peers online"]];
   const d = (key, x) => key === "peers_online" && x.prev == null ? "right now" : delta(x, ui.range);
   const hasData = k.checked.value > 0;
+  setExportCount(k.checked.value);
   view().replaceChildren(h("div", { class: "stack" },
     h("div", { class: "kpis" }, tiles.map(([key, l]) => h("div", { class: "card kpi" },
       h("div", { class: "l" }, l), h("div", { class: "v" }, n(k[key].value)), h("div", { class: "d" }, d(key, k[key]))))),
@@ -112,6 +153,7 @@ async function renderOverview() {
       h("span", {}, h("i", { class: "f-mid" }), "Masked or waiting"), h("span", {}, h("i", { class: "f-block" }), "Blocked")),
       hasData ? h("div", { class: "card-b" }, trend(o.series, o.bucket_s), h("div", { class: "chart-foot" }, `One bar per ${bucketWords(o.bucket_s)}, all peers.`))
         : h("div", { class: "empty" }, "No actions in this time range.")),
+    latencyCard(o.latency),
     h("div", { class: "grid2" },
       card("Blocked by reason", null, hbars(o.by_reason, r => r.label, r => r.count)),
       card("Blocked by role", null, hbars(o.by_role, r => `${r.agent} (${r.role})`, r => r.count))),
@@ -546,6 +588,7 @@ async function renderSessions(sidArg, stepArg) {
   const drawList = () => {
     const rows = all.filter(matches);
     count.textContent = `${n(rows.length)} of ${n(all.length)}`;
+    setExportCount(rows.reduce((a, x) => a + x.n, 0));
     body.replaceChildren(rows.length ? tbl([null, "76px", "52px", "52px", "96px"], ["Agent and peer", "Started", ["Steps", "r"], "State", "Last"],
       rows.map(x => h("tr", linkRow(() => pick(x.id), x.id === sid ? "sel" : "", { "aria-selected": String(x.id === sid) }),
         h("td", { title: `${x.agent} on ${x.peer_label} (${x.id})` }, h("div", { class: "two" }, h("span", { class: "ell" }, x.agent, x.active ? h("span", { class: "live", title: "Active" }) : null),
