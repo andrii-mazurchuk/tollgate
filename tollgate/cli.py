@@ -63,9 +63,13 @@ def serve() -> int:
     print(f"  health: {base}/healthz   taint: {base}/admin/taint   budget: {base}/admin/budget", flush=True)
     print(f"  approvals: {base}/admin/approvals   (tollgate approve|deny <id>)", flush=True)
     print(f"  edge UI: {base}/edge   console: {base}/console", flush=True)
-    if not os.environ.get("TOLLGATE_ADMIN_TOKEN"):
-        print("  WARNING: TOLLGATE_ADMIN_TOKEN is not set: the admin token is off (approve/deny and /admin/* from other "
-              "hosts need it). Console: sign in with an account (`tollgate admin create`).", flush=True)
+    from tollgate import accounts
+    if not any(u["role"] == "admin" and not u["disabled"] for u in accounts.listing()):
+        print("  NEXT: no console account yet: `tollgate admin create --email E` (or open /console to set the owner).",
+              flush=True)
+    if not os.environ.get("TOLLGATE_ADMIN_TOKEN"):  # optional; console accounts cover the UI
+        print("  note: remote admin token off (set TOLLGATE_ADMIN_TOKEN only for approve/deny or /admin/* from other "
+              "hosts).", flush=True)
     # open /edge tabs hold an endless SSE stream; without a cap uvicorn waits on it forever at Ctrl+C
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning", timeout_graceful_shutdown=1)
     return 0
