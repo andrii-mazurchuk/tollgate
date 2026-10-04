@@ -40,7 +40,7 @@ Measured on `main` on 2026-10-04. Fast suite: `uv run pytest -q -m "not slow"` �
 - Approval flow: `taint.block_flow.action: approve` or `roles.<role>.approval: [tool]` parks the call. It appears in `GET /admin/approvals` and on the dashboard, and waits up to `approval.timeout_s` for Approve/Deny (dashboard button, `tollgate approve|deny <id>`, or `POST /admin/approvals/{id}` with `TOLLGATE_ADMIN_TOKEN`). Deny and timeout fail closed. Audit rules: `approval.requested`, `approval.approved`, `approval.denied`, `approval.timeout`.
 - Tool-description pinning (rug-pull defence): name + description + schema hashed at startup; a changed tool is hidden and its calls blocked (`pin.changed`); `/healthz` `pin_alerts` drives the dashboard's red strip.
 
-**Known gaps, stated plainly:**
+**Known gaps, stated plainly** (full list: [README › Known limits](README.md#known-limits)):
 - Injection recall 83.7% is below the 85% target. Misses concentrate in the `deepset` source (recall 0.371 held-out).
 - Tier 2 meets latency only on short text, and there p95 is ~65–90 ms against 80 ms; long tool results skip it in balanced.
 - A content-level `approve` verdict still blocks; only taint and role approvals park.

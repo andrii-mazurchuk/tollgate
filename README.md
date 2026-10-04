@@ -140,6 +140,18 @@ uv run tollgate connect hermes      --role role-2 --peer <id>           # ~/.her
 
 Same binary, two roles; the demo runs both on one machine. Next step: split into `--role edge|hub` with policy sync from the hub.
 
+## Known limits
+
+- **Injection recall 0.837 vs 0.85 target** (held-out). Missed, and we say so; misses concentrate in the `deepset` source.
+- **Classifier latency is borderline:** p95 ~65–90 ms on short text vs 80 ms. Gated: long tool results skip it in balanced.
+- **No content-triggered taint.** A session becomes Untrusted / Holds private data from tool labels in the policy, not from what the text says (content checks still block or mask the text itself).
+- **Model door = OpenAI Chat Completions, no streaming.** Claude Code and Codex model traffic is not proxied; their tools are, through hooks.
+- **Edge and hub are one binary** today (the demo runs both on one machine); the `--role edge|hub` split is planned.
+- **Codex, Cursor, Gemini CLI and Hermes hooks** are written against their documented formats, not verified against installed binaries (Claude Code is verified live).
+- **Bash labels are pattern heuristics:** obfuscated shell can evade a label. Taint from other tools and the content checks still apply.
+- **In-memory state** (pending approvals, token budgets, taint) resets on restart; a restart fails waiting approvals closed.
+- **Single-process JSON stores** (peers, accounts, policy history): fine for a team; a database for scale.
+
 ## Docs
 
 - [TOLLGATE.md](TOLLGATE.md): spec, AC1–AC16 with status, statistics, known gaps
