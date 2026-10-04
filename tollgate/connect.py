@@ -239,8 +239,10 @@ def merge_toml(old: str, block: str) -> str:
     if feats is None:
         block = "[features]\nhooks = true\n\n" + block
     elif not feats.get("hooks"):
-        text = re.sub(r"^hooks\s*=.*\n?", "", text, flags=re.M) if "hooks" in feats else text
-        text = re.sub(r"^\[features\][ \t]*$", "[features]\nhooks = true", text, count=1, flags=re.M)
+        if "hooks" in feats:  # `hooks = false` -> true
+            text = re.sub(r"^hooks\s*=\s*false\s*$", "hooks = true", text, count=1, flags=re.M)
+        else:
+            text = re.sub(r"^\[features\][ \t]*$", "[features]\nhooks = true", text, count=1, flags=re.M)
     new = (text + "\n\n" if text else "") + f"{MARK_START}\n{block.rstrip()}\n{MARK_END}\n"
     tomllib.loads(new)  # raises if the user's file clashes (e.g. its own [mcp_servers.tollgate]); nothing is written
     return new
