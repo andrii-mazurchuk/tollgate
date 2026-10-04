@@ -153,7 +153,7 @@ const toolRow = t => h("tr", {}, h("td", { title: t.name }, t.plain, h("span", {
   h("td", {}, t.write ? "Write" : "Read"), h("td", { class: "muted", title: (t.limits || []).join("; ") }, (t.limits || []).join("; ") || "No extra limits"));
 const serverList = servers => servers.map(s => h("div", { class: "srv" },
   h("div", { class: "srv-h" }, h("h3", {}, s.name), h("span", { class: "muted small" },
-    s.reachable ? `${s.allowed.length} allowed · ${s.denied.length} hidden from this role` + (s.access === "read" ? " · read-only tools only" : "") : "Not reachable by this role")),
+    s.unreachable ? "Unreachable: the upstream MCP server did not answer at startup" : s.reachable ? `${s.allowed.length} allowed · ${s.denied.length} hidden from this role` + (s.access === "read" ? " · read-only tools only" : "") : "Not reachable by this role")),
   s.allowed.length ? h("table", { class: "t" }, h("colgroup", {}, h("col", {}), h("col", { style: "width:72px" }), h("col", { style: "width:40%" })),
     h("thead", {}, h("tr", {}, h("th", {}, "Allowed tool"), h("th", {}, "Kind"), h("th", {}, "Limits"))), h("tbody", {}, s.allowed.map(toolRow))) : null,
   s.denied.length ? h("div", { class: "denied" }, h("span", { class: "muted small" }, s.reachable ? "Hidden from this role:" : "Tools on this server:"),

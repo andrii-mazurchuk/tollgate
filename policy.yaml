@@ -6,6 +6,11 @@ servers:
   github:  { mock: mocks.github }
   tickets: { mock: mocks.tickets }
   files:   { mock: mocks.files }
+  # Real upstreams (docs/connectivity.md), next to the mocks. Commented out so the demo stays offline;
+  # the name must not clash with a mock, and roles.<role>.servers must grant it like any other server.
+  # gh:    { url: "https://api.githubcopilot.com/mcp/", headers: { Authorization: "Bearer ${GITHUB_TOKEN}" } }
+  # fs:    { command: bunx, args: ["@modelcontextprotocol/server-filesystem", "/workspace"] }
+  # local: { command: uv, args: [run, my_server.py], env: { API_KEY: "${MY_API_KEY}" }, cwd: ../my-server }
 
 roles:
   role-1:

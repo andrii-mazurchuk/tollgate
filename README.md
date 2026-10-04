@@ -77,6 +77,7 @@ UIs: /edge (developer laptop) · /console (security lead: peers, sessions, polic
 ```
 
 - **Hub (authoritative):** one virtual MCP per role; laptops enroll once, the admin sets their roles, a key is minted per agent launch and revocable; argument limits; session taint; budgets and loop cut-off; tool-description pinning; audit log.
+- **Upstreams:** the demo fronts in-process mocks; `servers:` also takes real MCP servers, remote (`url:` + `headers:`) or local (`command:` + `args:`/`env:`), with `${VAR}` from the environment. An upstream that is down at startup is logged and shown as unreachable (`/healthz`, role detail); the rest keep working. See `docs/connectivity.md`.
 - **Edge (protective):** content checks; raw text stays on the laptop. Today the content pipeline runs in the hub's process; a separate edge process is future work.
 - **One `policy.yaml`** drives both, hot reloaded; an invalid edit is rejected while the old policy stays active. Profiles: [`strict`](policies/strict.yaml), [`balanced`](policies/balanced.yaml) (= `policy.yaml`), [`lenient`](policies/lenient.yaml), each commented.
 

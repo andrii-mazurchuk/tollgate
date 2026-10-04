@@ -283,7 +283,7 @@ def limit_words(arg: str, rule: str) -> str:
 
 def agent(data: dict, role: str, source_tools: dict, feed_state: dict, used: dict) -> dict:
     """Everything about how this role's agent is set up, from the live policy and each source's own tool list."""
-    from tollgate.gateway import content_policy, tool_allowed
+    from tollgate.gateway import content_policy, tool_allowed, upstream_status
     from types import SimpleNamespace
     rp = (data.get("roles") or {}).get(role) or {}
     constrain, approval = rp.get("constrain") or {}, set(rp.get("approval") or [])
@@ -300,7 +300,8 @@ def agent(data: dict, role: str, source_tools: dict, feed_state: dict, used: dic
             else:
                 denied.append(item)
         spec = (rp.get("servers") or {}).get(srv) or {}
-        servers.append({"name": srv, "reachable": bool(spec), "access": spec.get("access") or "picked tools" if spec else None,
+        down = (upstream_status().get(srv) or {}).get("reachable") is False
+        servers.append({"name": srv, "reachable": bool(spec) and not down, "unreachable": down, "access": spec.get("access") or "picked tools" if spec else None,
                         "allowed": allowed, "denied": denied})
     flow = (data.get("taint") or {}).get("block_flow") or {}
     on = (data.get("taint") or {}).get("enabled", True)

@@ -96,6 +96,30 @@ def history_path() -> Path:
 LABELS = {"untrusted_source", "private_data", "public_sink"}
 
 
+SERVER_KEYS = {"mock": set(), "url": {"headers", "transport"}, "command": {"args", "env", "cwd"}}
+
+
+def validate_server(name: str, s) -> None:
+    """servers.<name>: exactly one of mock: module | url: http(s)://... | command: exe (see docs/connectivity.md)."""
+    kind = [k for k in SERVER_KEYS if k in (s if isinstance(s, dict) else {})]
+    if len(kind) != 1:
+        raise ValueError(f"servers.{name}: need exactly one of mock: module | url: https://... | command: exe")
+    k = kind[0]
+    if extra := set(s) - {k} - SERVER_KEYS[k]:
+        raise ValueError(f"servers.{name}: unknown keys {sorted(extra)} for a {k}: server")
+    is_str_map = lambda v: isinstance(v, dict) and all(isinstance(x, str) for x in v.values())  # noqa: E731
+    if not isinstance(s[k], str) or not s[k] or (k == "url" and not s[k].startswith(("http://", "https://", "${"))):
+        raise ValueError(f"servers.{name}.{k}: need a non-empty string" + (" starting http(s)://" if k == "url" else ""))
+    if not is_str_map(s.get("headers", {})) or not is_str_map(s.get("env", {})):
+        raise ValueError(f"servers.{name}: headers/env need a mapping of strings")
+    if s.get("transport", "http") not in ("http", "sse"):
+        raise ValueError(f"servers.{name}.transport: need http|sse")
+    if not isinstance(s.get("args", []), list) or not all(isinstance(a, str) for a in s.get("args", [])):
+        raise ValueError(f"servers.{name}.args: need a list of strings")
+    if not isinstance(s.get("cwd", ""), str):
+        raise ValueError(f"servers.{name}.cwd: need a string")
+
+
 def validate(p) -> dict:
     """Checks A's sections only; `content` is passed through untouched (Track B)."""
     if not isinstance(p, dict):
@@ -103,6 +127,8 @@ def validate(p) -> dict:
     servers, roles = p.get("servers") or {}, p.get("roles")
     if not isinstance(servers, dict) or not isinstance(roles, dict):
         raise ValueError("servers and roles must be mappings")
+    for name, s in servers.items():
+        validate_server(name, s)
     for role, r in roles.items():
         if not isinstance(r, dict) or not isinstance(r.get("servers") or {}, dict):
             raise ValueError(f"roles.{role}: must be a mapping with servers: {{...}}")
