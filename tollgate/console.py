@@ -11,7 +11,7 @@ from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from tollgate import edge, explain
+from tollgate import edge, explain, telemetry
 from tollgate.gateway import model_door, peers
 from tollgate.gateway.approvals import admin_ok, admin_request
 
@@ -90,7 +90,8 @@ def overview(events: list[dict], rng: str, reg: dict, now: datetime | None = Non
                      "peers_online": {"value": online, "prev": None}},
             "by_reason": [{"label": r, "count": n} for r, n in reasons.most_common()],
             "by_role": [{"role": r, "agent": explain.AGENTS.get(r, r), "count": n} for r, n in roles.most_common()],
-            "attacks": [_with_peer(edge._item(e), e.get("key_id"), reg) for e in attacks]}
+            "attacks": [_with_peer(edge._item(e), e.get("key_id"), reg) for e in attacks],
+            "latency": telemetry.latency(cur)}
 
 
 def health(events, app, policy) -> dict:
@@ -277,6 +278,7 @@ def routes(policy) -> list:
     api += console3.routes(policy, admin)
     from tollgate import console_try  # Try it: dry-run content check
     api += console_try.routes(policy, admin)
+    api.append(Route("/export", admin(telemetry.export)))  # exportable audit log (CSV | JSONL)
     return [Mount("/console/api", routes=api), Route("/console", lambda r: RedirectResponse("/console/")),
             Mount("/console", app=StaticFiles(directory=UI, html=True))]
 
