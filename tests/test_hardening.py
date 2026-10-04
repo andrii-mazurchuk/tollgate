@@ -1,5 +1,6 @@
 """Security hardening regressions (h/hardening): each test failed before its fix."""
 import hashlib
+import json
 import hmac
 
 import pytest
@@ -193,6 +194,59 @@ def test_tier2_download_is_pinned(monkeypatch):
     monkeypatch.setattr(tier2, "_model", None)
     assert tier2._load() is None
     assert calls and all(len(kw.get("revision") or "") == 40 for kw in calls)
+
+
+def _stub_hub(code, body):
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(code)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, f"http://127.0.0.1:{srv.server_address[1]}"
+
+
+GOOD = b'{"tool_name": "Read", "tool_input": {}}'
+
+
+@pytest.mark.parametrize("agent", ["claude-code", "codex", "cursor", "gemini", "hermes"])
+@pytest.mark.parametrize("stdin,event,hub", [
+    (b"[]", "pre", (200, b"{}")), (b"{}", None, (200, b"{}")), (b"\xff\xfe{", "pre", (200, b"{}")),
+    (b"not json", "pre", (200, b"{}")), (GOOD, "pre", (500, b"oops")), (GOOD, "pre", (200, b"[]"))])
+def test_hook_shim_fails_closed_on_any_error(agent, stdin, event, hub):
+    from tollgate import connect as conn
+    ev = {"claude-code": "PreToolUse", "codex": "PreToolUse", "cursor": "preToolUse", "gemini": "BeforeTool",
+          "hermes": "pre_tool_call"}[agent] if event else None
+    srv, url = _stub_hub(*hub)
+    try:
+        out, err, code = conn.hook(agent, ev, stdin, url)
+    finally:
+        srv.shutdown()
+    if agent == "hermes":
+        assert json.loads(out)["action"] == "block"
+    else:
+        assert code == 2 and err.startswith("Tollgate")
+        if agent == "cursor":
+            assert json.loads(out)["permission"] == "deny"
+
+
+@pytest.mark.track_a
+async def test_string_tool_input_is_scanned(monkeypatch):
+    async with _app(monkeypatch) as c:
+        k = _key()
+        r = await _hook(c, k, "PreToolUse", "terminal", f"echo {AWS}")
+        assert _decision(r) == "deny" and any(x["rule"] == "secret.aws_key" for x in _events()[-1]["reasons"])
+        r = await _hook(c, k, "PreToolUse", "terminal", [1, 2])
+        assert _decision(r) == "deny"
 
 
 def test_bash_sink_labels_widened():
