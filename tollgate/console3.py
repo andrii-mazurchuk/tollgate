@@ -191,7 +191,8 @@ def selftest() -> dict:
     t2 = (ev.get("tier2") or {}).get("latency_ms_short") or {}
     heads = [
         _target("injection_recall", "Injection recall", inj.get("recall"), ">=", 0.85, "ratio", "eval, held-out 30%"),
-        _target("fpr", "False-positive rate (benign flagged)", ov.get("fpr"), "<=", 0.05, "ratio", "eval, held-out 30%"),
+        _target("injection_fpr", "Injection false alarms", inj.get("fpr"), "<=", 0.05, "ratio", "harmless text flagged, held-out 30%"),
+        _target("fpr", "False alarms, all checks", ov.get("fpr"), "<=", 0.05, "ratio", "harmless cases flagged, held-out 30%"),
         _target("pii_recall", "Personal-data recall", ((ev.get("controls") or {}).get("pii") or {}).get("recall"), ">=", 0.95,
                 "ratio", "eval, held-out 30%"),
         _target("t1_p95", "Tier 1 scan p95", ((ev.get("latency_ms") or {}).get("t1") or {}).get("p95"), "<=", 5.0, "ms", "eval"),
