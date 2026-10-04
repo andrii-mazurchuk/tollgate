@@ -25,3 +25,4 @@ audit/
 models/
 .ruff_cache/
 !tests/corpus/*.jsonl
+.claude/worktrees/
