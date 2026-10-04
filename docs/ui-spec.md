@@ -168,4 +168,81 @@ Order on the page, top to bottom: status line → KPI strip → trend → (reaso
      - (c) drop it from the UI and keep it as an API.
    - Until decided: do not invest further UI in approvals.
 
+### Server console, revision 1 (agreed 2026-10-04)
+
+**Decisions (Andrey):**
+- **Approvals:** dropped from the UI. They stay as an API (`/admin/approvals`).
+- **Policy:** read-only, plus the Strict / Balanced / Lenient profile switch.
+- **Build order:** Overview, Peers & roles and Sessions first. Policy, Threat feed and Self-test follow as time allows.
+- **Merged views:** Analytics merges into Overview, and Agents & keys into Peers & roles.
+
+#### Identity: peers and keys
+- **A peer is a laptop running the local edge.** It enrolls once:
+  - command: `tollgate enroll <token> --owner <name> --device <name>`;
+  - the token is one-time, created in the console (or with `tollgate enroll-token`), and expires after 24 h.
+- **The admin sets which roles each peer may run** (in Peers & roles). A role is what the agent is, not who owns the laptop. One laptop can run several roles.
+- **Agent keys are minted automatically, one per agent launch.**
+  - `tollgate connect <client> --role R --peer P` (clients: `claude-code`, `cursor`, `print`) mints a key and prints or writes the client config.
+  - The key is `tg_<role>_<peer>-<n>_<mac>`. The format is unchanged and `<peer>-<n>` is the key ID, so enforcement doesn't change.
+  - Minting is refused if the peer is revoked or the role isn't allowed for it.
+  - Nobody issues keys by hand any more. `tollgate key issue` stays for tests and dev.
+- **A key is still one session.** A key per launch means clean taint per agent run.
+- **Revocation:**
+  - revoking a peer kills every key it minted;
+  - removing a role from a peer kills that peer's keys for that role;
+  - `verify()` checks the registry.
+  - Legacy keys whose ID has no `-` (no peer) keep working and show as the peer **"Unenrolled"**.
+- **Registry:** `audit/peers.json` (gitignored runtime):
+  ```json
+  {"peers": {"p3f9a": {"owner": "Andrey", "device": "andrey-thinkpad", "roles": ["role-2"], "enrolled_at": "...Z",
+                        "revoked_at": null, "minted": 4}},
+   "tokens": {"<sha256 of token>": {"expires_at": "...Z", "used_at": null, "peer": null}}}
+  ```
+  Peer IDs are `p` + 4 hex characters (no `_`, `:` or `-`).
+- **Online and last seen:**
+  - online means an audit event from any of the peer's keys in the last 5 minutes;
+  - last seen is the newest such event.
+  - There are no heartbeats, and per-peer app/feed versions are not shown (no data).
+- **Demo fleet:** `tollgate seed-fleet` enrolls about 6 peers across both roles, with believable owners and devices. It then drives a mix of normal calls and the Acme attack through the **real in-process gateway** with minted keys, so every number in the console is real.
+
+#### Console API (`/console/api/*`; loopback or the admin token, like `/admin/*`)
+| Method / path | Returns |
+|---|---|
+| `GET status` | `{health: {level, message, ts?, session_id?, trace_id?}, admin, policy: {version, profile}, feed: {version}, app_version}`. Health counts the last hour, like the edge. "N attacks stopped" counts blocked injection/signature/data-flow events. |
+| `GET overview?range=15m\|1h\|today\|all` | `{kpis: {checked, blocked, attacks, peers_online} (each {value, prev}), series, bucket_s, by_reason: [{label, count}], by_role: [{role, agent, count}], attacks: [item]}`. `item` = the edge `_item` + `peer`, `peer_label`. |
+| `GET peers` | `{roles: [{role, agent, peers, servers: [{name, allowed: n, hidden: n}], actions, blocked}], peers: [{id, owner, device, roles, online, last_seen, sessions, actions, blocked, revoked}]}`, including the "Unenrolled" row when legacy keys exist. |
+| `GET peers/{id}` | the peer + `sessions` (edge session shape) + `keys: [{key_id, role, first_ts, last_ts, n}]` |
+| `POST peers/{id}/roles` `{roles: [...]}` | the updated peer (roles must exist in the policy) |
+| `POST peers/{id}/revoke` | the updated peer |
+| `POST enroll-token` | `{token, expires_at, command: "tollgate enroll <token> --owner … --device …"}` |
+| `GET roles/{role}` | the edge `agent(...)` shape for that role (servers, allowed/hidden tools with limits, models, budget, content, labels) + `peers: [...]` |
+| `GET sessions?peer=&role=&state=` | edge session list items + `peer`, `peer_label` |
+| `GET sessions/{id}` | the edge timeline **without `text`**. Each step keeps `content_sha256` (the fingerprint). |
+
+#### Views (revision 1 builds the first three)
+**Shell:** the same as the edge.
+- Left nav: Overview · Peers & roles · Sessions, then Policy · Threat feed · Self-test greyed until built.
+- Top bar, 28 px: health on the left; on the right the view's controls, a status chip (Admin · hub, with policy, feed and app versions in the tooltip) and the theme toggle.
+- The same CSS tokens, badges and type scale as the edge. Red only for Blocked.
+
+1. **Overview** answers "are we safe?":
+   - KPI strip: Actions checked · Blocked · Attacks stopped · Peers online (with deltas);
+   - a verdict trend (grey, blocked in red);
+   - **Blocked by reason | Blocked by role**, side by side as sorted bars;
+   - **Attacks stopped**: a table (time, what happened, peer, agent, tool) linking into Sessions.
+   - The time range sits in the top bar.
+2. **Peers & roles** has two tabs, **Peers | Roles**.
+   - **Peers** is master–detail:
+     - left: a peers table (device + owner, roles, online dot + last seen, sessions, blocked);
+     - right: the peer detail: a strip (owner, device, enrolled, last seen, keys minted), **Roles this laptop may run** (checkboxes, Save), its sessions (click → Sessions), its keys (key ID, role, active window, calls), and **Revoke this laptop** (destructive, with a confirm naming the device).
+     - The top bar has an **Enroll a laptop** button: a dialog with the one-time command, a Copy button and the expiry.
+   - **Roles**:
+     - left: a roles table (agent name, role, peers running it, tools allowed/hidden, actions, blocked) and a "Peers per role" sorted bar;
+     - right: the role detail: MCP servers → allowed tools (kind, limits) and hidden tools (the edge Setup rendering), models/budget, content checks, and the peers running it.
+3. **Sessions**: master–detail across all peers.
+   - Filter pills: Peer · Role · State.
+   - Each list row: agent + peer, started, steps, state icons, last outcome.
+   - The detail is the edge trace layout with tabs **Overview · Checks · Fingerprint**. Fingerprint shows the SHA-256, plus the line "The text stays on the peer's laptop".
+   - There is no Input/Output tab: the hub never has the text.
+
 These texts will be revised, and both frontends rebuilt, several times. This spec is the source of truth for each rebuild.
