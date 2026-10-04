@@ -898,7 +898,7 @@ function reviewDialog() {
 }
 
 /* ---------- routing + live refresh ---------- */
-const VIEWS = { overview: renderOverview, peers: renderPeers, roles: renderRoles, sessions: renderSessions, policy: renderPolicy, feed: renderFeed, selftest: renderSelftest };
+const VIEWS = { overview: renderOverview, peers: renderPeers, roles: renderRoles, sessions: renderSessions, policy: renderPolicy, feed: renderFeed, selftest: renderSelftest, try: renderTry };
 async function route(focus) {
   const parts = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
   ui.view = VIEWS[parts[0]] ? parts[0] : "overview";

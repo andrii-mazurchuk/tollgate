@@ -275,6 +275,8 @@ def routes(policy) -> list:
            Route("/sessions", admin(list_sessions)), Route("/sessions/{id}", admin(one_session))]
     from tollgate import console3  # revision 3: Threat feed + Self-test
     api += console3.routes(policy, admin)
+    from tollgate import console_try  # Try it: dry-run content check
+    api += console_try.routes(policy, admin)
     return [Mount("/console/api", routes=api), Route("/console", lambda r: RedirectResponse("/console/")),
             Mount("/console", app=StaticFiles(directory=UI, html=True))]
 
