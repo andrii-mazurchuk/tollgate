@@ -238,8 +238,35 @@ def routes(policy) -> list:
         backup = switch_profile(policy, name)
         return JSONResponse({"status": policy_status(policy), "backup": backup})
 
+    async def set_access(request):
+        import yaml
+        from tollgate.gateway.policy import validate
+        try:
+            body = await request.json()
+            base, chg = body.get("base_version"), body.get("changes")
+        except (ValueError, AttributeError):
+            base = chg = None
+        if not policy.path or not isinstance(chg, list) or not chg or not all(isinstance(c, dict) for c in chg):
+            return JSONResponse({"error": "need {base_version, changes: [{role, tool, allowed}]}"}, 400)
+        cur = policy.status()["version"]
+        if base != cur:
+            return JSONResponse({"error": f"the policy changed meanwhile (now {cur})", "version": cur}, 409)
+        st = request.app.state
+        tools = {n: await src.list_tools() for n, src in (getattr(st, "sources", None) or {}).items()}
+        try:
+            new, sentences = edit_access(policy.data, tools, chg)
+            raw = yaml.safe_dump(new, sort_keys=False, allow_unicode=True).encode("utf-8")
+            validate(yaml.safe_load(raw))
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, 400)
+        if not sentences:
+            return JSONResponse({"error": "nothing changes"}, 400)
+        backup = replace_policy(policy, raw, "Edited in console")
+        return JSONResponse({"status": policy_status(policy), "backup": backup, "sentences": sentences})
+
     api = [Route("/status", admin(status)), Route("/overview", admin(get_overview)),
            Route("/policy", admin(get_policy)), Route("/policy/profile", admin(set_profile), methods=["POST"]),
+           Route("/policy/access", admin(set_access), methods=["POST"]),
            Route("/peers", admin(list_peers)), Route("/peers/{id}", admin(get_peer)),
            Route("/peers/{id}/roles", admin(set_roles), methods=["POST"]),
            Route("/peers/{id}/revoke", admin(revoke), methods=["POST"]),
@@ -379,17 +406,86 @@ def rules(data: dict, feed_state: dict) -> list[dict]:
     ]
 
 
-def switch_profile(policy, name: str) -> str:
-    """Backs up the active file, puts policies/<name>.yaml in its place (atomic replace), reloads. Returns the backup."""
+def replace_policy(policy, raw: bytes, note: str | None = None) -> str:
+    """Backs up the active file, puts `raw` in its place (atomic replace), reloads. Returns the backup path."""
     import os
     import shutil
-    from tollgate.gateway.policy import DEFAULT_PATH, history_path
+    from tollgate.gateway.policy import history_path
     backup = (history_path().parent / "policy-backups"
               / f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{policy.version}.yaml")
     backup.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(policy.path, backup)
     tmp = policy.path.with_name(policy.path.name + ".tmp")
-    shutil.copyfile(DEFAULT_PATH.parent / "policies" / f"{name}.yaml", tmp)
+    tmp.write_bytes(raw)
     os.replace(tmp, policy.path)  # atomic on Windows too: a hot reload never sees half a file
-    policy.reload()
+    policy.reload(note)
     return str(backup)
+
+
+def switch_profile(policy, name: str) -> str:
+    """Puts policies/<name>.yaml in place of the active file (backed up first). Returns the backup."""
+    from tollgate.gateway.policy import DEFAULT_PATH
+    return replace_policy(policy, (DEFAULT_PATH.parent / "policies" / f"{name}.yaml").read_bytes())
+
+
+# --- Policy: edit access (docs/ui-spec.md "Server console, revision 3") ---
+def _catalog(tools: dict) -> dict:
+    """full tool name -> (server, name as the policy lists it, write?), from each source's own tool list."""
+    return {f"{s}.{t.name.replace('_', '.')}": (s, t.name.replace("_", "."),
+                                                 not (t.annotations and t.annotations.read_only_hint))
+            for s, ts in tools.items() for t in ts}
+
+
+def _lc(x: str) -> str:
+    return x[:1].lower() + x[1:]
+
+
+def edit_access(data: dict, tools: dict, changes: list) -> tuple[dict, list[str]]:
+    """Applies [{role, tool, allowed}] to a copy of `data`. Each touched role x server is rewritten in its smallest
+    form (all read tools -> access: read, all tools -> access: rw, else tools: [...], none -> server removed); every
+    other key (constrain, approval, ...) is kept. Returns (new data, one plain sentence per real change)."""
+    import copy
+    from types import SimpleNamespace
+    from tollgate.gateway import tool_allowed
+    cat, new = _catalog(tools), copy.deepcopy(data)
+    roles = new.get("roles") or {}
+    before: dict[tuple, set] = {}
+    after: dict[tuple, set] = {}
+    for c in changes:
+        role, tool, want = c.get("role"), c.get("tool"), c.get("allowed")
+        if role not in roles:
+            raise ValueError(f"unknown role {role!r}")
+        if tool not in cat:
+            raise ValueError(f"unknown tool {tool!r}")
+        if not isinstance(want, bool):
+            raise ValueError("allowed: need true|false")
+        srv, short, _ = cat[tool]
+        if (role, srv) not in before:
+            rp = roles[role] or {}
+            before[role, srv] = {s for n, (sv, s, w) in cat.items() if sv == srv and tool_allowed(
+                rp, SimpleNamespace(name=n, annotations=SimpleNamespace(read_only_hint=not w)))}
+            after[role, srv] = set(before[role, srv])
+        (after[role, srv].add if want else after[role, srv].discard)(short)
+    labels = new.get("labels") or {}
+    out = []
+    for (role, srv), now in after.items():
+        mine = [(s, w, n) for n, (sv, s, w) in cat.items() if sv == srv]  # in the source's order
+        every, reads = {s for s, _, _ in mine}, {s for s, w, _ in mine if not w}
+        roles[role] = roles[role] or {}
+        servers = roles[role]["servers"] = roles[role].get("servers") or {}
+        rest = {k: v for k, v in (servers.get(srv) or {}).items() if k not in ("access", "tools")}
+        if not now:
+            servers.pop(srv, None)
+        else:
+            form = ({"access": "read"} if now == reads else {"access": "rw"} if now == every
+                    else {"tools": [s for s, _, _ in mine if s in now]})
+            servers[srv] = {**form, **rest}
+        agent = explain.AGENTS.get(role, role)
+        for s, w, n in mine:
+            if (s in now) != (s in before[role, srv]):
+                if s in now:
+                    tags = ["write" if w else "read"] + [edge.LABEL_WORDS[x] for x in labels.get(n) or []]
+                    out.append(f"{agent} may now {_lc(explain.tool(n))} ({', '.join(tags)})")
+                else:
+                    out.append(f"{agent} can no longer {_lc(explain.tool(n))}")
+    return new, out

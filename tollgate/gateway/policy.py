@@ -33,8 +33,10 @@ class PolicyHolder:
         if self.path:
             self._record(True, data.get("mode") if isinstance(data, dict) else None)
 
-    def _record(self, ok: bool, profile, version: str | None = None, error: str | None = None):
+    def _record(self, ok: bool, profile, version: str | None = None, error: str | None = None, note: str | None = None):
         e = {"version": version or self.version, "at": _now(), "profile": profile, "ok": ok, "error": error}
+        if note:
+            e["note"] = note  # e.g. "Edited in console"; older entries have no note
         last = self.history[-1] if self.history else {}
         if ok and last.get("ok") and last.get("version") == e["version"]:
             return  # a restart (or a CLI one-shot) on the same file is not a new version
@@ -62,7 +64,7 @@ class PolicyHolder:
             self.reload()
         return self._data
 
-    def reload(self) -> bool:
+    def reload(self, note: str | None = None) -> bool:
         self._stamp, raw, data = self._stat(), None, None
         try:
             raw = self.path.read_bytes()
@@ -77,7 +79,7 @@ class PolicyHolder:
         self._data, self.last_error, self.loaded_at = data, None, _now()
         self.version = hashlib.sha256(raw).hexdigest()[:8]
         log.warning("policy reloaded: %s", self.version)
-        self._record(True, data.get("mode"))
+        self._record(True, data.get("mode"), note=note)
         return True
 
     def status(self) -> dict:
