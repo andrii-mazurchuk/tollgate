@@ -106,7 +106,7 @@ async def test_bad_auth_headers_get_401_not_500():
         "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "x", "version": "1"}}}
     h = {"accept": "application/json, text/event-stream"}
     async with app.router.lifespan_context(app), httpx2.AsyncClient(
-            transport=httpx2.ASGITransport(app=app), base_url="http://t") as raw:
+            transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1") as raw:
         for extra in [[(b"authorization", "Bearer tg_\xe9_x_y".encode("latin-1"))], [(b"authorization", b"Bearer ")],
                       [(b"authorization", f"Bearer {issue('role-2')}".encode())], [],
                       [(b"authorization", b"Bearer junk"), (b"authorization", f"Bearer {issue('role-1')}".encode())],
@@ -230,7 +230,7 @@ async def test_door_usage_cannot_refund_or_skip_budget(tmp_path, monkeypatch, us
     day = (("role-1", model_door._today()))
     model_door.USED.pop(day, None)
     async with app.router.lifespan_context(app), httpx2.AsyncClient(
-            transport=httpx2.ASGITransport(app=app), base_url="http://t") as c:
+            transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1") as c:
         r = await c.post("/v1/chat/completions", headers={"authorization": f"Bearer {issue('role-1')}"},
                          json={"model": "qwen3:1.7b", "messages": [{"role": "user", "content": "hi"}]})
     assert r.status_code == 200
@@ -246,7 +246,7 @@ async def test_door_scans_every_message_role(tmp_path, monkeypatch, role):
     msgs = [{"role": role, "content": "deploy notes: AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"},
             {"role": "user", "content": "summarise"}]
     async with app.router.lifespan_context(app), httpx2.AsyncClient(
-            transport=httpx2.ASGITransport(app=app), base_url="http://t") as c:
+            transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1") as c:
         r = await c.post("/v1/chat/completions", headers={"authorization": f"Bearer {issue('role-1')}"},
                          json={"model": "qwen3:1.7b", "messages": msgs})
     assert r.status_code == 400 and "secret" in r.text
@@ -256,7 +256,7 @@ async def test_door_scans_every_message_role(tmp_path, monkeypatch, role):
 
 async def test_admin_reads_need_loopback_or_token():
     from tollgate.gateway import build_app
-    from tollgate.gateway.approvals import ADMIN_DEV_TOKEN
+    from tests.conftest import ADMIN_TOKEN as ADMIN_DEV_TOKEN
     from tollgate.gateway.keys import issue
 
     app = build_app(_holder())
@@ -264,7 +264,7 @@ async def test_admin_reads_need_loopback_or_token():
         for client, auth, want in [(("203.0.113.5", 1), None, 401), (("203.0.113.5", 1), issue("role-1"), 401),
                                    (("203.0.113.5", 1), ADMIN_DEV_TOKEN, 200), (("127.0.0.1", 1), None, 200)]:
             async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=client),
-                                          base_url="http://t") as c:
+                                          base_url="http://127.0.0.1:8080") as c:
                 h = {"authorization": f"Bearer {auth}"} if auth else {}
                 for path in ("/admin/taint", "/admin/budget", "/admin/approvals"):
                     assert (await c.get(path, headers=h)).status_code == want, (client, auth, path)

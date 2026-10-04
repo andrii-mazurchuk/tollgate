@@ -1,6 +1,6 @@
 """Server console (docs/ui-spec.md "Server console, revision 1"): static app at /console, JSON API at /console/api/*.
 
-Loopback or the admin token, like /admin/*. The hub never serves text: sessions/{id} drops `text`, keeps the
+Access: console_auth.gate (accounts; loopback or the admin token until the first account exists). The hub never serves text: sessions/{id} drops `text`, keeps the
 fingerprint. Numbers come from the audit log; peers from the registry (gateway/peers.py)."""
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -11,9 +11,9 @@ from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from tollgate import edge, explain, telemetry
+from tollgate import accounts, edge, explain, telemetry
 from tollgate.gateway import model_door, peers
-from tollgate.gateway.approvals import admin_ok, admin_request
+from tollgate.gateway.approvals import admin_ok
 
 UI = Path(__file__).resolve().parent / "ui" / "console"
 ONLINE = timedelta(minutes=5)
@@ -107,12 +107,10 @@ def health(events, app, policy) -> dict:
 
 
 def routes(policy) -> list:
-    def admin(view):
-        async def h(request: Request):
-            if not admin_request(request):
-                return JSONResponse({"error": "admin token required (TOLLGATE_ADMIN_TOKEN)"}, 401)
-            return await view(request)
-        return h
+    from tollgate.console_auth import gate as admin  # signed-in user; writes: admin + CSRF + same origin
+
+    def by(request) -> str:  # attribution; nobody to name before the first account exists
+        return "" if request.state.who == "loopback" else f" by {request.state.who}"
 
     def roles() -> list[str]:
         return list(policy.data.get("roles") or {})
@@ -180,6 +178,7 @@ def routes(policy) -> list:
             peers.set_roles(i, want)
         except KeyError:
             return JSONResponse({"error": "unknown peer"}, 404)
+        accounts.log(request.state.who, f"Set laptop {i}'s roles to {', '.join(want) or 'none'}")
         return JSONResponse(one_peer(i, peers.load()))
 
     async def revoke(request):
@@ -188,10 +187,12 @@ def routes(policy) -> list:
             peers.revoke(i)
         except KeyError:
             return JSONResponse({"error": "unknown peer"}, 404)
+        accounts.log(request.state.who, f"Revoked laptop {i}")
         return JSONResponse(one_peer(i, peers.load()))
 
     async def enroll_token(request):
         t = peers.enroll_token()
+        accounts.log(request.state.who, "Created a one-time enroll command")
         return JSONResponse({**t, "command": f"tollgate enroll {t['token']} --owner … --device …"})
 
     async def get_role(request):
@@ -236,7 +237,8 @@ def routes(policy) -> list:
             name = None
         if name not in PROFILES or not policy.path:
             return JSONResponse({"error": f"profile must be one of {list(PROFILES)}"}, 400)
-        backup = switch_profile(policy, name)
+        backup = switch_profile(policy, name, f"Switched to the {name} profile in console{by(request)}")
+        accounts.log(request.state.who, f"Switched the policy to the {name} profile")
         return JSONResponse({"status": policy_status(policy), "backup": backup})
 
     async def set_access(request):
@@ -262,10 +264,12 @@ def routes(policy) -> list:
             return JSONResponse({"error": str(e)}, 400)
         if not sentences:
             return JSONResponse({"error": "nothing changes"}, 400)
-        backup = replace_policy(policy, raw, "Edited in console")
+        backup = replace_policy(policy, raw, f"Edited in console{by(request)}")
+        accounts.log(request.state.who, "Edited access: " + "; ".join(sentences))
         return JSONResponse({"status": policy_status(policy), "backup": backup, "sentences": sentences})
 
-    api = [Route("/status", admin(status)), Route("/overview", admin(get_overview)),
+    from tollgate import console_auth  # sign-in + Users (no gate on /auth/*; Users is admin-only)
+    api = console_auth.routes() + [Route("/status", admin(status)), Route("/overview", admin(get_overview)),
            Route("/policy", admin(get_policy)), Route("/policy/profile", admin(set_profile), methods=["POST"]),
            Route("/policy/access", admin(set_access), methods=["POST"]),
            Route("/peers", admin(list_peers)), Route("/peers/{id}", admin(get_peer)),
@@ -438,10 +442,10 @@ def replace_policy(policy, raw: bytes, note: str | None = None) -> str:
     return str(backup)
 
 
-def switch_profile(policy, name: str) -> str:
+def switch_profile(policy, name: str, note: str | None = None) -> str:
     """Puts policies/<name>.yaml in place of the active file (backed up first). Returns the backup."""
     from tollgate.gateway.policy import DEFAULT_PATH
-    return replace_policy(policy, (DEFAULT_PATH.parent / "policies" / f"{name}.yaml").read_bytes())
+    return replace_policy(policy, (DEFAULT_PATH.parent / "policies" / f"{name}.yaml").read_bytes(), note)
 
 
 # --- Policy: edit access (docs/ui-spec.md "Server console, revision 3") ---

@@ -81,7 +81,7 @@ async def test_gateway_healthz_reports_feed_and_policy_validates_it():
     data = copy.deepcopy(load_policy().data)
     data["feed"] = {"url": "http://127.0.0.1:8090/bundle.json", "interval_s": 10}
     app = build_app(PolicyHolder(validate(data)))
-    async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t") as c:
+    async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1") as c:
         feed = (await c.get("/healthz")).json()["feed"]
     assert set(feed) == {"url", "version", "last_pull", "last_error"}
     data["feed"] = {"url": 5}

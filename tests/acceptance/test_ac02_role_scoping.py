@@ -17,7 +17,7 @@ async def test_ac02_role_scoping():
     k1, k2 = issue("role-1"), issue("role-2")
 
     def factory(**kw):
-        return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t", **kw)
+        return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1", **kw)
 
     def client(role, key):
         return Client(StreamableHttpTransport(f"http://t/mcp/{role}/", auth=key, httpx_client_factory=factory))

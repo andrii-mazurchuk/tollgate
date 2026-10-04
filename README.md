@@ -140,6 +140,8 @@ uv run tollgate connect hermes      --role role-2 --peer <id>           # ~/.her
 
 Same binary, two roles; the demo runs both on one machine. Next step: split into `--role edge|hub` with policy sync from the hub.
 
+**Console accounts.** The first visit to `/console/` on the server itself asks for the owner account (or run `uv run tollgate admin create --email you@acme.io`). Two roles: **Admin** changes policy, access, profiles, peers, enroll commands, the feed, self-test runs and users; **Viewer** sees everything and changes nothing (the API answers 403, not just a hidden button). Admins invite people from **Users** (a one-time link, 24 h) or with `tollgate admin invite --email E --role viewer|admin`; also `tollgate admin list|disable`. Sessions are an HttpOnly, SameSite=Strict cookie (12 h). Every write needs the session's CSRF token, a same-origin `Origin` and `Content-Type: application/json`. Policy history and the admin log record who did what ("Edited in console by ola@acme.io"). Automation uses `Authorization: Bearer $TOLLGATE_ADMIN_TOKEN`; there is no default token, so leaving it unset turns this path off. To serve the console under a name other than localhost, set `TOLLGATE_ALLOWED_HOSTS=hub.acme.io`. Until the owner account exists, loopback can read but never write.
+
 ## Known limits
 
 - **Injection recall 0.837 vs 0.85 target** (held-out). Missed, and we say so; misses concentrate in the `deepset` source.
@@ -151,6 +153,7 @@ Same binary, two roles; the demo runs both on one machine. Next step: split into
 - **Bash labels are pattern heuristics:** obfuscated shell can evade a label. Taint from other tools and the content checks still apply.
 - **In-memory state** (pending approvals, token budgets, taint) resets on restart; a restart fails waiting approvals closed.
 - **Single-process JSON stores** (peers, accounts, policy history): fine for a team; a database for scale.
+
 
 ## Docs
 

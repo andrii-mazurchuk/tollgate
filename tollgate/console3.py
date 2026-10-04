@@ -16,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from tollgate import edge
+from tollgate import accounts, edge
 from tollgate.content import signatures as sigs
 from tollgate.feed import SRC, _STAMP, add, check_signatures
 
@@ -255,6 +255,7 @@ def routes(policy, admin) -> list:
             return JSONResponse({"error": "; ".join(f"{k}: {v}" for k, v in err.items()), "fields": err}, 400)
         replaced = any(s.get("id") == entry["id"] for s in (yaml.safe_load((d / SRC).read_text(encoding="utf-8")) or {}).get("signatures") or [])
         version = add(d, entry)
+        accounts.log(request.state.who, f"Published signature {entry['id']} (feed v{version})")
         return JSONResponse({"version": version, "id": entry["id"], "replaced": replaced,
                              "note": f"Signed bundle v{version} is live on the feed. Hubs pulling it pick it up within "
                                      f"{(data.get('feed') or {}).get('interval_s', 10)} s."})
@@ -262,9 +263,10 @@ def routes(policy, admin) -> list:
     async def get_selftest(_):
         return JSONResponse(selftest())
 
-    async def start_run(_):
+    async def start_run(request):
         if RUN["running"]:
             return JSONResponse({"error": "a self-test is already running", "run": RUN}, 409)
+        accounts.log(request.state.who, "Started a self-test run")
         RUN["running"] = True  # before the task starts: a second click in the same tick gets the 409
         t = asyncio.get_running_loop().create_task(run_eval())
         _TASKS.add(t)

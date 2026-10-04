@@ -63,6 +63,9 @@ def serve() -> int:
     print(f"  health: {base}/healthz   taint: {base}/admin/taint   budget: {base}/admin/budget", flush=True)
     print(f"  approvals: {base}/admin/approvals   (tollgate approve|deny <id>)", flush=True)
     print(f"  edge UI: {base}/edge   console: {base}/console", flush=True)
+    if not os.environ.get("TOLLGATE_ADMIN_TOKEN"):
+        print("  WARNING: TOLLGATE_ADMIN_TOKEN is not set: the admin token is off (approve/deny and /admin/* from other "
+              "hosts need it). Console: sign in with an account (`tollgate admin create`).", flush=True)
     # open /edge tabs hold an endless SSE stream; without a cap uvicorn waits on it forever at Ctrl+C
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning", timeout_graceful_shutdown=1)
     return 0
@@ -107,19 +110,20 @@ def agent() -> int:
 
 
 def decide(id: str, decision: str) -> int:
-    """POST /admin/approvals/{id} with the admin token (env TOLLGATE_ADMIN_TOKEN, else the dev constant)."""
+    """POST /admin/approvals/{id} with the admin token (env TOLLGATE_ADMIN_TOKEN; there is no default)."""
     import json
     import os
     import urllib.error
     import urllib.request
 
-    from tollgate.gateway.approvals import ADMIN_DEV_TOKEN
-
+    if not os.environ.get("TOLLGATE_ADMIN_TOKEN"):
+        print("Set TOLLGATE_ADMIN_TOKEN (the same value the server runs with).", file=sys.stderr)
+        return 2
     req = urllib.request.Request(
         f"http://127.0.0.1:{_opt('--port', '8080')}/admin/approvals/{id}", method="POST",
         data=json.dumps({"decision": decision}).encode(),
         headers={"Content-Type": "application/json",
-                 "Authorization": f"Bearer {os.environ.get('TOLLGATE_ADMIN_TOKEN') or ADMIN_DEV_TOKEN}"})
+                 "Authorization": f"Bearer {os.environ['TOLLGATE_ADMIN_TOKEN']}"})
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
             print(r.read().decode())
@@ -352,6 +356,7 @@ USAGE = {  # one line per subcommand; `tollgate <cmd> --help` prints its line an
     "hook": "hook AGENT [EVENT] [--url http://127.0.0.1:8080]   hook shim (agent JSON on stdin)",
     "open": "open [edge|console] [TRACE_ID] [--port N]   open a UI or one step's details",
     "seed-fleet": "seed-fleet [--policy F]   demo fleet traffic through the real gateway",
+    "admin": "admin create --email E [--name N] [--password-stdin] | invite --email E [--role viewer|admin] | list | disable --email E",
     "feed": "feed serve [--port 8090] [--dir feed] | publish --add 'id=..,pattern=..,action=block,tags=A;B' | pull [--url U]",
 }
 
@@ -361,6 +366,43 @@ def usage(cmd: str | None = None) -> str:
         return "usage: tollgate " + USAGE[cmd]
     return "usage: tollgate <command> [options]   (tollgate <command> --help)\n" + "\n".join(
         "  " + u for u in dict.fromkeys(USAGE.values()))
+
+def admin(sub: str) -> int:
+    """Console accounts: create (first admin) | invite | list | disable. Works on the store directly (same machine)."""
+    import getpass
+
+    from tollgate import accounts
+    try:
+        if sub == "create":
+            if "--password-stdin" in sys.argv:
+                pw = sys.stdin.readline().rstrip(chr(13) + chr(10))
+            else:
+                pw = getpass.getpass("Password (12+ characters): ")
+                if getpass.getpass("Again: ") != pw:
+                    print("The passwords differ.", file=sys.stderr)
+                    return 1
+            u = accounts.create_user(_opt("--email"), pw, _opt("--role", "admin"), _opt("--name"))
+            accounts.log("cli", f"Created {u['email']} as {u['role']}")
+            print(f"Created {u['email']} ({u['role']}). Sign in at /console/.")
+        elif sub == "invite":
+            t = accounts.invite(_opt("--email"), _opt("--role", "viewer"), "cli")
+            base = _opt("--url") or f"http://127.0.0.1:{_opt('--port', '8080')}"
+            print(f"{base}/console/#/accept/{t['token']}\nOne use, for {t['email']} ({t['role']}). Expires {t['expires_at']}.")
+        elif sub == "list":
+            for u in accounts.listing():
+                print(f"{u['email']:32} {u['role']:7} {'disabled' if u['disabled'] else 'active':9} "
+                      f"last login {u['last_login'] or 'never'}  {u['name']}")
+        elif sub == "disable":
+            accounts.set_disabled(accounts.norm_email(_opt("--email")), True, "cli")
+            print("Disabled; their sessions are signed out.")
+        else:
+            print("usage: tollgate admin create --email E [--name N] [--password-stdin] | invite --email E "
+                  "[--role viewer|admin] [--url BASE] | list | disable --email E", file=sys.stderr)
+            return 2
+    except (ValueError, KeyError) as e:
+        print(f"Refused: {e}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def main() -> int:
@@ -410,6 +452,8 @@ def main() -> int:
         return hook(sys.argv[2:])
     if cmd == "open":
         return open_ui(sys.argv[2:])
+    if cmd == "admin":
+        return admin(sys.argv[2] if len(sys.argv) > 2 else "")
     if cmd == "seed-fleet":
         return seed_fleet()
     if cmd == "feed":

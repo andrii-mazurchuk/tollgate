@@ -13,6 +13,7 @@ uv sync
 uv run tollgate test                                   # once: downloads + warms the classifier, writes audit/eval.json for Self-test
 Copy-Item policy.yaml audit/policy.demo.yaml -Force
 uv run tollgate seed-fleet --policy audit/policy.demo.yaml
+uv run tollgate admin create --email you@acme.io --name "Your name"   # console owner (asks for a 12+ char password); sign in at /console/
 uv run tollgate up --scripted-model --policy audit/policy.demo.yaml
 ```
 bash: `cp policy.yaml audit/policy.demo.yaml`; the rest is identical.

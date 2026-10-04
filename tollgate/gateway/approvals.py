@@ -8,21 +8,39 @@ import os
 import secrets
 from datetime import datetime, timezone
 
-ADMIN_DEV_TOKEN = "tollgate-admin-dev"
 KEEP = 200  # decided items kept for GET /admin/approvals
 
 
 def admin_ok(authorization: str | None) -> bool:
-    """Separate from role keys, so an agent can't approve its own call."""
-    token = os.environ.get("TOLLGATE_ADMIN_TOKEN") or ADMIN_DEV_TOKEN
+    """Separate from role keys, so an agent can't approve its own call. No TOLLGATE_ADMIN_TOKEN set: the token path is
+    off (there is no default token)."""
+    token = os.environ.get("TOLLGATE_ADMIN_TOKEN")
+    if not token:
+        return False
     given = (authorization or "")[7:].strip() if (authorization or "").lower().startswith("bearer ") else ""
     return bool(given) and hmac.compare_digest(given, token)
 
 
+LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
+
+
+def host_ok(request) -> bool:
+    """The Host header names this server (anti DNS rebinding): loopback names, or TOLLGATE_ALLOWED_HOSTS (comma list)."""
+    h = (request.headers.get("host") or "").strip().lower()
+    h = h[1:].split("]")[0] if h.startswith("[") else h.rsplit(":", 1)[0] if h.count(":") == 1 else h
+    extra = {x.strip().lower() for x in (os.environ.get("TOLLGATE_ALLOWED_HOSTS") or "").split(",") if x.strip()}
+    return h in LOCAL_HOSTS or h in extra
+
+
+def loopback(request) -> bool:
+    return bool(request.client and request.client.host in LOCAL_HOSTS) and host_ok(request)
+
+
 def admin_request(request) -> bool:
-    """Admin reads: loopback (the dashboard, the console) or the admin token. ponytail: behind a reverse proxy every
-    client looks loopback; send the token from the UI then."""
-    return bool(request.client and request.client.host in ("127.0.0.1", "::1", "localhost"))         or admin_ok(request.headers.get("authorization"))
+    """Admin reads (/admin/*, /healthz details): the admin token, or loopback until the first console account exists
+    (then loopback no longer bypasses sign-in). ponytail: behind a reverse proxy every client looks loopback."""
+    from tollgate import accounts
+    return admin_ok(request.headers.get("authorization")) or (not accounts.any_users() and loopback(request))
 
 
 def _now() -> str:

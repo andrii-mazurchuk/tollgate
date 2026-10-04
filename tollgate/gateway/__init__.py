@@ -380,7 +380,9 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
             finally:
                 task.cancel()
 
-    async def healthz(_):
+    async def healthz(request):
+        if not admin_request(request):  # public: liveness only; targets, feed URL and policy need admin
+            return JSONResponse({"ok": True})
         st = policy.status()
         return JSONResponse({"ok": True, "policy": st, "roles": list(apps), "sources": list(sources),
                              "upstreams": upstream_status(),

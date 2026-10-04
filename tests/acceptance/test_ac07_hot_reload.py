@@ -34,7 +34,7 @@ async def test_ac07_hot_reload(tmp_path, monkeypatch):
     app, key = build_app(holder), issue("role-1")
 
     def factory(**kw):
-        return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t", **kw)
+        return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1", **kw)
 
     async with app.router.lifespan_context(app):
         async with Client(StreamableHttpTransport("http://t/mcp/role-1/", auth=key, httpx_client_factory=factory)) as c:
@@ -79,7 +79,7 @@ async def test_ac01_app_serves_healthz_and_roles():
 
     app = build_app(load_policy())
     async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t") as raw:
+        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1") as raw:
             h = (await raw.get("/healthz")).json()
             assert h["ok"] and h["policy"]["version"] and set(h["sources"]) == {"github", "tickets", "files"}
             assert set(h["roles"]) == {"role-1", "role-2"}
