@@ -102,3 +102,22 @@ def test_pre_trace_events_get_one_stable_id():
     old = {k: v for k, v in ev(30, "block", "role.denied", sid="s9").items() if k != "trace_id"}
     item = edge.events_list([old], "all", {}, now=NOW)["items"][0]
     assert item["trace_id"] and item["trace_id"] == edge.timeline([old], "s9")[0]["trace_id"]
+
+
+def test_load_events_tails_appends_and_reloads_on_rewrite(tmp_path, monkeypatch):
+    import json as _j
+
+    from tollgate import edge
+    p = tmp_path / "a.jsonl"
+    monkeypatch.setenv("TOLLGATE_AUDIT", str(p))
+    line = lambda i: _j.dumps({"ts": f"2026-10-04T00:00:0{i}Z", "n": i}) + "\n"  # noqa: E731
+    p.write_text(line(1) + line(2), encoding="utf-8")
+    assert [e["n"] for e in edge.load_events()] == [1, 2]
+    with p.open("a", encoding="utf-8") as f:
+        f.write(line(3) + line(4)[:10])  # a half-written line is not parsed yet
+    assert [e["n"] for e in edge.load_events()] == [1, 2, 3]
+    with p.open("a", encoding="utf-8") as f:
+        f.write(line(4)[10:])
+    assert [e["n"] for e in edge.load_events()] == [1, 2, 3, 4]
+    p.write_text(line(7), encoding="utf-8")  # rotated / rewritten: full reload
+    assert [e["n"] for e in edge.load_events()] == [7]

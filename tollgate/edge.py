@@ -3,6 +3,7 @@ SSE of new trace ids.
 
 Loopback only: the API serves full local text and the edge key. Sessions = role keys (taint is keyed by key)."""
 import asyncio
+import functools
 import json
 import math
 import os
@@ -41,30 +42,42 @@ _CACHE: dict = {}
 
 
 def load_events() -> list[dict]:
-    """Audit events, re-parsed only when the file's (path, mtime, size) changes. Callers must not mutate the list."""
+    """Audit events. Unchanged file (path, mtime, size): the cached list. Grown file with the same head: only the new
+    complete lines are parsed. Shrunk, replaced or another path: full reload. Callers must not mutate the list."""
     p = Path(os.environ.get("TOLLGATE_AUDIT") or audit.DEFAULT_PATH)
     try:
         st = p.stat()
         sig = (str(p), st.st_mtime_ns, st.st_size)
         if _CACHE.get("sig") == sig:
             return _CACHE["events"]
-        lines = p.read_text(encoding="utf-8").splitlines()
+        with p.open("rb") as f:
+            head = f.read(256)
+            tail = _CACHE.get("path") == str(p) and _CACHE.get("off", 0) <= st.st_size and head.startswith(_CACHE.get("head", b"\0"))
+            off = _CACHE["off"] if tail else 0
+            f.seek(off)
+            data = f.read()
     except OSError:
         return []
-    out = []
-    for line in lines:
+    end = data.rfind(b"\n") + 1  # a half-written last line waits for the next call
+    out = list(_CACHE["events"]) if tail else []
+    for line in data[:end].decode("utf-8", errors="replace").splitlines():
         try:
             ev = json.loads(line)
         except ValueError:
             continue
         if isinstance(ev, dict) and "ts" in ev:
             out.append(ev)
-    _CACHE.update(sig=sig, events=out)
+    _CACHE.update(sig=sig, events=out, path=str(p), off=off + end, head=head[:min(len(head), off + end)])
     return out
 
 
+@functools.lru_cache(maxsize=65536)
+def _parse_ts(ts: str) -> datetime:
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
 def ev_ts(ev: dict) -> datetime:
-    return datetime.fromisoformat(ev["ts"].replace("Z", "+00:00"))
+    return _parse_ts(ev["ts"])  # parsed once per distinct timestamp
 
 
 def ev_sid(ev: dict) -> str:
