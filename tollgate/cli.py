@@ -335,9 +335,40 @@ def seed_fleet() -> int:
     return 0
 
 
+USAGE = {  # one line per subcommand; `tollgate <cmd> --help` prints its line and exits before doing anything
+    "up": "up [--port 8080] [--policy F] [--scripted-model]   gateway + /console + /edge (+ feed server if `feed:` is set)",
+    "serve": "serve [--port 8080] [--policy F] [--scripted-model]   gateway only",
+    "agent": "agent [--role R] [--model M] [--base URL] [--scripted] [TASK]   demo agent (--scripted: in-process)",
+    "replay": "replay github|supabase   attack trace, taint off then on (in-process)",
+    "test": "test [--eval-only] [PYTEST ARGS]   test suite + eval report",
+    "perf": "perf [--n 200]   latency per stage (writes audit/perf.json)",
+    "approve": "approve ID [--port P]   approve a parked call",
+    "deny": "deny ID [--port P]   deny a parked call",
+    "key": "key issue --role R [--key-id K] [--port P]   hand-issued key (dev; needs allow_unenrolled_keys: true)",
+    "enroll-token": "enroll-token   one-time token to enroll a laptop",
+    "enroll": "enroll TOKEN --owner O --device D   enroll this laptop",
+    "connect": "connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--port P] [--host H] [--policy F]"
+               " [--write [--dir PATH]] [--fast]   mint a key per agent launch + that agent's config",
+    "hook": "hook AGENT [EVENT] [--url http://127.0.0.1:8080]   hook shim (agent JSON on stdin)",
+    "open": "open [edge|console] [TRACE_ID] [--port N]   open a UI or one step's details",
+    "seed-fleet": "seed-fleet [--policy F]   demo fleet traffic through the real gateway",
+    "feed": "feed serve [--port 8090] [--dir feed] | publish --add 'id=..,pattern=..,action=block,tags=A;B' | pull [--url U]",
+}
+
+
+def usage(cmd: str | None = None) -> str:
+    if cmd in USAGE:
+        return "usage: tollgate " + USAGE[cmd]
+    return "usage: tollgate <command> [options]   (tollgate <command> --help)\n" + "\n".join(
+        "  " + u for u in dict.fromkeys(USAGE.values()))
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252 and mangle "…" in redactions
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:  # before anything runs: `up --help` must not start a server
+        print(usage(cmd))
+        return 0
     if cmd == "test":
         args = sys.argv[2:]
         rc = 0
@@ -383,11 +414,7 @@ def main() -> int:
         return seed_fleet()
     if cmd == "feed":
         return feed(sys.argv[2] if len(sys.argv) > 2 else "")
-    print("usage: tollgate {up [--port P] [--policy F] [--scripted-model]|serve [--port P] [--policy F] [--scripted-model]"
-          "|agent [--role R] [--model M] [--base URL] [--scripted] TASK"
-          "|approve ID|deny ID [--port P]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]|feed serve|publish|pull"
-          "|enroll-token|enroll TOKEN --owner O --device D|connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--write]|hook AGENT EVENT|open [edge|console] [TRACE_ID] [--port N]|seed-fleet}",
-          file=sys.stderr)
+    print(usage(), file=sys.stderr)
     return 2
 
 
