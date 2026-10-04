@@ -1,7 +1,10 @@
 [project]
 name = "tollgate"
-version = "0.1.0"
+version = "1.0.0"
 description = "AI control layer: per-role virtual MCPs, session taint, local content inspection"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Andrii Mazurchuk" }]
 requires-python = ">=3.13"
 dependencies = [
     "fastmcp==4.0.10",
@@ -13,6 +16,10 @@ dependencies = [
     "pyyaml>=6",
     "tokenizers>=0.23.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/andrii-mazurchuk/tollgate"
+Repository = "https://github.com/andrii-mazurchuk/tollgate"
 
 [project.scripts]
 tollgate = "tollgate.cli:main"
