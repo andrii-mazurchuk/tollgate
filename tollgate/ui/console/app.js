@@ -194,10 +194,11 @@ async function renderPeers(idArg) {
   const list = h("section", { class: "card pane", "data-keep": "plist" }, tbl([null, "148px", "104px", "68px", "64px"],
     ["Laptop", "Roles", "Seen", ["Sessions", "r"], ["Blocked", "r"]],
     d.peers.map(p => {
-      const roles = p.roles.map(roleName).join(", ") || "None";
+      const rejected = p.id === "unenrolled" && !d.allow_unenrolled_keys;
+      const roles = rejected ? "Rejected — allow_unenrolled_keys is off" : p.roles.map(roleName).join(", ") || "None";
       return h("tr", linkRow(() => { location.hash = peerHref(p.id); }, p.id === id ? "sel" : "", { "aria-selected": String(p.id === id) }),
         h("td", { title: `${p.device} · ${p.owner} (${p.id})` }, h("div", { class: "two" }, h("span", { class: "ell" }, p.device), h("span", { class: "ell muted small" }, p.owner))),
-        h("td", { class: p.roles.length ? "" : "muted", title: roles }, roles),
+        h("td", { class: rejected ? "err" : p.roles.length ? "" : "muted", title: roles }, roles),
         h("td", {}, seen(p)),
         h("td", { class: "num r" }, n(p.sessions)),
         h("td", { class: "num r" }, n(p.blocked)));
@@ -208,10 +209,10 @@ async function renderPeers(idArg) {
   try { p = await api("/peers/" + enc(id)); } catch (err) {
     return right.replaceChildren(h("div", { class: "empty" }, "Could not load this laptop. ", String(err.message)));
   }
-  drawPeer(right, p, d.roles);
+  drawPeer(right, p, d.roles, d.allow_unenrolled_keys);
 }
 
-function drawPeer(box, p, roles) {
+function drawPeer(box, p, roles, allowUnenrolled = true) {
   const legacy = /unenrolled/i.test(`${p.id} ${p.device}`);
   const strip = h("div", { class: "strip" }, [
     ["Owner", p.owner || "–"], ["Device", p.device], ["Enrolled", p.enrolled_at ? time(p.enrolled_at) : "–"], ["Last seen", p.last_seen ? ago(p.last_seen) : "Never"],
@@ -241,7 +242,7 @@ function drawPeer(box, p, roles) {
   const body = h("div", { class: "body", "data-keep": "pdetail" },
     h("div", { class: "sec" }, h("div", { class: "sec-h" }, h("h3", {}, "Roles this laptop may run")),
       checks,
-      locked ? h("p", { class: "muted small", style: "margin:8px 0 0" }, p.revoked ? "This laptop is revoked: it cannot mint keys for any role." : "Legacy keys with no laptop. Enroll the laptop to manage its roles.")
+      locked ? h("p", { class: "muted small", style: "margin:8px 0 0" }, p.revoked ? "This laptop is revoked: it cannot mint keys for any role." : allowUnenrolled ? "Legacy keys with no laptop. Enroll the laptop to manage its roles." : "Rejected — allow_unenrolled_keys is off: keys with no laptop are refused at every door. Enroll the laptop instead.")
         : h("div", { class: "save-row adm" }, saveBtn, msg, h("span", { class: "muted small", style: "margin-left:auto" }, "Removing a role ends this laptop's keys for it."))),
     h("div", { class: "sec" }, h("div", { class: "sec-h" }, h("h3", {}, `Sessions (${n(sessions.length)})`),
       sessions.length ? h("a", { class: "small", href: "#/sessions", onclick: () => { ui.f = { peer: p.id }; } }, "Show in Sessions") : null),

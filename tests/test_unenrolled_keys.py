@@ -1,9 +1,9 @@
 """Hand-issued keys (no peer) are refused at every door unless the policy sets allow_unenrolled_keys: true."""
 import contextlib
 
-import httpx2
 import pytest
 
+from tests._util import gateway
 from tollgate.gateway import keys
 
 pytestmark = pytest.mark.track_a
@@ -16,13 +16,10 @@ HOOK = {"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"fi
 
 @contextlib.asynccontextmanager
 async def _app(monkeypatch, flag):
-    monkeypatch.setenv("TOLLGATE_UPSTREAM", "scripted")
-    from tollgate.gateway import build_app
     from tollgate.gateway.policy import PolicyHolder, load_policy
-    app = build_app(PolicyHolder({**load_policy().data, "allow_unenrolled_keys": flag}))
-    async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1") as c:
-            yield c
+    async with gateway(monkeypatch, PolicyHolder({**load_policy().data, "allow_unenrolled_keys": flag}),
+                       base="http://127.0.0.1") as (c, _, _):
+        yield c
 
 
 async def _codes(c) -> list[int]:
@@ -49,3 +46,12 @@ def test_production_default_is_off_and_flag_is_validated():
     assert "allow_unenrolled_keys" not in base  # shipped policy: off
     with pytest.raises(ValueError, match="allow_unenrolled_keys"):
         policy.validate({**base, "allow_unenrolled_keys": "yes"})
+
+
+@pytest.mark.parametrize("flag", [False, True])
+async def test_console_peers_reports_the_flag(monkeypatch, flag):
+    """The Peers page labels the Unenrolled row "Rejected" from this field."""
+    from tests.conftest import ADMIN
+    async with _app(monkeypatch, flag) as c:
+        r = await c.get("/console/api/peers", headers=ADMIN)
+        assert r.status_code == 200 and r.json()["allow_unenrolled_keys"] is flag

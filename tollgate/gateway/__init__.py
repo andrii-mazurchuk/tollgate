@@ -1,14 +1,13 @@
 import asyncio
 import contextlib
 import hashlib
-import json
-import time
-from datetime import datetime, timezone
 import importlib
+import json
 import logging
 import os
 import posixpath
 import re
+import time
 from pathlib import PurePosixPath
 from urllib.parse import unquote
 
@@ -28,25 +27,15 @@ from starlette.routing import Mount, Route
 
 from tollgate import explain
 from tollgate.content import scan
-from tollgate.feed import Puller
 from tollgate.contract import SEVERITY, AuditEvent, Reason, Verdict
+from tollgate.feed import Puller
 from tollgate.gateway import audit, keys, local_text, model_door, taint, trace
 from tollgate.gateway.approvals import Approvals, admin_ok, admin_request
 from tollgate.gateway.pins import Pins
 from tollgate.gateway.policy import PolicyHolder
+from tollgate.util import now_z
 
 log = logging.getLogger("tollgate.gateway")
-
-
-def build_gateway(github) -> FastMCP:
-    """Tollgate gateway: proxies the github MCP under dotted tool names."""
-    gw = FastMCP("tollgate")
-    gw.mount(create_proxy(github), tool_names={
-        "issues_read": "github.issues.read",
-        "repo_read": "github.repo.read",
-        "pr_create": "github.pr.create",
-    })
-    return gw
 
 
 class Dotted(Namespace):
@@ -144,7 +133,7 @@ class RoleGate(Middleware):
         args_json = json.dumps(args, ensure_ascii=False)  # not ASCII-escaped: Polish rules miss escaped text
         data = self.policy.data
         ev = AuditEvent(
-            ts=datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            ts=now_z("milliseconds"),
             role=self.role, key_id=key_id, door="tool", verdict="allow", scan_point="tool_args",
             source=name.partition(".")[0], tool=name,
             content_sha256=hashlib.sha256(args_json.encode()).hexdigest(),
@@ -416,9 +405,12 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
         if not admin_ok(request.headers.get("authorization")):
             return JSONResponse({"error": "admin token required (TOLLGATE_ADMIN_TOKEN)"}, 401)
         try:
-            decision = (await request.json()).get("decision")
+            body = await request.json()
         except ValueError:
-            decision = None
+            body = {}
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "body must be a JSON object"}, 400)
+        decision = body.get("decision")
         item = approvals.decide(request.path_params["id"], decision)
         if item is None:
             return JSONResponse({"error": "unknown or already decided id, or decision not approve|deny"}, 404)

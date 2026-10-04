@@ -8,6 +8,7 @@ from pathlib import Path
 import httpx2
 import pytest
 
+from tests._util import gateway, policy_copy
 from tests.conftest import ADMIN
 
 WRITE = {**ADMIN, "Content-Type": "application/json"}  # writes need the admin token (or a session) and JSON
@@ -72,14 +73,8 @@ def test_mint_refusals_and_revocation():
 
 @contextlib.asynccontextmanager
 async def _app(monkeypatch):
-    monkeypatch.setenv("TOLLGATE_UPSTREAM", "scripted")
-    from tollgate.gateway import build_app
-    from tollgate.gateway.policy import load_policy
-
-    app = build_app(load_policy())
-    async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080", headers=WRITE) as c:
-            yield c, app
+    async with gateway(monkeypatch, headers=WRITE) as (c, app, _):
+        yield c, app
 
 
 LIST = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
@@ -90,7 +85,8 @@ async def test_revoked_peer_gets_401_over_http(monkeypatch):
         pid = _peer("role-2")
         k = peers.mint(pid, "role-2", ROLES)
         h = {"Authorization": f"Bearer {k}", "Accept": "application/json, text/event-stream"}
-        assert (await c.post("/mcp/role-2/", headers=h, json=LIST)).status_code != 401
+        r = await c.post("/mcp/role-2/", headers=h, json=LIST)
+        assert r.status_code == 400 and "Missing session ID" in r.text  # key accepted; MCP wants initialize first
         chat = {"model": "qwen3:4b", "messages": [{"role": "user", "content": "Hi"}]}
         assert (await c.post("/v1/chat/completions", headers=h, json=chat)).status_code == 200
         assert (await c.post(f"/console/api/peers/{pid}/revoke")).json()["revoked"]
@@ -186,17 +182,8 @@ def test_peer_online_window():
 @contextlib.asynccontextmanager
 async def _policy_app(monkeypatch, tmp_path):
     """Gateway on a tmp copy of policy.yaml: a profile switch must never overwrite the repo's file."""
-    monkeypatch.setenv("TOLLGATE_UPSTREAM", "scripted")
-    from tollgate.gateway import build_app
-    from tollgate.gateway.policy import DEFAULT_PATH, load_policy
-
-    path = tmp_path / "policy.yaml"
-    path.write_bytes(DEFAULT_PATH.read_bytes())
-    holder = load_policy(path)
-    app = build_app(holder)
-    async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080", headers=WRITE) as c:
-            yield c, app, holder
+    async with gateway(monkeypatch, policy_copy(tmp_path), headers=WRITE) as t:
+        yield t
 
 
 async def test_policy_view_shape_and_matrix(monkeypatch, tmp_path):

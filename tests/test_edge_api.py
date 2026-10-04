@@ -5,22 +5,16 @@ import contextlib
 import httpx2
 import pytest
 
+from tests._util import gateway
 from tollgate.contract import STAGES
 
 pytestmark = pytest.mark.track_a
 
 
 @contextlib.asynccontextmanager
-async def _edge(monkeypatch):  # not a fixture: lifespan enter/exit must run in the same task
-    monkeypatch.setenv("TOLLGATE_T2", "off")
-    monkeypatch.setenv("TOLLGATE_UPSTREAM", "scripted")
-    from tollgate.gateway import build_app
-    from tollgate.gateway.policy import load_policy
-
-    app = build_app(load_policy())
-    async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080") as c:
-            yield c, app
+async def _edge(monkeypatch):
+    async with gateway(monkeypatch, t2_off=True) as (c, app, _):
+        yield c, app
 
 
 async def test_attack_then_views(monkeypatch):

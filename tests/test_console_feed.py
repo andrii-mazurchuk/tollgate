@@ -9,12 +9,13 @@ from pathlib import Path
 import httpx2
 import pytest
 
+from tests._util import gateway
 from tests.conftest import ADMIN
 
 WRITE = {**ADMIN, "Content-Type": "application/json"}  # writes need the admin token (or a session) and JSON
 import yaml
 
-from tollgate import console3
+from tollgate import console_feed
 
 pytestmark = pytest.mark.track_b
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,9 +24,6 @@ ROOT = Path(__file__).resolve().parents[1]
 @contextlib.asynccontextmanager
 async def _app(monkeypatch, tmp_path, feed: bool):
     """Gateway on a tmp policy copy; with feed=True it has `feed:` and a tmp feed source + signatures file."""
-    monkeypatch.setenv("TOLLGATE_UPSTREAM", "scripted")
-    monkeypatch.setenv("TOLLGATE_T2", "off")
-    from tollgate.gateway import build_app
     from tollgate.gateway.policy import DEFAULT_PATH, load_policy
 
     data = yaml.safe_load(DEFAULT_PATH.read_text(encoding="utf-8"))
@@ -37,10 +35,8 @@ async def _app(monkeypatch, tmp_path, feed: bool):
         data["feed"] = {"url": "http://127.0.0.1:9/bundle.json", "interval_s": 3600, "dir": str(tmp_path / "feed")}
     path = tmp_path / "policy.yaml"
     path.write_text(yaml.safe_dump(data), encoding="utf-8")
-    app = build_app(load_policy(path))
-    async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080", headers=WRITE) as c:
-            yield c, app
+    async with gateway(monkeypatch, load_policy(path), headers=WRITE, t2_off=True) as (c, app, _):
+        yield c, app
 
 
 async def test_feed_view_without_a_feed_refuses_publish(monkeypatch, tmp_path):
@@ -124,16 +120,17 @@ async def test_selftest_reads_eval_from_the_audit_dir(monkeypatch, tmp_path):
 
 async def test_selftest_run_starts_one_eval_subprocess(monkeypatch, tmp_path):
     out = {"ran_at": "2026-10-04T02:00:00Z", "cases_run": 1, "overall": {}, "sources": {}, "controls": {}}
-    monkeypatch.setattr(console3, "EVAL_ARGV", lambda p: [sys.executable, "-c",
+    monkeypatch.setattr(console_feed, "EVAL_ARGV", lambda p: [sys.executable, "-c",
                                                           f"import json,pathlib; pathlib.Path({str(p)!r}).write_text({json.dumps(json.dumps(out))})"])
     async with _app(monkeypatch, tmp_path, feed=False) as (c, _):
         r = await c.post("/console/api/selftest/run")
         assert r.status_code == 202 and r.json()["run"]["running"]
         assert (await c.post("/console/api/selftest/run")).status_code == 409
-        for _ in range(100):
-            if not console3.RUN["running"]:
+        for _ in range(400):  # up to 20 s: a cold interpreter start on a busy CI box
+            if not console_feed.RUN["running"]:
                 break
             await asyncio.sleep(0.05)
+        assert not console_feed.RUN["running"], "eval subprocess did not finish within 20 s"
         s = (await c.get("/console/api/selftest")).json()
         assert s["run"]["running"] is False and s["run"]["error"] is None and s["eval"]["ran_at"] == out["ran_at"]
 

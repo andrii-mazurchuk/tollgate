@@ -6,7 +6,6 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
@@ -14,11 +13,12 @@ from starlette.staticfiles import StaticFiles
 from tollgate import accounts, edge, explain, telemetry
 from tollgate.gateway import model_door, peers
 from tollgate.gateway.approvals import admin_ok
+from tollgate.util import iso_z, valid_range
 
 UI = Path(__file__).resolve().parent / "ui" / "console"
 ONLINE = timedelta(minutes=5)
 ATTACK = ("inj.", "t2.", "sig.", "taint.")
-UNENROLLED = "unenrolled"  # the id of the row grouping legacy keys (no peer)
+UNENROLLED = telemetry.UNENROLLED  # the id of the row grouping legacy keys (no peer)
 
 
 def is_attack(e: dict) -> bool:
@@ -26,8 +26,7 @@ def is_attack(e: dict) -> bool:
     return e.get("verdict") == "block" and any((r.get("rule") or "").startswith(ATTACK) for r in e.get("reasons") or [])
 
 
-def pid(e: dict) -> str:
-    return peers.peer_of(e.get("key_id") or "") or UNENROLLED
+pid = telemetry.pid
 
 
 def _with_peer(x: dict, key_id: str, reg: dict) -> dict:
@@ -60,8 +59,8 @@ def peer_rows(events: list[dict], reg: dict, now: datetime | None = None) -> lis
                     "roles": p.get("roles") if p else sorted({e.get("role") for e in evs if e.get("role")}),
                     "enrolled_at": p.get("enrolled_at"), "minted": p.get("minted"),
                     "revoked": bool(p.get("revoked_at")), "revoked_at": p.get("revoked_at"),
-                    "online": bool(seen and now - edge._ts({"ts": seen}) < ONLINE), "last_seen": seen,
-                    "sessions": len({edge._sid(e) for e in evs}), "actions": len(evs),
+                    "online": bool(seen and now - edge.ev_ts({"ts": seen}) < ONLINE), "last_seen": seen,
+                    "sessions": len({edge.ev_sid(e) for e in evs}), "actions": len(evs),
                     "blocked": sum(e.get("verdict") == "block" for e in evs)})
     return sorted(out, key=lambda r: (r["id"] == UNENROLLED, r["revoked"], r["device"] or ""))
 
@@ -74,23 +73,23 @@ def overview(events: list[dict], rng: str, reg: dict, now: datetime | None = Non
     now = now or datetime.now(timezone.utc)
     ov = edge.overview(events, rng, None, now)
     start, prev = edge.window(rng, now)
-    cur = edge._in(events, start, now)
-    old = edge._in(events, *prev) if prev else None
-    online = sum(edge._ts({"ts": t}) > now - ONLINE for k, t in _online(events).items() if k != UNENROLLED)
+    cur = edge.in_window(events, start, now)
+    old = edge.in_window(events, *prev) if prev else None
+    online = sum(edge.ev_ts({"ts": t}) > now - ONLINE for k, t in _online(events).items() if k != UNENROLLED)
 
     def kpi(f):
         return {"value": f(cur), "prev": f(old) if old is not None else None}
     blocked = [e for e in cur if e.get("verdict") == "block"]
     reasons = Counter(explain.check_name((explain.main_reason(e) or {}).get("rule")) for e in blocked)
     roles = Counter(e.get("role") for e in blocked)
-    attacks = sorted((e for e in cur if is_attack(e)), key=edge._ts, reverse=True)[:50]
+    attacks = sorted((e for e in cur if is_attack(e)), key=edge.ev_ts, reverse=True)[:50]
     return {"range": rng, "start": ov["start"], "now": ov["now"], "series": ov["series"], "bucket_s": ov["bucket_s"],
             "kpis": {"checked": ov["kpis"]["checked"], "blocked": ov["kpis"]["blocked"],
                      "attacks": kpi(lambda evs: sum(map(is_attack, evs))),
                      "peers_online": {"value": online, "prev": None}},
             "by_reason": [{"label": r, "count": n} for r, n in reasons.most_common()],
             "by_role": [{"role": r, "agent": explain.AGENTS.get(r, r), "count": n} for r, n in roles.most_common()],
-            "attacks": [_with_peer(edge._item(e), e.get("key_id"), reg) for e in attacks],
+            "attacks": [_with_peer(edge.ev_item(e), e.get("key_id"), reg) for e in attacks],
             "latency": telemetry.latency(cur)}
 
 
@@ -99,7 +98,7 @@ def health(events, app, policy) -> dict:
     st = app.state
     h = edge.health(events, policy, st.pins, st.feed, None)
     if h["level"] == "alert" and h.get("trace_id"):
-        cut = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+        cut = iso_z(datetime.now(timezone.utc) - timedelta(hours=1))
         n = sum(is_attack(e) for e in events if e["ts"] > cut)
         if n:
             h["message"] = f"{n} attack{'s' * (n != 1)} stopped"
@@ -135,7 +134,7 @@ def routes(policy) -> list:
 
     async def get_overview(request):
         r = request.query_params.get("range", "today")
-        r = r if r in ("15m", "1h", "today", "all") else "today"
+        r = valid_range(r)
         return JSONResponse(overview(edge.load_events(), r, peers.load()))
 
     async def list_peers(request):
@@ -150,7 +149,8 @@ def routes(policy) -> list:
                         "servers": [{"name": s["name"], "allowed": len(s["allowed"]), "hidden": len(s["denied"])}
                                     for s in a["servers"]],
                         "actions": len(ev_r), "blocked": sum(e.get("verdict") == "block" for e in ev_r)})
-        return JSONResponse({"roles": out, "peers": rows})
+        from tollgate.gateway import keys
+        return JSONResponse({"roles": out, "peers": rows, "allow_unenrolled_keys": keys.unenrolled_ok(policy.data)})
 
     async def get_peer(request):
         i, evs, reg = request.path_params["id"], edge.load_events(), peers.load()
@@ -159,7 +159,7 @@ def routes(policy) -> list:
             return JSONResponse({"error": "unknown peer"}, 404)
         mine = [e for e in evs if pid(e) == i]
         ks: dict[str, dict] = {}
-        for e in sorted(mine, key=edge._ts):
+        for e in sorted(mine, key=edge.ev_ts):
             k = ks.setdefault(e.get("key_id"), {"key_id": e.get("key_id"), "role": e.get("role"), "first_ts": e["ts"],
                                                 "n": 0})
             k.update(last_ts=e["ts"], n=k["n"] + 1)
@@ -243,6 +243,7 @@ def routes(policy) -> list:
 
     async def set_access(request):
         import yaml
+
         from tollgate.gateway.policy import validate
         try:
             body = await request.json()
@@ -278,8 +279,8 @@ def routes(policy) -> list:
            Route("/enroll-token", admin(enroll_token), methods=["POST"]),
            Route("/roles/{role}", admin(get_role)),
            Route("/sessions", admin(list_sessions)), Route("/sessions/{id}", admin(one_session))]
-    from tollgate import console3  # revision 3: Threat feed + Self-test
-    api += console3.routes(policy, admin)
+    from tollgate import console_feed  # revision 3: Threat feed + Self-test
+    api += console_feed.routes(policy, admin)
     from tollgate import console_try  # Try it: dry-run content check
     api += console_try.routes(policy, admin)
     from tollgate import console_map  # Overview access map
@@ -330,6 +331,7 @@ def _get(d: dict, path: tuple, default=None):
 
 def _profile(name: str) -> dict:
     import yaml
+
     from tollgate.gateway.policy import DEFAULT_PATH
     return yaml.safe_load((DEFAULT_PATH.parent / "policies" / f"{name}.yaml").read_text(encoding="utf-8"))
 
@@ -430,6 +432,7 @@ def replace_policy(policy, raw: bytes, note: str | None = None) -> str:
     """Backs up the active file, puts `raw` in its place (atomic replace), reloads. Returns the backup path."""
     import os
     import shutil
+
     from tollgate.gateway.policy import history_path
     backup = (history_path().parent / "policy-backups"
               / f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{policy.version}.yaml")
@@ -466,6 +469,7 @@ def edit_access(data: dict, tools: dict, changes: list) -> tuple[dict, list[str]
     other key (constrain, approval, ...) is kept. Returns (new data, one plain sentence per real change)."""
     import copy
     from types import SimpleNamespace
+
     from tollgate.gateway import tool_allowed
     cat, new = _catalog(tools), copy.deepcopy(data)
     roles = new.get("roles") or {}

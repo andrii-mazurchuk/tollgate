@@ -4,10 +4,10 @@ import json
 import os
 from pathlib import Path
 
-import httpx2
 import pytest
 import yaml
 
+from tests._util import gateway
 from tollgate.gateway import keys, peers, taint
 
 pytestmark = pytest.mark.track_a
@@ -17,14 +17,9 @@ AWS = "AKIAIOSFODNN7EXAMPLE"
 
 @contextlib.asynccontextmanager
 async def _app(monkeypatch, policy_path=None):
-    monkeypatch.setenv("TOLLGATE_UPSTREAM", "scripted")
-    from tollgate.gateway import build_app
     from tollgate.gateway.policy import load_policy
-
-    app = build_app(load_policy(policy_path) if policy_path else load_policy())
-    async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080") as c:
-            yield c
+    async with gateway(monkeypatch, load_policy(policy_path) if policy_path else None) as (c, _, _):
+        yield c
 
 
 def _key(role="role-2"):
@@ -72,6 +67,7 @@ async def test_github_mcp_style_attack_through_hooks_only(monkeypatch):
         assert ev["trace_id"] in [x["trace_id"] for x in d["timeline"]]
         # `tollgate open TRACE_ID` resolves the session from the audit log and opens the same URL
         import webbrowser
+
         from tollgate import cli
         opened = []
         monkeypatch.setattr(webbrowser, "open", opened.append)
@@ -144,7 +140,7 @@ async def test_result_masked_and_prompt_injection(monkeypatch):
 
 
 async def test_role_deny_list_and_bad_keys(monkeypatch, tmp_path):
-    p = yaml.safe_load(Path("policy.yaml").read_text(encoding="utf-8"))
+    p = yaml.safe_load((Path(__file__).resolve().parents[1] / "policy.yaml").read_text(encoding="utf-8"))
     p["roles"]["role-1"]["builtins"] = {"deny": ["WebSearch"]}
     (tmp_path / "policy.yaml").write_text(yaml.safe_dump(p), encoding="utf-8")
     async with _app(monkeypatch, tmp_path / "policy.yaml") as c:
@@ -165,7 +161,7 @@ async def test_role_deny_list_and_bad_keys(monkeypatch, tmp_path):
 
 def test_validate_builtins():
     from tollgate.gateway.policy import validate
-    base = yaml.safe_load(Path("policy.yaml").read_text(encoding="utf-8"))
+    base = yaml.safe_load((Path(__file__).resolve().parents[1] / "policy.yaml").read_text(encoding="utf-8"))
     for bad in ({"builtins": {"Read": ["secret_stuff"]}}, {"builtins": {"Bash": {"sink": ["git push*"]}}},
                 {"builtins": {"Bash": {"public_sink": "git push*"}}}):
         with pytest.raises(ValueError):

@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx2
 import pytest
 
+from tests._util import gateway
 from tests.conftest import ADMIN
 
 WRITE = {**ADMIN, "Content-Type": "application/json"}  # writes need the admin token (or a session) and JSON
@@ -15,14 +16,8 @@ pytestmark = pytest.mark.track_a
 
 @contextlib.asynccontextmanager
 async def _app(monkeypatch):
-    monkeypatch.setenv("TOLLGATE_UPSTREAM", "scripted")
-    from tollgate.gateway import build_app
-    from tollgate.gateway.policy import load_policy
-
-    app = build_app(load_policy())
-    async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080", headers=WRITE) as c:
-            yield c, app
+    async with gateway(monkeypatch, headers=WRITE) as (c, app, _):
+        yield c, app
 
 
 async def _try(c, role, point, text):

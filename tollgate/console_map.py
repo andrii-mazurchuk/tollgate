@@ -9,6 +9,7 @@ from starlette.routing import Route
 
 from tollgate import console, edge, explain
 from tollgate.gateway import peers
+from tollgate.util import iso_z, valid_range
 
 SERVER_LABEL = {"builtins": "Agent built-ins", "model": "Model"}
 TOP_SESSIONS = 8
@@ -24,10 +25,6 @@ def server_of(e: dict) -> str:
     return e.get("source") or tool.partition(".")[0] or "unknown"
 
 
-def _peer_id(e: dict) -> str:
-    return peers.peer_of(e.get("key_id") or e.get("session_id") or "") or console.UNENROLLED
-
-
 def _bump(row: dict, e: dict) -> dict:
     row["calls"] += 1
     row["last_ts"] = max(row.get("last_ts") or "", e["ts"])
@@ -35,7 +32,7 @@ def _bump(row: dict, e: dict) -> dict:
         row["blocked"] += 1
         if e["ts"] >= (row.get("_bts") or ""):
             row["_bts"] = e["ts"]
-            row["last_blocked"] = {"session_id": edge._sid(e), "trace_id": edge._tid(e), "ts": e["ts"]}
+            row["last_blocked"] = {"session_id": edge.ev_sid(e), "trace_id": edge.ev_tid(e), "ts": e["ts"]}
     return row
 
 
@@ -50,14 +47,14 @@ def _clean(rows) -> list[dict]:
 def build(events: list[dict], rng: str, reg: dict, roles: list[str], now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     start, _ = edge.window(rng, now)
-    cur = edge._in(events, start, now)
+    cur = edge.in_window(events, start, now)
     state = {p["id"]: p for p in console.peer_rows(events, reg, now)}  # online/revoked over all time, not the range
     P = {i: _new(id=i, label=p["label"], online=p["online"], revoked=p["revoked"]) for i, p in state.items()
          if i != console.UNENROLLED}
     R = {r: _new(role=r, agent=explain.AGENTS.get(r, r)) for r in roles}
     S, L, T, sess = {}, {}, {}, {}
-    for e in sorted(cur, key=edge._ts):
-        p, r, s = _peer_id(e), e.get("role") or "unknown", server_of(e)
+    for e in sorted(cur, key=edge.ev_ts):
+        p, r, s = console.pid(e), e.get("role") or "unknown", server_of(e)
         if p not in P:
             P[p] = _new(id=p, label=peers.label(None if p == console.UNENROLLED else p, reg),
                         online=False, revoked=False)
@@ -67,7 +64,7 @@ def build(events: list[dict], rng: str, reg: dict, roles: list[str], now: dateti
                     L.setdefault(f"r:{r}>s:{s}", _new(**{"from": f"r:{r}", "to": f"s:{s}"})),
                     T.setdefault((p, r, s), _new(peer=p, role=r, server=s))):
             _bump(row, e)
-        x = sess.setdefault(edge._sid(e), {"id": edge._sid(e), "role": r, "agent": explain.AGENTS.get(r, r),
+        x = sess.setdefault(edge.ev_sid(e), {"id": edge.ev_sid(e), "role": r, "agent": explain.AGENTS.get(r, r),
                                             "peer": p, "peer_label": P[p]["label"], "n": 0, "blocked": 0,
                                             "nodes": set()})
         x.update(last_ts=e["ts"], n=x["n"] + 1, blocked=x["blocked"] + (e.get("verdict") == "block"))
@@ -79,7 +76,7 @@ def build(events: list[dict], rng: str, reg: dict, roles: list[str], now: dateti
             lst = by_node.setdefault(k, [])
             if len(lst) < TOP_SESSIONS:
                 lst.append({k2: v for k2, v in x.items() if k2 != "nodes"})
-    return {"range": rng, "now": now.isoformat().replace("+00:00", "Z"),
+    return {"range": rng, "now": iso_z(now),
             "peers": _clean(sorted(P.values(), key=lambda x: (x["id"] == console.UNENROLLED, -x["calls"], x["label"]))),
             "roles": _clean(R.values()),
             "servers": _clean(sorted(S.values(), key=lambda x: -x["calls"])),
@@ -89,6 +86,6 @@ def build(events: list[dict], rng: str, reg: dict, roles: list[str], now: dateti
 def routes(policy, admin) -> list:
     async def get_map(request: Request):
         r = request.query_params.get("range", "today")
-        r = r if r in ("15m", "1h", "today", "all") else "today"
+        r = valid_range(r)
         return JSONResponse(build(edge.load_events(), r, peers.load(), list(policy.data.get("roles") or {})))
     return [Route("/map", admin(get_map))]

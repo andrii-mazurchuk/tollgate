@@ -35,7 +35,7 @@ class AuditEvent:
     ts: str                           # ISO 8601 UTC
     role: str
     key_id: str
-    door: Literal["tool", "model"]
+    door: Literal["tool", "model", "hook"]
     verdict: Action
     reasons: list[Reason] = field(default_factory=list)
     scan_point: ScanPoint | None = None

@@ -5,17 +5,18 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+
+from tollgate.util import now_z
 
 DEFAULT_PATH = Path(__file__).resolve().parents[2] / "policy.yaml"
 log = logging.getLogger("tollgate.policy")
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return now_z("seconds")
 
 
 class PolicyHolder:

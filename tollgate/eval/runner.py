@@ -6,6 +6,7 @@ and every reported metric comes from the held-out 30. Tier 2 scores are cached i
 import copy
 import hashlib
 import json
+import os
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -13,10 +14,11 @@ from pathlib import Path
 from tollgate.content import scan, tier2
 from tollgate.content.normalise import normalise
 from tollgate.eval.corpus import CORPUS, load
+from tollgate.util import now_z
 
 WEIGHTS = {"pii": 3, "secrets": 3, "injection": 3, "signatures": 1, "obfuscation": 1}
 ROOT = CORPUS.parents[1]
-CACHE = ROOT / "audit" / "t2_cache.json"
+CACHE = ROOT / "audit" / "t2_cache.json"  # TOLLGATE_T2_CACHE overrides (tests point it at a tmp file)
 PROFILES = {"strict": 0.10, "balanced": 0.05, "lenient": 0.02}  # benign FPR ceiling when choosing tier 2 `high`
 MIN_HELD_OUT = 10  # below this many held-out cases a control's posture uses its full-corpus pass rate
 NEVER = 1.01  # a `high` tier 2 can never reach
@@ -86,13 +88,14 @@ def run(policy: dict, cases: list[dict] | None = None) -> dict:
     content = _content(policy)
     cases = load() if cases is None else cases
     inj = content.get("injection")
-    tier2.CACHE = json.loads(CACHE.read_text()) if CACHE.exists() else {}
+    cache = Path(os.environ.get("TOLLGATE_T2_CACHE") or CACHE)
+    tier2.CACHE = json.loads(cache.read_text()) if cache.exists() else {}
     try:
         return _run(content, cases, inj if isinstance(inj, dict) and "high" in inj else None)
     finally:
         if tier2.CACHE:
-            CACHE.parent.mkdir(exist_ok=True)
-            CACHE.write_text(json.dumps(tier2.CACHE))
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps(tier2.CACHE))
         tier2.CACHE = None
 
 
@@ -207,16 +210,15 @@ def report(res: dict) -> str:
 
 
 def main(policy_path: str = "policy.yaml", out: str = "audit/eval.json") -> dict:
-    import yaml
-
     import time
-    from datetime import datetime, timezone
+
+    import yaml
 
     with open(ROOT / policy_path, encoding="utf-8") as fh:
         policy = yaml.safe_load(fh)
     t0 = time.perf_counter()
     res = run(policy)
-    res.update(ran_at=datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+    res.update(ran_at=now_z("seconds"),
                duration_s=round(time.perf_counter() - t0, 1), profile=policy.get("mode"))
     print(report(res))
     p = ROOT / out
@@ -228,10 +230,9 @@ def main(policy_path: str = "policy.yaml", out: str = "audit/eval.json") -> dict
 class Tally:
     """pytest plugin for `tollgate test`: writes the suite's counts to audit/tests.json for the console Self-test."""
     def pytest_terminal_summary(self, terminalreporter, exitstatus):
-        from datetime import datetime, timezone
         st = terminalreporter.stats
         out = {k: len(st.get(k, [])) for k in ("passed", "failed", "error", "skipped", "xfailed", "xpassed", "deselected")}
-        out.update(exit_code=int(exitstatus), ran_at=datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"))
+        out.update(exit_code=int(exitstatus), ran_at=now_z("seconds"))
         p = ROOT / "audit" / "tests.json"
         p.parent.mkdir(exist_ok=True)
         p.write_text(json.dumps(out, indent=1), encoding="utf-8")

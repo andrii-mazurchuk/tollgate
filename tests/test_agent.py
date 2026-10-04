@@ -61,9 +61,10 @@ def _ollama_up() -> bool:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not _ollama_up(), reason="Ollama not reachable on 127.0.0.1:11434")
 async def test_real_ollama_agent_never_leaks(tmp_path, monkeypatch):
     """Real LLM: whatever it decides, no PR may carry the payroll secrets while taint is on."""
+    if not _ollama_up():  # probed at run time, not import: collection never makes an HTTP call
+        pytest.skip("Ollama not reachable on 127.0.0.1:11434")
     from mocks.github import PRS
     from tollgate.gateway.policy import load_policy
 

@@ -1,6 +1,6 @@
 import pytest
 
-pytestmark = [pytest.mark.track_a]
+pytestmark = [pytest.mark.track_a, pytest.mark.slow]  # wall-clock thresholds: flaky on a loaded machine
 
 
 def test_ac15_hub_and_tier1_latency(tmp_path, monkeypatch):

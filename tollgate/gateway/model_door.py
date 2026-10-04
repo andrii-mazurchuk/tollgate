@@ -15,6 +15,7 @@ from tollgate import explain
 from tollgate.content import scan
 from tollgate.contract import AuditEvent, Reason
 from tollgate.gateway import audit, keys, local_text, taint, trace
+from tollgate.util import now_z
 
 DEFAULT_UPSTREAM = "http://127.0.0.1:11434/v1"
 USED: dict[tuple[str, str], int] = {}  # (role, UTC day) -> tokens. ponytail: in-memory, lost on restart
@@ -54,7 +55,10 @@ def _keep(texts: dict, point: str, text: str, v) -> None:
 
 def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
     """Starlette endpoint. `upstream` is a test transport; the URL comes from TOLLGATE_UPSTREAM."""
-    from tollgate.gateway import apply_verdict, content_policy  # late: avoids a cycle with gateway/__init__
+    from tollgate.gateway import (  # late: avoids a cycle with gateway/__init__
+        apply_verdict,
+        content_policy,
+    )
 
     async def chat(request: Request):
         ident = keys.from_header(request.headers.get("authorization"), keys.unenrolled_ok(policy.data))
@@ -75,7 +79,7 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
         model = body.get("model")
         # every role: an injected `assistant`/`tool`/`developer` message reaches the model just the same
         prompt = "\n".join(_text(m.get("content")) for m in body["messages"] if isinstance(m, dict))
-        ev = AuditEvent(ts=datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        ev = AuditEvent(ts=now_z("milliseconds"),
                         role=role, key_id=key_id, door="model", verdict="allow", scan_point="prompt",
                         source="model", tool=str(model),
                         content_sha256=hashlib.sha256(prompt.encode()).hexdigest(),

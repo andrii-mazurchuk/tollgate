@@ -18,7 +18,8 @@ from starlette.routing import Route
 
 from tollgate import accounts, edge
 from tollgate.content import signatures as sigs
-from tollgate.feed import SRC, _STAMP, add, check_signatures
+from tollgate.feed import _STAMP, SRC, add, check_signatures
+from tollgate.util import iso_z, now_z
 
 ROOT = Path(__file__).resolve().parents[1]
 FEED_HOWTO = ("Publishing needs a signature feed. Add `feed: {url: http://127.0.0.1:8090/bundle.json, interval_s: 10}` "
@@ -76,7 +77,7 @@ def _json(p: Path):
 
 def _mtime(p: Path) -> str | None:
     try:
-        return datetime.fromtimestamp(p.stat().st_mtime, timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+        return iso_z(datetime.fromtimestamp(p.stat().st_mtime, timezone.utc), "seconds")
     except OSError:
         return None
 
@@ -222,7 +223,7 @@ EVAL_ARGV = lambda out: [sys.executable, "-c", f"from tollgate.eval.runner impor
 
 async def run_eval() -> None:
     """One eval in a subprocess (the eval swaps tier 2 globals; in-process it would cache live traffic)."""
-    RUN.update(running=True, started_at=datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"), error=None)
+    RUN.update(running=True, started_at=now_z("seconds"), error=None)
     try:
         p = await asyncio.create_subprocess_exec(*EVAL_ARGV(_audit_dir() / "eval.json"), cwd=ROOT,
                                                  stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
