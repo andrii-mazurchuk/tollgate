@@ -1,4 +1,38 @@
 <!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
-<title>Tollgate console</title>
-<p>Console UI pending</p>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tollgate Console</title>
+<link rel="icon" href="data:,">
+<script>try { const t = localStorage.getItem("tg.theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
+<link rel="stylesheet" href="/edge/app.css">
+<link rel="stylesheet" href="console.css">
+</head>
+<body>
+<div class="shell">
+  <nav class="nav" aria-label="Views">
+    <div class="brand"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6z"/></svg>Tollgate</div>
+    <a href="#/overview" data-view="overview"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4zM14 20h6v-9h-6zM4 20h6v-3H4zM14 7h6V4h-6z"/></svg>Overview</a>
+    <a href="#/peers" data-view="peers"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H4zM2 19h20M9 15v4M15 15v4"/></svg>Peers &amp; roles</a>
+    <a href="#/sessions" data-view="sessions"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Sessions</a>
+    <span class="soon" aria-disabled="true" title="Coming in a later revision"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7"/></svg>Policy<small>coming</small></span>
+    <span class="soon" aria-disabled="true" title="Coming in a later revision"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 0 1 14 0M8.5 12a3.5 3.5 0 0 1 7 0M12 12v9"/></svg>Threat feed<small>coming</small></span>
+    <span class="soon" aria-disabled="true" title="Coming in a later revision"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/></svg>Self-test<small>coming</small></span>
+    <div class="nav-foot">Server console</div>
+  </nav>
+  <div class="main">
+    <header class="top">
+      <button id="health" class="health" type="button" aria-live="polite"><span class="dot"></span><span class="msg ell">Checking…</span></button>
+      <span class="spacer"></span>
+      <div id="bar" class="bar"></div>
+      <div id="status" class="status" aria-label="Status"></div>
+      <button id="theme" class="icon-btn" type="button" aria-label="Switch light or dark" title="Switch light or dark"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg></button>
+    </header>
+    <main id="view" tabindex="-1"></main>
+  </div>
+</div>
+<script src="/edge/common.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
