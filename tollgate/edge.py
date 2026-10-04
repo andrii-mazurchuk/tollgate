@@ -28,7 +28,10 @@ ACTIVE_MIN = 15  # a session with no action for this long shows as ended
 def version() -> str:
     try:
         from importlib.metadata import version as v
-        return v("tollgate")
+        try:
+            return v("agent-tollgate")
+        except Exception:  # an install from before the PyPI rename
+            return v("tollgate")
     except Exception:
         return "0.1.0"
 

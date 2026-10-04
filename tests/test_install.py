@@ -163,7 +163,7 @@ def test_connect_rejects_bad_scope(monkeypatch, capsys, peer):  # noqa: F811
 def test_wheel_ships_defaults_and_runs_outside_the_repo(tmp_path):
     """uv build -> fresh venv -> the installed tollgate inits a temp home from the packaged defaults."""
     subprocess.run(["uv", "build", "--wheel", "-o", str(tmp_path / "dist"), str(REPO)], check=True, capture_output=True)
-    wheel = next((tmp_path / "dist").glob("tollgate-*.whl"))
+    wheel = next((tmp_path / "dist").glob("*.whl"))
     subprocess.run(["uv", "venv", "-q", "--python", "3.13", str(tmp_path / "v")], check=True)
     py = tmp_path / "v" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     subprocess.run(["uv", "pip", "install", "-q", "--python", str(py), str(wheel)], check=True)

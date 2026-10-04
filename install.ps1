@@ -51,7 +51,7 @@ $TgHome = if ($env:TOLLGATE_HOME) { $env:TOLLGATE_HOME } else { Join-Path $env:L
 $uv = (Get-Command uv -ErrorAction SilentlyContinue).Source
 
 if ($Uninstall) {
-    if ($uv) { $ErrorActionPreference = 'Continue'; & $uv tool uninstall tollgate; $ErrorActionPreference = 'Stop' }
+    if ($uv) { $ErrorActionPreference = 'Continue'; foreach ($t in "agent-tollgate", "tollgate") { & $uv tool uninstall $t 2>$null }; $ErrorActionPreference = 'Stop' }
     foreach ($d in 'venv', 'bin') { $p = Join-Path $TgHome $d; if (Test-Path $p) { Remove-Item -Recurse -Force $p; Say "removed $p" } }
     Say "kept your data: $TgHome (policy, audit log, accounts). Delete it with: Remove-Item -Recurse -Force '$TgHome'"
     Say "if you ran 'tollgate service install --yes', remove the task first: tollgate service uninstall --yes (or schtasks /Delete /TN Tollgate /F)"

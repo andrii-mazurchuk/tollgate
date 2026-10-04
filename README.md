@@ -125,6 +125,7 @@ curl -LsSf https://raw.githubusercontent.com/andrii-mazurchuk/tollgate/main/inst
 # Windows (PowerShell 5.1+)
 irm https://raw.githubusercontent.com/andrii-mazurchuk/tollgate/main/install.ps1 | iex
 # from a clone (either OS): sh install.sh --source .   /   .\install.ps1 --source .
+# from PyPI, with uv: uv tool install agent-tollgate   (then: tollgate init)
 ```
 
 The installer uses `uv tool install` when [uv](https://docs.astral.sh/uv/) is present (it fetches Python 3.13 itself); otherwise a Python 3.13+ venv in the Tollgate home with a `tollgate` shim; otherwise it prints the uv installer command (`--install-uv` runs it). It never edits PATH or shell profiles unless you pass `--modify-path`; it prints the line instead. Options: `--source PATH|URL`, `--ref TAG`, `--uninstall` (removes the program, keeps your data and prints its path). Then it runs `tollgate init`.

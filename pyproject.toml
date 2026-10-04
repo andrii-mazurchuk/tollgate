@@ -1,5 +1,5 @@
 [project]
-name = "tollgate"
+name = "agent-tollgate"
 version = "1.0.0"
 description = "AI control layer: per-role virtual MCPs, session taint, local content inspection"
 readme = "README.md"

@@ -62,6 +62,8 @@ uv run tollgate seed-fleet              # demo fleet with real traffic
 uv run tollgate up --scripted-model     # http://127.0.0.1:8080/console and http://127.0.0.1:8080/edge
 ```
 
+Installed, without a clone: `irm https://raw.githubusercontent.com/andrii-mazurchuk/tollgate/main/install.ps1 | iex` (Linux/macOS: `curl -LsSf …/install.sh | sh`), or from PyPI: `uv tool install agent-tollgate`.
+
 The full judge guide (PowerShell and bash, ad-hoc prompts, live policy edits) is at the top of `README.md`; the 3-minute run sheet is `DEMO.md`.
 
 ## Deliverables

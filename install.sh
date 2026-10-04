@@ -40,7 +40,7 @@ LOCAL_BIN="$HOME/.local/bin"
 UV="$(command -v uv || true)"
 
 if [ "$UNINSTALL" = 1 ]; then
-    if [ -n "$UV" ]; then "$UV" tool uninstall tollgate || true; fi
+    if [ -n "$UV" ]; then "$UV" tool uninstall agent-tollgate 2>/dev/null || true; "$UV" tool uninstall tollgate 2>/dev/null || true; fi
     if [ -L "$LOCAL_BIN/tollgate" ] && [ -d "$TG_HOME/venv" ]; then rm -f "$LOCAL_BIN/tollgate"; say "removed $LOCAL_BIN/tollgate"; fi
     if [ -d "$TG_HOME/venv" ]; then rm -rf "$TG_HOME/venv"; say "removed $TG_HOME/venv"; fi
     say "kept your data: $TG_HOME (policy, audit log, accounts). Delete it with: rm -rf \"$TG_HOME\""
