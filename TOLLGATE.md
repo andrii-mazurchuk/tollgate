@@ -1,9 +1,9 @@
 # Tollgate: product spec and acceptance criteria
 
 **Task:** HackYeah 2026, partner task Goldman Sachs, "AI Control Layer".
-**Status:** final 2026-10-04. Built through M2 plus approvals, pinning, the signature feed, the local edge UI (`/edge`) and the server console (`/console`: peers, sessions, policy editing, threat feed, self-test); see [Status (final)](#status-final-2026-10-04).
+**Status:** final 2026-10-04. Built through M2 plus approvals, pinning, the signature feed, the hook door for agents' built-in tools (`/hook`, `tollgate connect`), the local edge UI (`/edge`) and the server console (`/console`: access map, peers, sessions, Try it, policy editing, threat feed, self-test, accounts); see [Status (final)](#status-final-2026-10-04).
 **Team:** 1 person, about 30 hours, full Python.
-**Visual walkthrough:** [Tollgate product map](https://claude.ai/artifact/VScYMyEP8mAdALTqa3jxq6). It includes a role builder, an attack replay and a tier 1 playground. Background research is in [RESEARCH.md](RESEARCH.md).
+Background research is in [RESEARCH.md](RESEARCH.md).
 
 **One-liner:** every role gets its own MCP server, generated from one policy file, that exposes exactly the tools that role may use. Every tool call is checked locally for malicious content before it leaves the machine. The server also blocks the private → public data flow once a session has read untrusted content.
 
@@ -11,11 +11,11 @@
 
 ## Status (final, 2026-10-04)
 
-Measured on `main` on 2026-10-04. Fast suite: `uv run pytest -q -m "not slow"` → **247 passed, 7 deselected** (slow = real tier 2 model / full eval). Eval: `uv run tollgate test --eval-only` on **1,411 cases**, 30% held out (`sha256(id) % 100 >= 70`, 390 cases), thresholds tuned on the other 70%; a 30-case red-team holdout was scored once by hand and never re-run. Latency: `uv run tollgate perf` (200 rounds in-process, writes `audit/perf.json`).
+Measured on `main` on 2026-10-04. Fast suite: `uv run pytest -q -m "not slow"` → **377 passed, 7 deselected** (slow = real tier 2 model / full eval). Eval: `uv run tollgate test --eval-only` on **1,411 cases**, 30% held out (`sha256(id) % 100 >= 70`, 390 cases), thresholds tuned on the other 70%; a 30-case red-team holdout was scored once by hand and never re-run. Latency: `uv run tollgate perf` (200 rounds in-process, writes `audit/perf.json`).
 
 | AC | Status | Evidence |
 |---|---|---|
-| AC1 one command | green | `tollgate up` starts the gateway (role MCPs, 3 in-process mocks, model door, `/healthz`, `/admin/*`, the `/console` and `/edge` UIs; `--scripted-model` for an offline LLM) (`test_ac07_hot_reload.py::test_ac01_app_serves_healthz_and_roles`). Ollama is external (`ollama serve`); without it only the model door returns 502. No separate Edge process. |
+| AC1 one command | green | `tollgate up` starts the gateway (role MCPs, 3 in-process mocks, model door, hook door `/hook`, `/healthz`, `/admin/*`, the `/console` and `/edge` UIs; `--scripted-model` for an offline LLM) (`test_ac07_hot_reload.py::test_ac01_app_serves_healthz_and_roles`). Ollama is external (`ollama serve`); without it only the model door returns 502. No separate Edge process. |
 | AC2 role scoping | green | `tests/acceptance/test_ac02_role_scoping.py` |
 | AC3 exact tools | green | `tests/acceptance/test_ac03_exact_tools.py` |
 | AC4 argument limits | green | `tests/acceptance/test_ac04_argument_limits.py` |
@@ -28,7 +28,7 @@ Measured on `main` on 2026-10-04. Fast suite: `uv run pytest -q -m "not slow"` �
 | AC11 budget + loops | green | `tests/acceptance/test_ac11_budget_loops.py` (429, `loop.cutoff`) |
 | AC12 model allow-list | green | `tests/acceptance/test_ac12_model_allowlist.py`; live: `qwen3:4b` for role-1 → 403 `model.denied` |
 | AC13 suite | green | `tollgate test`: 1,411 cases; all checks held-out recall 0.891, FPR 0.048, posture **0.931**; the console Self-test view shows the same numbers and the misses; `content.injection: off` → posture 0.718. `test_ac13_suite_summary.py`, `test_eval_posture.py`. Per-pattern P1–P10 coverage is not audited. |
-| AC14 dashboard | green | Server console `/console` (Overview, Peers & roles, Sessions with fingerprints, Policy view + profile switch + access editing, Threat feed, Self-test) and local edge `/edge` (Sessions trace, Checks per stage in ms, Events, Setup); `tests/test_console.py`, `tests/test_console3.py`, `tests/test_edge_*.py`. The earlier Streamlit dashboard was removed (superseded by `/console`). |
+| AC14 dashboard | green | Server console `/console` (Overview with access map, Peers & roles, Sessions with fingerprints, Try it, Policy view + profile switch + access editing, Threat feed, Self-test, Users) and local edge `/edge` (Overview, Sessions trace, Checks per stage in ms, Events, Setup). Audit export: **JSONL and CSV** (`GET /console/api/export?format=jsonl\|csv`, Export menu in the console header; `tests/test_console_export.py`). Also `tests/test_console*.py`, `tests/test_edge_*.py`. The earlier Streamlit dashboard was removed (superseded by `/console`). |
 | AC15 latency | partial | Hub checks (role + taint) p95 **under 1 ms**, tier 1 p95 **2.5 ms**, both under the 5 ms target: **met**. Tier 2 short text (≤ 64 tokens) p95 is **~65–90 ms** depending on the run, against 80 ms: **borderline (partial)**; it is gated so long tool results skip it in balanced. |
 | AC16 deliverables | green | README "Judges: start here", MIT `LICENSE`, public repo https://github.com/andrii-mazurchuk/tollgate, [`DEMO.md`](DEMO.md) run sheet, [`docs/architecture.md`](docs/architecture.md) diagram, commented `policies/strict\|balanced\|lenient.yaml` profiles, 10-slide deck [`docs/Tollgate.pdf`](docs/Tollgate.pdf) (Marp source `docs/deck.md`, screenshots in `docs/img/`). |
 
@@ -37,8 +37,8 @@ Measured on `main` on 2026-10-04. Fast suite: `uv run pytest -q -m "not slow"` �
 **Built beyond the ACs:**
 - Demo agent (a required deliverable): `tollgate/agent/`, a framework-free tool-calling loop that talks only to Tollgate's two doors (model door + role MCP). `tollgate agent --scripted "…"` runs offline in one terminal with an in-process gateway and a scripted hijacked model (`scripted-hijacked`): issue #12 steers it to read `acme/payroll/.env` (both AWS keys masked `[SECRET]`) and its PR is blocked by `taint.flow`. `tollgate serve` + `tollgate agent --model qwen3:4b "…"` runs a real Ollama model. `tests/test_agent.py`.
 - Secrets beyond fixed prefixes: `secret.kv` (credential-named key/value, value-only mask, JSON aware), `secret.github_pat`, `secret.slack_token`, `secret.entropy` (≥ 32 chars, ≥ 4.0 bits/char). `tests/test_secrets.py`.
-- Approval flow: `taint.block_flow.action: approve` or `roles.<role>.approval: [tool]` parks the call. It appears in `GET /admin/approvals` and on the dashboard, and waits up to `approval.timeout_s` for Approve/Deny (dashboard button, `tollgate approve|deny <id>`, or `POST /admin/approvals/{id}` with `TOLLGATE_ADMIN_TOKEN`). Deny and timeout fail closed. Audit rules: `approval.requested`, `approval.approved`, `approval.denied`, `approval.timeout`.
-- Tool-description pinning (rug-pull defence): name + description + schema hashed at startup; a changed tool is hidden and its calls blocked (`pin.changed`); `/healthz` `pin_alerts` drives the dashboard's red strip.
+- Approval flow: `taint.block_flow.action: approve` or `roles.<role>.approval: [tool]` parks the call. It appears in `GET /admin/approvals` and waits up to `approval.timeout_s` for Approve/Deny (API and CLI only: `tollgate approve|deny <id>`, or `POST /admin/approvals/{id}` with `TOLLGATE_ADMIN_TOKEN`). Through the hook door the tainted flow instead asks the person at the agent (Claude Code's `ask`). Deny and timeout fail closed. Audit rules: `approval.requested`, `approval.approved`, `approval.denied`, `approval.timeout`.
+- Tool-description pinning (rug-pull defence): name + description + schema hashed at startup; a changed tool is hidden and its calls blocked (`pin.changed`); `/healthz` lists them in `pin_alerts`.
 
 **Known gaps, stated plainly** (full list: [README › Known limits](README.md#known-limits)):
 - Injection recall 83.7% is below the 85% target. Misses concentrate in the `deepset` source (recall 0.371 held-out).
@@ -93,7 +93,7 @@ Sources: [heise](https://www.heise.de/en/news/Attack-via-GitHub-MCP-server-Acces
 | P6 | Known-attack signatures from an external feed | `signatures.yaml`, hot reloaded (Edge) |
 | P7 | One central policy config, edited live by judges | `policy.yaml`, hot reloaded |
 | P8 | Hybrid defence: deterministic and AI | Tier 1 regex and validators + tier 2 classifier |
-| P9 | Reporting: metrics, exportable audit, dashboard, telemetry | Hub audit log, dashboard, per-tier latency |
+| P9 | Reporting: metrics, exportable audit, dashboard, telemetry | Hub audit log (JSONL/CSV export), `/console` and `/edge`, per-tier latency |
 | P10 | Self-testing suite that judges run | `tollgate test` |
 
 **Weights:**
@@ -155,7 +155,7 @@ Rule for the split: anything the client could skip (access, taint, budgets, audi
    - the key must be bound to this role, because the URL alone grants nothing;
    - argument limits are checked for tools that both read and write (SQL verb, path glob, recipient domain);
    - the call uses the role's own credential for that server, and the agent never sees it;
-   - an optional `approval` waits for a dashboard click.
+   - an optional `approval` parks the call until an admin approves or denies it (API/CLI).
 
 Example from the alignment session: role-1 = read on A; role-2 = read and write on A, B and C.
 
@@ -163,7 +163,7 @@ Example from the alignment session: role-1 = read on A; role-2 = read and write 
 - Tools carry labels: `untrusted_source`, `private_data`, `public_sink`.
 - A session starts clean. An `untrusted_source` call marks it **tainted** and records the cause. A `private_data` call marks it as **holding private data**.
 - A `public_sink` call is `block`ed (or sent to `approve`) only when **both** flags are set. Requiring both keeps benign flows working.
-- Taint never clears inside a session. **A session = one issued role key** (short TTL, e.g. 8h), tracked on the Hub. MCP session IDs are not stable in the current protocol (verified with fastmcp 4.0.10 / mcp 2.3.0), and a client-chosen header could be rotated to escape taint. Reset = issue a new key, or an admin reset from the dashboard.
+- Taint never clears inside a session. **A session = one issued role key** (short TTL, e.g. 8h), tracked on the Hub. MCP session IDs are not stable in the current protocol (verified with fastmcp 4.0.10 / mcp 2.3.0), and a client-chosen header could be rotated to escape taint. Reset = mint a new key (`tollgate connect`).
 - The verdict names its cause, for example: `blocked: session tainted by github.issues.read #12; private data from github.repo.read`.
 
 ### 4.5 Content pipeline (Edge)
@@ -259,10 +259,10 @@ loops: { max_identical_calls: 5 }
 | **Core** | 5. Hub audit log and evaluation suite | Rep, Test |
 | Required, thin | Model door with model allow-list | Rob, Rep |
 | Required, thin | Token budgets per role, loop cut-off | Rob, Rep |
-| Required, thin | Dashboard | Rep |
+| Required, thin | Dashboard (`/console` + `/edge`) | Rep |
 | Required, thin | `signatures.yaml` feed | Rob |
 | Required, thin | Three strictness profiles | Rob |
-| Helper | Approval flow (dashboard button) | Rob |
+| Helper | Approval flow (API/CLI) | Rob |
 | Helper | Tier 3 judge | Rob |
 | Helper | Tool description pinning | Rob |
 | Helper | Admin UI role builder (until then, YAML) | Scale |
@@ -292,18 +292,19 @@ The dashboard aggregates these into:
 
 **Offline evaluation (`tollgate test`):**
 
-| Corpus | Measures |
+Actual corpus: **1,411 cases** in `tests/corpus/` (plus `redteam_holdout.jsonl`, 30 cases, scored once by hand).
+
+| Corpus (cases) | Measures |
 |---|---|
-| deepset/prompt-injections (662) | precision, recall, F1, PR curve |
-| Lakera/gandalf_ignore_instructions (777) | recall |
-| jackhhao/jailbreak-classification (1,306) | benign false-positive rate |
-| JailbreakBench JBB-Behaviors (200) | over-blocking on near misses |
-| gretel synthetic_pii_finance (5,594) | span precision and recall per PII type |
-| Own: poisoned tool results (~100) | recall on indirect injection |
-| Own: clean instruction-like tool results (~100) | FPR where it hurts |
-| Own: obfuscated variants (auto) | recall with and without normalisation |
-| Own: Polish attacks (~50) | language gap |
-| Own: attack traces (~10) | taint, roles, argument limits, budgets, loops |
+| deepset/prompt-injections (300) | precision, recall, F1 |
+| Lakera/gandalf_ignore_instructions (300) | recall |
+| jackhhao/jailbreak-classification (300) | benign false-positive rate |
+| JailbreakBench JBB-Behaviors (100) | over-blocking on near misses |
+| gretel synthetic_pii_finance (300) | PII recall per type |
+| Own (61): poisoned tool results 11, clean instruction-like results 11, secrets 10, PII 7, signatures 6, obfuscated variants 12 + their plain originals 4 | indirect injection, FPR where it hurts, normalisation ablation |
+| Red team (50) | attacks written against the pipeline |
+
+Attack traces (taint, roles, argument limits, budgets, loops) are acceptance tests and `tollgate replay`, not eval rows.
 
 **Thresholds:**
 1. Split each corpus 70/30.

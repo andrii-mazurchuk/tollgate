@@ -209,7 +209,7 @@ salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
 # Proof: <code style="font-size:44px">uv run tollgate test</code>
 
 <div class="m">
-<div><b>255</b><span>fast tests · +7 slow</span></div>
+<div><b>377</b><span>fast tests · +7 slow</span></div>
 <div><b>1,411</b><span>eval cases · 30% held out</span></div>
 <div><b>&lt; 1 ms</b><span>hub checks, p95</span></div>
 <div><b class="blue">0.967</b><span>PII recall</span></div>
