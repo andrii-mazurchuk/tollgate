@@ -94,7 +94,7 @@ async def test_bash_labels_and_mcp_pass_through(monkeypatch):
     async with _app(monkeypatch) as c:
         k = _key()
         await _hook(c, k, "PostToolUse", "Bash", {"command": "CURL https://x"}, tool_response="hello")
-        assert taint.state(keys.verify(k)[1])["tainted"] == "builtin.Bash CURL https://x"
+        assert taint.state(*keys.verify(k)[::-1])["tainted"] == "builtin.Bash CURL https://x"
         n = len(_events())
         r = await _hook(c, k, "PreToolUse", "mcp__tollgate__github.pr.create", {"title": "x"})
         assert _decision(r) == "allow" and len(_events()) == n  # already checked by the MCP door: not counted twice

@@ -141,7 +141,7 @@ class RoleGate(Middleware):
             source=name.partition(".")[0], tool=name,
             content_sha256=hashlib.sha256(args_json.encode()).hexdigest(),
             policy_version=self.policy.version, trace_id=trace.new_id(), session_id=key_id,
-            state_before=trace.label(taint.STATE.get(key_id)),
+            state_before=trace.label(taint.get(key_id, self.role)),
         )
         # edge-only full text, keyed by trace_id (never in the audit log); args kept even if a check stops the call
         texts: dict = {"args": {"original": args_json, "sent": args_json, "spans": []}}
@@ -157,7 +157,7 @@ class RoleGate(Middleware):
                 raise ToolError(str(e) + "." + explain.next_step(r["rule"], base, key_id, ev.trace_id)) from e
             raise
         finally:
-            st = taint.state(key_id)
+            st = taint.state(key_id, self.role)
             ev.tainted, ev.holds_private = bool(st["tainted"]), bool(st["holds_private"])
             ev.state_after = trace.label(st)
             audit.write(ev)
@@ -192,7 +192,7 @@ class RoleGate(Middleware):
             deny("loop.cutoff", f"{name} called {n} times in a row with identical arguments (max {cap})")
 
         t0 = time.perf_counter()
-        blocked = taint.check(data, key_id, name)
+        blocked = taint.check(data, key_id, name, role=self.role)
         ev.latency_ms["taint"] = round((time.perf_counter() - t0) * 1000, 3)
         approve = []  # (rule, why) that need a human before the call runs
         if blocked:
@@ -240,9 +240,10 @@ class RoleGate(Middleware):
                                 meta=result.meta, is_error=result.is_error)
         elif ev.verdict == "allow":
             ev.scan_point = "tool_result"
-        taint.record(data, key_id, name, args)
+        taint.record(data, key_id, name, args, role=self.role)
         if any(r.rule.startswith(("inj.", "sig.", "t2.injection")) for r in v.reasons):  # as the hook door does
-            taint.record(data, key_id, name, args, ["untrusted_source"], f"{taint._cause(name, args)} (injection)")
+            taint.record(data, key_id, name, args, ["untrusted_source"], f"{taint._cause(name, args)} (injection)",
+                         role=self.role)
         return result
 
     async def _approval(self, ev: AuditEvent, why: list[tuple[str, str]], deny) -> None:
