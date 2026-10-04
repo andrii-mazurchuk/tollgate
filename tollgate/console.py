@@ -81,7 +81,7 @@ def overview(events: list[dict], rng: str, reg: dict, now: datetime | None = Non
     def kpi(f):
         return {"value": f(cur), "prev": f(old) if old is not None else None}
     blocked = [e for e in cur if e.get("verdict") == "block"]
-    reasons = Counter(explain.rule(r["rule"])[0] for e in blocked if (r := explain.main_reason(e)))
+    reasons = Counter(explain.check_name((explain.main_reason(e) or {}).get("rule")) for e in blocked)
     roles = Counter(e.get("role") for e in blocked)
     attacks = sorted((e for e in cur if is_attack(e)), key=edge._ts, reverse=True)[:50]
     return {"range": rng, "start": ov["start"], "now": ov["now"], "series": ov["series"], "bucket_s": ov["bucket_s"],

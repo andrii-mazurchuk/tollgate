@@ -121,7 +121,7 @@ async def test_console_api_shapes(monkeypatch):
         assert k["checked"]["value"] == 4 and k["blocked"]["value"] == 1 and k["attacks"]["value"] == 1
         assert k["peers_online"]["value"] == 1
         assert ov["by_role"] == [{"role": "role-2", "agent": "Support assistant", "count": 1}]
-        assert ov["by_reason"][0]["count"] == 1 and ov["series"] and ov["bucket_s"]
+        assert ov["by_reason"] == [{"label": "Data-flow rule", "count": 1}] and ov["series"] and ov["bucket_s"]
         a = ov["attacks"][0]
         assert a["peer"] == pid and a["peer_label"] == "ada-x1 · Ada" and a["kind"] == "blocked"
 
