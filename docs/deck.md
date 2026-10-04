@@ -2,284 +2,288 @@
 marp: true
 size: 16:9
 paginate: true
-footer: "Tollgate · HackYeah 2026 · Goldman Sachs AI Control Layer · github.com/andrii-mazurchuk/tollgate"
+footer: "Tollgate · github.com/andrii-mazurchuk/tollgate"
 ---
 
 <style>
-:root { --ink: #111827; --mute: #4b5563; --line: #e5e7eb; --blue: #2563eb; --red: #dc2626; --green: #15803d; --soft: #f3f4f6; }
+:root { --ink: #0f172a; --mute: #64748b; --line: #cbd5e1; --soft: #f1f5f9; --blue: #2563eb; --bluebg: #eff6ff; --red: #dc2626; --redbg: #fef2f2; }
 section {
   background: #fff; color: var(--ink);
   font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  font-size: 26px; line-height: 1.35;
-  padding: 44px 64px 56px; display: flex !important; flex-direction: column !important; justify-content: flex-start !important;
+  font-size: 28px; line-height: 1.25;
+  padding: 40px 60px 50px;
+  display: flex !important; flex-direction: column !important; justify-content: center !important;
 }
-h1 { color: var(--ink); font-size: 42px; line-height: 1.15; margin: 0 0 14px; }
-h1 em { color: var(--blue); font-style: normal; }
-h2 { color: var(--mute); font-size: 18px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; margin: 0 0 8px; }
-.tag { position: absolute; top: 40px; right: 64px; font-size: 16px; font-weight: 700; letter-spacing: .08em;
-  color: var(--blue); border: 2px solid var(--blue); border-radius: 6px; padding: 3px 10px; }
-strong { color: var(--blue); }
-.red { color: var(--red); } .green { color: var(--green); }
-footer { color: #9ca3af; font-size: 13px; left: 64px; }
-section::after { color: #9ca3af; font-size: 14px; }
-code { background: var(--soft); color: var(--ink); border-radius: 4px; padding: 1px 6px; font-size: .85em; }
-pre { background: #111827; border-radius: 8px; padding: 14px 18px; margin: 8px 0; }
-pre code { background: none; color: #e5e7eb; font-size: 22px; line-height: 1.5; padding: 0; }
-ul { margin: 4px 0; padding-left: 26px; } li { margin: 6px 0; }
-.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
-.small { font-size: 22px; color: var(--mute); }
-section img { border: 1px solid #d1d5db; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+h1 { font-size: 54px; line-height: 1.1; margin: 0 0 22px; color: var(--ink); font-weight: 800; }
+h1 em { font-style: normal; color: var(--blue); }
+h1 .r { color: var(--red); }
+.kick { font-size: 22px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--mute); margin: 0 0 8px; }
+.tag { position: absolute; top: 26px; right: 40px; font-size: 14px; font-weight: 700; letter-spacing: .08em; color: var(--mute);
+  border: 1.5px solid var(--line); border-radius: 5px; padding: 2px 8px; }
+.big { font-size: 42px; line-height: 1.2; font-weight: 700; margin: 18px 0 0; }
+.mute { color: var(--mute); }
+.blue { color: var(--blue); } .red { color: var(--red); }
+footer { color: #94a3b8; font-size: 14px; left: 60px; }
+section::after { color: #94a3b8; font-size: 14px; }
+code { background: var(--soft); color: var(--ink); border-radius: 6px; padding: 2px 10px; }
+section img { border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 18px rgba(15,23,42,.10); }
 
-/* the three-call chain */
-.chain { display: flex; align-items: stretch; gap: 10px; margin: 18px 0 14px; }
-.call { flex: 1; border: 2px solid var(--line); border-radius: 10px; padding: 14px 16px; background: #fafafa; }
-.call .n { font-size: 22px; color: var(--mute); font-weight: 700; }
-.call .t { font-size: 26px; font-weight: 600; margin: 4px 0 8px; }
-.call .v { font-size: 22px; font-weight: 700; }
-.arrow { align-self: center; font-size: 34px; color: #9ca3af; }
-.call.ok .v { color: var(--green); }
-.call.bad { border-color: var(--red); background: #fef2f2; }
+/* call chain */
+.chain { display: flex; gap: 14px; align-items: stretch; }
+.call { flex: 1; border: 3px solid var(--line); border-radius: 14px; padding: 16px 18px; background: var(--soft); }
+.call .n { font-size: 22px; color: var(--mute); font-weight: 800; }
+.call .t { font-size: 32px; font-weight: 700; margin: 4px 0 10px; line-height: 1.15; }
+.call .v { font-size: 28px; font-weight: 800; color: var(--blue); }
+.call.bad { border-color: var(--red); background: var(--redbg); }
 .call.bad .v { color: var(--red); }
-.out { align-self: center; font-size: 30px; font-weight: 800; color: #fff; background: var(--red); border-radius: 10px; padding: 18px 16px; }
-.hook { font-size: 44px; line-height: 1.2; font-weight: 700; margin: 4px 0 0; }
-.cap { font-size: 28px; line-height: 1.35; }
-.brand { font-size: 20px; font-weight: 700; color: var(--blue); letter-spacing: .1em; margin: 0; }
+.arr { align-self: center; font-size: 40px; color: var(--mute); }
 
-/* architecture */
-.arch { display: grid; grid-template-columns: 1fr 34px 1.35fr 34px 1fr; align-items: stretch; margin-top: 6px; }
-.box { border: 2px solid #9ca3af; border-radius: 10px; padding: 12px 14px; font-size: 22px; line-height: 1.3; background: #fff; }
-.box b { display: block; font-size: 24px; margin-bottom: 6px; }
-.box.hub { border-color: var(--blue); background: #eff6ff; }
-.box.edge { background: #f9fafb; }
-.box ul { padding-left: 20px; margin: 0; } .box li { margin: 3px 0; }
-.ar { align-self: center; text-align: center; font-size: 30px; color: #6b7280; }
-.under { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 14px; }
+/* leaked PR */
+.pr { margin-top: 20px; border: 3px solid var(--red); border-radius: 14px; background: var(--redbg); padding: 14px 22px; }
+.pr .h { font-size: 22px; font-weight: 800; color: var(--red); letter-spacing: .06em; }
+.pr .b { font-family: Consolas, "Courier New", monospace; font-size: 28px; line-height: 1.4; margin-top: 6px; }
+.x { background: var(--ink); color: var(--ink); border-radius: 3px; }
+
+/* incident grid */
+.grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.inc { border: 2px solid var(--line); border-radius: 14px; padding: 14px 18px; background: var(--soft); }
+.inc .d { font-size: 20px; color: var(--mute); font-weight: 700; }
+.inc .p { font-size: 30px; font-weight: 800; margin: 2px 0 6px; }
+.inc .h { font-size: 26px; line-height: 1.2; color: var(--red); font-weight: 600; }
+.inc .w { font-size: 16px; color: var(--mute); margin-top: 6px; text-transform: uppercase; letter-spacing: .08em; }
+
+/* boxes / architecture */
+.row { display: flex; gap: 18px; align-items: stretch; }
+.box { flex: 1; border: 3px solid var(--line); border-radius: 16px; padding: 20px 22px; background: var(--soft); font-size: 26px; }
+.box b { display: block; font-size: 34px; margin-bottom: 8px; }
+.box.tg { border-color: var(--blue); background: var(--bluebg); flex: 1.2; }
+.box.tg b { color: var(--blue); }
+.badge { display: inline-block; font-size: 22px; font-weight: 700; border-radius: 999px; padding: 4px 14px; margin: 4px 6px 4px 0;
+  border: 2px solid var(--blue); color: var(--blue); background: #fff; }
+.badge.soon { border: 2px dashed var(--line); color: var(--mute); }
 
 /* metrics */
-.metrics { display: flex; gap: 36px; margin: 10px 0; flex-wrap: wrap; }
-.metric b { display: block; font-size: 52px; line-height: 1.05; color: var(--ink); font-weight: 700; }
-.metric span { font-size: 22px; color: var(--mute); }
-.metric.miss b { color: var(--red); }
-table.g { font-size: 22px; border-collapse: collapse; margin: 6px 0; }
-table.g td, table.g th { padding: 6px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
-table.g th { color: var(--mute); font-weight: 600; background: #f9fafb; }
+.m { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px 30px; }
+.m div b { display: block; font-size: 64px; line-height: 1.05; font-weight: 800; }
+.m div span { font-size: 22px; color: var(--mute); }
+.m .miss b { color: var(--mute); }
+.m .miss { border-left: 4px dashed var(--line); padding-left: 14px; }
+
+/* keyword list */
+.kw { font-size: 34px; line-height: 1.25; margin: 0; padding: 0; list-style: none; }
+.kw li { margin: 0 0 16px; } .kw li b { color: var(--blue); }
+.kw li span { display: block; font-size: 22px; color: var(--mute); font-weight: 400; }
 </style>
 
-<p class="brand">TOLLGATE</p>
+<!-- 1 · ONE INCIDENT -->
 
-<p class="hook">May 2025. An AI agent read one GitHub issue and published its owner's private code. <span class="red">Every step it took was allowed.</span></p>
+<p class="kick">May 2025 · GitHub MCP · Claude</p>
+
+# One public issue. <span class="r">Private life, published.</span>
 
 <div class="chain">
-<div class="call ok"><div class="n">①</div><div class="t">Read the issue</div><div class="v">✓ allowed</div></div>
-<div class="arrow">→</div>
-<div class="call ok"><div class="n">②</div><div class="t">Read the private repo</div><div class="v">✓ allowed</div></div>
-<div class="arrow">→</div>
-<div class="call ok"><div class="n">③</div><div class="t">Open a public pull request</div><div class="v">✓ allowed</div></div>
-<div class="arrow">→</div>
-<div class="out">LEAKED</div>
+<div class="call"><div class="n">1</div><div class="t">Read issue in public repo</div><div class="v">✓ allowed</div></div>
+<div class="arr">→</div>
+<div class="call"><div class="n">2</div><div class="t">Read owner's private repos</div><div class="v">✓ allowed</div></div>
+<div class="arr">→</div>
+<div class="call"><div class="n">3</div><div class="t">Open public pull request</div><div class="v">✓ allowed</div></div>
 </div>
 
-<p class="cap">Nothing was hacked. The agent was obeyed. Per-tool permissions can't see this: <strong>the danger is the sequence.</strong></p>
-
-<p class="small">GitHub MCP, May 2025 (Invariant Labs): the issue hid instructions for the agent. Same pattern, Supabase MCP, Jul 2025: a support ticket made the agent read private tables and write them back into the ticket.</p>
+<div class="pr"><div class="h">PUBLIC PULL REQUEST #2 · "ABOUT THE AUTHOR"</div><div class="b">
+private repo&nbsp; <b>J██████ Star</b><br>
+moving to&nbsp;&nbsp;&nbsp; <b>South Am█████</b><br>
+salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
+</div></div>
 
 ---
 
-<div class="tag">ROBUSTNESS · 30%</div>
+<!-- 2 · IT KEEPS HAPPENING -->
 
-## Same agent, with Tollgate
+# It keeps happening.
 
-<div class="chain">
-<div class="call ok"><div class="n">①</div><div class="t">Read the issue</div><div class="v">✓ allowed · untrusted</div></div>
-<div class="arrow">→</div>
-<div class="call ok"><div class="n">②</div><div class="t">Read the private repo</div><div class="v">✓ keys masked · private</div></div>
-<div class="arrow">→</div>
-<div class="call bad"><div class="n">③</div><div class="t">Open a public PR</div><div class="v">✕ BLOCKED</div></div>
-</div>
-
-<div class="cols" style="grid-template-columns: 1fr 1.1fr; gap: 26px;">
-<div>
-
-<p class="cap">“The session read text written by outsiders and also holds private data, so sending data out could leak it.”</p>
-
-<p class="small">Every role gets its own MCP server from one policy file; every call is checked locally; once a session has read untrusted text, <b>private → public is blocked.</b></p>
-
-</div>
-<div>
-
-![w:600](img/deck-blocked.png)
-
-</div>
+<div class="grid">
+<div class="inc"><div class="d">MAY 2025</div><div class="p">GitHub MCP</div><div class="h">Private repos leaked into public PR</div><div class="w">research demo</div></div>
+<div class="inc"><div class="d">JUL 2025</div><div class="p">Supabase MCP</div><div class="h">Support ticket pulled out secret tokens</div><div class="w">research demo</div></div>
+<div class="inc"><div class="d">JUL 2025</div><div class="p">Replit Agent</div><div class="h">Production database deleted during code freeze</div><div class="w">in the wild</div></div>
+<div class="inc"><div class="d">JUL 2025</div><div class="p">Amazon Q · VS Code</div><div class="h">Shipped prompt: wipe disk and cloud</div><div class="w">in the wild · v1.84.0</div></div>
+<div class="inc"><div class="d">JUL 2025</div><div class="p">Gemini CLI</div><div class="h">README silently sent credentials away</div><div class="w">research demo · fixed</div></div>
+<div class="inc"><div class="d">SEP 2025</div><div class="p">postmark-mcp</div><div class="h">Every email secretly BCC'd to attacker</div><div class="w">in the wild · 1,643 installs</div></div>
 </div>
 
 ---
+
+<!-- 3 · THE GAP -->
+
+<p class="kick">The gap</p>
+
+# Each call is fine. <em>The sequence is the attack.</em>
+
+<div class="chain">
+<div class="call"><div class="n">READS</div><div class="t">Outsider text</div><div class="v">untrusted</div></div>
+<div class="arr">+</div>
+<div class="call"><div class="n">READS</div><div class="t">Private data</div><div class="v">private</div></div>
+<div class="arr">+</div>
+<div class="call bad"><div class="n">WRITES</div><div class="t">Somewhere public</div><div class="v">= leak</div></div>
+</div>
+
+<p class="big mute">Permissions check calls one by one. Nobody watches the session.</p>
+
+---
+
+<!-- 4 · TOLLGATE -->
 
 <div class="tag">ARCHITECTURE · 20%</div>
 
-## Architecture
+<p class="kick">Tollgate</p>
 
-# One policy file, *one virtual MCP per role*
+# Every agent call <em>passes one gate.</em>
 
-<div class="arch">
-<div class="box edge"><b>Agents on laptops</b>Claude Code, Cursor, any MCP or OpenAI-compatible client. The laptop enrolls once; each agent launch gets its own key.</div>
-<div class="ar">→</div>
-<div class="box hub"><b>Hub (server)</b><ul>
-<li>per-role virtual MCPs: exact tools, argument limits</li>
-<li>session taint: untrusted + private → no public sink</li>
-<li>model door (OpenAI-compatible), budgets</li>
-</ul></div>
-<div class="ar">→</div>
-<div class="box"><b>MCP servers & models</b>GitHub, tickets DB, file share; Ollama or any OpenAI-compatible model.</div>
+<div class="row">
+<div class="box"><b>Agents</b>Claude Code<br>any MCP client</div>
+<div class="arr">→</div>
+<div class="box tg"><b>Tollgate</b>tools per role<br>content check, local<br>session data flow</div>
+<div class="arr">→</div>
+<div class="box"><b>Tools & models</b>GitHub, databases, files<br>LLMs</div>
 </div>
 
-<div class="under">
-<div class="box edge"><b>Edge (laptop)</b>Content checks run locally. Full text stays local; the server gets the decision + a fingerprint.</div>
-<div class="box"><b>Server console</b>Overview, sessions, peers & roles, policy editing, threat feed, self-test.</div>
-<div class="box"><b>Signed threat feed</b>HMAC-signed signature bundles, hot-loaded; a tampered bundle is rejected.</div>
-</div>
+<p class="big mute">One policy file. One MCP server per role.</p>
 
 ---
+
+<!-- 5 · SAME ATTACK, STOPPED -->
 
 <div class="tag">ROBUSTNESS · 30%</div>
 
-## Guardrails that hold
+# Same attack. <span class="r">Stopped at step 3.</span>
 
-# Hybrid checks, *taint as the backstop*
+![w:1100](img/deck2-steps.png)
 
-<table class="g">
-<tr><th>Layer</th><th>What it catches</th><th>Held-out result</th></tr>
-<tr><td>PII & secrets, deterministic</td><td>IBAN, PESEL, cards (checksums: Luhn, mod-97); AWS keys</td><td>PII recall <b>0.967</b></td></tr>
-<tr><td>Injection regex + normalisation</td><td>zero-width chars, base64 / hex / URL encoding undone first</td><td>obfuscated: <b>1.00</b> (0.67 without)</td></tr>
-<tr><td>DeBERTa classifier, local ONNX</td><td>paraphrased prompt injection</td><td>recall <b class="red">0.837</b>, FPR <b>0.009</b></td></tr>
-<tr><td>Signatures, signed feed</td><td>historical attacks: <code>pickle</code>, <code>torch.load</code>, <code>trust_remote_code</code></td><td>hot-loaded, no restart</td></tr>
-<tr><td>Session taint</td><td>what text checks miss: untrusted + private can't reach a public sink</td><td>both 2025 attacks blocked</td></tr>
-</table>
-
-<p class="small">All checks together: recall <b>0.891</b>, FPR <b>0.048</b>. Posture score <b>0.931</b>.</p>
+<p class="big">“The session read outsiders' text and holds private data, so sending data out could leak it.”</p>
 
 ---
+
+<!-- 6 · HOW IT'S USED. Connectivity wording lives ONLY in the badge block below: move a name from .soon to plain when it ships. -->
+
+<div class="tag">IMPLEMENTABILITY · 10%</div>
+
+<p class="kick">Day to day</p>
+
+# Enroll once. <em>Then just work.</em>
+
+<div class="row">
+<div class="box"><b>1 · Enroll</b>laptop joins once<br>admin picks its roles</div>
+<div class="arr">→</div>
+<div class="box" style="flex:1.35"><b>2 · Connect</b><code style="font-size:24px;white-space:nowrap">tollgate connect claude-code</code></div>
+<div class="arr">→</div>
+<div class="box tg"><b>3 · Work</b>every tool call checked<br>you see only the blocks</div>
+</div>
+
+<div style="margin-top:26px">
+<span class="badge">✓ Claude Code</span><span class="badge">✓ any MCP client</span><span class="badge soon">coming: Codex · Cursor · Gemini CLI · Hermes</span>
+</div>
+<p class="mute" style="font-size:24px;margin:10px 0 0">Built-in tools too (shell, files, web), via hooks: in progress.</p>
+
+---
+
+<!-- 7 · SECURITY TEAM'S VIEW -->
 
 <div class="tag">SECURITY REPORTING · 20%</div>
 
-## Security reporting
+# Every block, <em>traced to its session.</em>
 
-# Every attack, *traced to its session*
+![w:1160](img/deck2-kpis.png)
 
-<div class="cols" style="grid-template-columns: 1.6fr 1fr; gap: 20px;">
-<div>
+<div class="row" style="align-items:center; margin-top:18px">
+<div style="flex:1.35">
 
-![w:740](img/deck-overview.png)
+![w:700](img/deck2-fingerprint.png)
 
 </div>
-<div>
-
-![w:450](img/deck-fingerprint.png)
-
-<p class="small">Click an attack → its session, step by step, cause in plain words. <b>Text stays on the laptop</b>: the server keeps the decision and a SHA-256 fingerprint.</p>
-
+<div style="flex:1">
+<p class="big" style="margin:0">Text never leaves the laptop.</p>
+<p class="mute" style="font-size:26px">Server keeps the decision + a fingerprint.</p>
 </div>
 </div>
 
 ---
+
+<!-- 8 · PROOF -->
+
+<div class="tag">SELF-TEST SUITE · 20% · PERFORMANCE · 20%</div>
+
+# Proof: <code style="font-size:44px">uv run tollgate test</code>
+
+<div class="m">
+<div><b>255</b><span>fast tests · +7 slow</span></div>
+<div><b>1,411</b><span>eval cases · 30% held out</span></div>
+<div><b>&lt; 1 ms</b><span>hub checks, p95</span></div>
+<div><b class="blue">0.967</b><span>PII recall</span></div>
+<div><b class="blue">0.009</b><span>injection false positives</span></div>
+<div class="miss"><b>0.837</b><span>injection recall · <b style="display:inline;font-size:22px;color:var(--ink)">missed</b> target 0.85</span></div>
+</div>
+
+<p class="mute" style="font-size:24px;margin-top:22px">All checks: FPR 0.048 · posture 0.931 · tier 1 p95 ~2.5 ms. Taint catches what text checks miss.</p>
+
+---
+
+<!-- 9 · WHY IT'S SECURE + WHO BUYS -->
+
+<div class="tag">SECURITY · SCALABILITY · 10%</div>
+
+<div class="row" style="gap:50px">
+<div style="flex:1.1">
+<p class="kick">Why it holds</p>
+<ul class="kw">
+<li><b>Fails closed</b><span>hub down = call denied</span></li>
+<li><b>Signed threat feed</b><span>tampered bundle rejected</span></li>
+<li><b>Key per agent launch</b><span>revoke laptop = all keys dead</span></li>
+<li><b>Company-wide</b><span>enforced via managed settings</span></li>
+</ul>
+</div>
+<div style="flex:1">
+<p class="kick">Who buys</p>
+<ul class="kw">
+<li>Security teams rolling out coding agents</li>
+<li>Banks, fintech, regulated industries</li>
+<li>Anyone letting agents near private data</li>
+</ul>
+</div>
+</div>
+
+---
+
+<!-- 10 · TRY IT -->
 
 <div class="tag">IMPLEMENTABILITY · 10%</div>
 
-## One policy, changed live
+# Try it in <em>5 minutes.</em>
 
-# Edit access in the console, *the next call obeys*
-
-<div class="cols" style="grid-template-columns: 1.15fr 1fr; gap: 28px;">
-<div>
-
-![w:620](img/deck-policy-review.png)
-
-</div>
-<div>
-
-- Matrix: role × MCP server × tool.
-- Review shows the diff and warns about risky data flows.
-- Hot reload on the next call, no restart.
-- A broken edit is **rejected**; the old policy keeps enforcing.
-- Profiles: strict / balanced / lenient.
-
-</div>
+<div class="box" style="font-family:Consolas,'Courier New',monospace; font-size:32px; line-height:1.55; flex:none">
+uv sync<br>
+uv run tollgate up --scripted-model<br>
+uv run tollgate test<br>
+<span class="mute">→ open /console and /edge</span>
 </div>
 
----
+<p class="big"><em class="blue" style="font-style:normal">github.com/andrii-mazurchuk/tollgate</em> <span class="mute" style="font-size:28px">· public · MIT</span></p>
 
-<div class="tag">SCALABILITY · 10%</div>
+<p class="mute" style="font-size:26px;margin-top:14px">Next: hooks for every agent · live access map · budgets in money</p>
 
-## Scale & identity
-
-# Enroll once, *a key per agent launch*
-
-<div class="cols" style="grid-template-columns: 1.5fr 1fr; gap: 24px;">
-<div>
-
-![w:620](img/deck-peers.png)
-
-</div>
-<div>
-
-- A laptop enrolls once; the admin sets the roles it may run.
-- Each agent launch mints its own key.
-- Revoke a laptop: every key stops at once.
-- Works with **any MCP server**: the Hub fronts it per role.
-
-</div>
-</div>
-
----
-
-<div class="tag">SELF-TEST SUITE · 20%</div>
-
-## Self-test suite
-
-# Judges run it: `uv run tollgate test`
-
-<div class="metrics">
-<div class="metric"><b>247</b><span>fast tests pass<br>(+7 slow: real model, full eval)</span></div>
-<div class="metric"><b>1,411</b><span>eval cases: public corpora + own red team,<br>30% held out, tuned on the rest</span></div>
-<div class="metric miss"><b>0.837</b><span>injection recall vs target 0.85:<br><span class="red">missed</span>, stated plainly</span></div>
-</div>
-
-![w:1150](img/deck-selftest.png)
-
----
-
-<div class="tag">PERFORMANCE · 20%</div>
-
-## Performance
-
-# The Hub costs *under a millisecond*
-
-<div class="metrics" style="gap: 56px; margin-top: 20px;">
-<div class="metric"><b>&lt; 1 ms</b><span>Hub checks p95<br>(roles, limits, taint)</span></div>
-<div class="metric"><b>2.5 ms</b><span>tier 1 p95<br>(regex, checksums, signatures)</span></div>
-<div class="metric miss"><b>65–90 ms</b><span>classifier p95, short text:<br>borderline vs 80 ms target</span></div>
-</div>
-
-- The classifier is **gated**: prompts always get it; long tool results are deferred, so calls stay fast.
-- Stateless checks per request; one policy for every role; taint is one small record per key.
-- `uv run tollgate perf` reproduces the numbers; the console Self-test shows the last run.
-
----
-
-<div class="tag">IMPLEMENTABILITY · 10%</div>
-
-## Try it in 5 minutes · public, MIT
-
-```text
-git clone https://github.com/andrii-mazurchuk/tollgate && cd tollgate
-uv sync
-uv run tollgate up --scripted-model   # Hub + mock MCPs + offline model; /console, /edge
-uv run tollgate test      # 247 tests + eval report
-```
-
-<p class="small">Then open <code>/edge/</code> → Scenario → Run all: both 2025 attacks replay and get blocked.</p>
-
-## What's next
-
-- A live access map in the console: every laptop, agent and tool call on one interactive view.
-- Cost budgets in money, not only tokens.
-- Memory controls for agents with long-term memory.
+<!--
+SOURCES (checked 2026-10-04)
+1  GitHub MCP, Invariant Labs, 2025-05-26: issue in public repo ukend0464/pacman ("About The Author" injection) made Claude Desktop (GitHub MCP, "Always Allow") read private repos and open public PR #2 with private repo "Jupiter Star", plan to relocate to South America, salary.
+   https://invariantlabs.ai/blog/mcp-github-vulnerability
+   https://simonwillison.net/2025/May/26/github-mcp-exploited/
+2  Supabase MCP, General Analysis, 2025-07-08: support ticket instructions → Cursor agent with service_role (bypasses RLS) read integration_tokens and wrote them back into the ticket.
+   https://www.generalanalysis.com/blog/supabase-mcp-blog
+3  Replit Agent, 2025-07-18: deleted SaaStr (Jason Lemkin) production DB (1,206 executives, 1,196 companies) during an explicit code freeze.
+   https://www.theregister.com/2025/07/22/replit_saastr_response/
+   https://www.heise.de/en/news/Artificial-intelligence-Vibe-coding-service-Replit-deletes-production-database-10499597.html
+4  Amazon Q Developer for VS Code v1.84.0, released 2025-07-17 with an injected prompt to "clean a system to a near-factory state and delete file-system and cloud resources"; AWS: malformed, not executed; fixed in 1.85.
+   https://www.bleepingcomputer.com/news/security/amazon-ai-coding-agent-hacked-to-inject-data-wiping-commands/
+5  Gemini CLI, Tracebit, disclosed 2025-07-28 (fixed v0.1.14, 2025-07-25): README prompt injection + allow-listed "grep" prefix → silent env | curl credential exfiltration.
+   https://tracebit.com/blog/code-exec-deception-gemini-ai-cli-hijack
+6  postmark-mcp (npm), Koi Security, Sep 2025: v1.0.16 (2025-09-17) added a BCC of every email to phan@giftshop[.]club; 1,643 downloads.
+   https://thehackernews.com/2025/09/first-malicious-mcp-server-found.html
+   https://snyk.io/blog/malicious-mcp-server-on-npm-postmark-mcp-harvests-emails/
+-->
