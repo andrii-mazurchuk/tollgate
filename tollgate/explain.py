@@ -16,6 +16,16 @@ TOOLS = {
     "files.fs.read": "Read a file",
     "files.fs.write": "Write a file",
     "files.fs.delete": "Delete a file",
+    # the agent's own tools, seen through POST /hook
+    "builtin.Bash": "Run a shell command",
+    "builtin.Read": "Read a file on the laptop",
+    "builtin.Write": "Write a file on the laptop",
+    "builtin.Edit": "Edit a file on the laptop",
+    "builtin.Grep": "Search files on the laptop",
+    "builtin.Glob": "Find files on the laptop",
+    "builtin.WebFetch": "Fetch a web page",
+    "builtin.WebSearch": "Search the web",
+    "builtin.Prompt": "Send a prompt to the agent",
 }
 
 _ADMIN = "Ask your security lead to change the policy if this is needed for your work."
@@ -28,6 +38,7 @@ RULES: dict[str, tuple[str, str]] = {
     # role / key / policy
     "auth.invalid": ("The key was missing or not valid.", "Copy the key again from Setup."),
     "role.denied": ("This tool is not available to your agent's role.", _ADMIN),
+    "role.builtin_denied": ("Your agent's role may not use this built-in tool.", _ADMIN),
     "role.constraint": ("The arguments are outside what your role allows (for example a path or a query type).",
                         "Change the request to stay inside the allowed limits."),
     "role.approval": ("This tool needs a person to approve each use.", "Wait for the approval, or ask your security lead."),
