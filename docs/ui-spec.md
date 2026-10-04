@@ -286,4 +286,54 @@ The view is read-only except for the profile switch. It answers four questions: 
   `current` is the active policy's `mode` when it names a profile, otherwise null. `status.modified` is true when the active file's gateway sections differ from that profile's file. The UI then says "Balanced (edited)" and warns in the switch dialog that the edits will be replaced; they are kept in the backup.
 - `POST /console/api/policy/profile` with `{profile}` returns `{status, backup}`. Unknown profile → 400; not admin → 401.
 
+### Server console, revision 3 (2026-10-04)
+
+#### Policy: edit access (Andrey: the admin must be able to change access on the server, at least per MCP server and tool)
+This replaces "read-only" for **access**. Everything else (limits, labels, content checks, budgets, models, adding roles) stays read-only for now and is an open item.
+
+**The policy model it edits:** `roles.<role>.servers.<server>`:
+- `{access: read}`: every read tool;
+- `{access: rw}`: every tool;
+- `{tools: [...]}`: an exact list;
+- absent: the server is hidden from the role.
+
+**Edit mode:**
+- An **Edit access** button sits in the top bar (Policy view only). The matrix switches to edit mode:
+  - each role × tool cell becomes a toggle: **Allowed / Hidden**. A tool's kind (Read/Write) is fixed by the server, shown as a small tag;
+  - each server group row gets a per-role quick set: **Hidden · Read only · All tools**.
+- Limits stay visible and read-only.
+- A bar shows "N changes · Discard · Review changes…".
+- **Review dialog:**
+  - one plain sentence per change, grouped by role. Example: "Intern bot may now open a pull request (write, public destination)".
+  - A warning line appears when a role gains a **public destination** while it can already read **outside text** and **private data**. The data-flow rule still guards that combination; the line says so.
+- **Save:**
+  - the server writes the smallest policy form per server: all read tools and nothing else → `access: read`; every tool → `access: rw`; otherwise `tools: [...]`; nothing → remove the server from the role;
+  - then it validates, backs up, writes atomically, and hot-reloads;
+  - history records "Edited in console", and the profile then reads "<Profile> (edited)".
+- **Conflicts:** the request carries `base_version`. If the file changed meanwhile, the server returns 409 with the current version, and the UI asks the admin to review against the new version.
+- **Trade-off:** YAML comments in the active file are not preserved on save (`yaml.safe_dump`). The backup keeps the original.
+
+**API:** `POST /console/api/policy/access` with
+```
+{base_version, changes: [{role, tool, allowed: bool}]}
+```
+returns `{status, backup, sentences: [..]}`. Responses:
+- 409 `{error, version}` if the file changed meanwhile;
+- 400 for an unknown role or tool, or a result that fails validation;
+- 401 if not admin.
+
+#### Threat feed
+The signatures in force, in plain words: name/ID, what it catches, action, tags, and the source (local file or signed feed).
+- **Feed status:** URL, last pull, current version, last error, and whether the signature checks out.
+- **Publish:** adding a signature (pattern, action, tags) through `tollgate.feed.publish`. The new bundle is signed and every hub pulling the feed picks it up on its next cycle.
+- **Not shown:** per-peer feed versions (no data). The page says so plainly.
+
+#### Self-test
+The latest evaluation (`audit/eval.json`) and test suite results, in plain words:
+- **Headline:** recall, false-positive rate and p95 latency, each against its target.
+- **Per corpus/category:** rows with pass/miss counts.
+- **Misses:** listed plainly, with the text as a fingerprint or truncated.
+- **Held-out set:** stated as "scored once by hand", never re-run.
+- **Run self-test:** a button runs the fast eval if it is cheap. If not, it shows the CLI command (`uv run tollgate test`) and when the last run happened.
+
 These texts will be revised, and both frontends rebuilt, several times. This spec is the source of truth for each rebuild.
