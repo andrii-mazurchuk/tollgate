@@ -21,22 +21,46 @@ from tollgate.gateway import apply_verdict, audit, content_policy, keys, local_t
 
 PASS_THROUGH = "mcp__tollgate__"  # exactly the server `tollgate connect` writes: our own MCP door already checked and audited these calls
 SPLIT = re.compile(r"&&|\|\||[;|\n]")  # each part of a compound command is labelled on its own
+# built-in floor under the policy's Bash public_sink patterns (matched on the normalised part)
+SINKS = ["*curl*-d*", "*curl*--data*", "*curl*-f*", "*curl*--upload*", "*curl*-t *", "*git*push*", "*scp*",
+         "*rsync*", "*nc *", "*ncat*", "*ssh *", "*wget*--post*", "*gh pr create*", "*gh issue comment*"]
+# Bash in an untrusted session holding private data: only these pass (every part, no substitution/redirect/`&`)
+READ_ONLY = re.compile(r"(?:ls|cat|head|tail|grep|rg|wc|pwd|echo|cd|git (?:status|diff|log|show))(?: .*)?")
+_UNSAFE = re.compile(r"[`$<>&]|--pre\b|-exec|-ok\b|-delete|-fprint|--output|--ext-diff")
+
+
+def _norm(part: str) -> str:
+    """Case and whitespace folded, leading path stripped from the program (/usr/bin/git -> git)."""
+    prog, _, rest = " ".join(part.split()).lower().partition(" ")
+    prog = re.split(r"[/\\]", prog)[-1]
+    return f"{prog} {rest}".strip()
+
+
+def read_only(command: str) -> bool:
+    """Every part a plain read-only command (bare program name, as typed). ponytail: allowlist, extend on demand."""
+    if _UNSAFE.search(command.replace("&&", "")):
+        return False
+    parts = [" ".join(p.split()) for p in SPLIT.split(command)]
+    return any(parts) and all(not p or READ_ONLY.fullmatch(p) for p in parts)
 
 
 def labels(data: dict, name: str, tool_input: dict) -> list[str]:
-    """Taint labels of a built-in. Bash: fnmatch per command part (case-insensitive, whitespace folded),
-    first matching label wins per part, labels of all parts are joined; no match -> `default`."""
+    """Taint labels of a built-in. Bash: fnmatch per command part (case-insensitive, whitespace folded, program
+    path stripped), first matching label wins per part, labels of all parts are joined; no match -> `default`.
+    A part matching SINKS is a public_sink whatever the policy says."""
     spec = (data.get("builtins") or {}).get(name)
     if not isinstance(spec, dict):
         return list(spec or [])
     out = []
     for part in SPLIT.split(str(tool_input.get("command", ""))):
-        cmd = " ".join(part.split()).lower()
+        cmd = _norm(part)
         if not cmd:
             continue
         hit = next((lab for lab, pats in spec.items() if lab != "default"
                     and any(fnmatch.fnmatchcase(cmd, p.lower()) for p in pats or [])), None)
         out += [hit] if hit else list(spec.get("default") or [])
+        if name == "Bash" and any(fnmatch.fnmatchcase(cmd, p) for p in SINKS):
+            out.append("public_sink")
     return list(dict.fromkeys(out)) or list(spec.get("default") or [])
 
 
@@ -135,7 +159,10 @@ def decide(data: dict, version: str, ident: tuple[str, str], kind: str, name: st
                 except (TypeError, ValueError):
                     deny("content.redact_failed", "redacted tool input is not valid JSON")
             t0 = time.perf_counter()
-            blocked = taint.check(data, key_id, tool, labels(data, name, ti))
+            lab = labels(data, name, ti)
+            if name == "Bash" and not read_only(str(ti.get("command", ""))):
+                lab.append("public_sink")  # only bites when untrusted + private: then Bash is read-only or nothing
+            blocked = taint.check(data, key_id, tool, lab)
             ev.latency_ms["taint"] = round((time.perf_counter() - t0) * 1000, 3)
             if blocked:
                 if ((data.get("taint") or {}).get("block_flow") or {}).get("action", "block") == "approve":

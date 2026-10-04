@@ -62,6 +62,8 @@ roles:
   role-2:
     builtins: { deny: [WebSearch] }   # optional per role. Absent = every built-in allowed (Andrey: allowed, labelled, guarded by taint)
 ```
+Patterns are a convenience, not the boundary: a built-in floor (`hooks.SINKS`: curl data/upload flags, git push, scp, rsync, nc, ssh, wget --post, gh pr create / issue comment) also labels `public_sink`, after folding case/whitespace and stripping the program's path. Once a session is **untrusted and holds private data**, every Bash command that is not plainly read-only (`ls`, `cat`, `head`, `tail`, `grep`, `rg`, `wc`, `pwd`, `echo`, `cd`, `git status|diff|log|show`; no `$`, backticks, redirects or `&`) is treated as a public sink and denied with `taint.flow`.
+
 **PreToolUse:**
 1. key → role;
 2. the role's built-in deny list;
