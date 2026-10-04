@@ -25,19 +25,20 @@ def _cause(tool: str, args: dict) -> str:
     return f"{tool} {where}".strip()
 
 
-def record(policy: dict, key_id: str, tool: str, args: dict) -> None:
-    """After a successful call. Taint never clears; the first cause is kept."""
-    s, labels = state(key_id), _labels(policy, tool)
+def record(policy: dict, key_id: str, tool: str, args: dict, labels: list | None = None, cause: str | None = None) -> None:
+    """After a successful call. Taint never clears; the first cause is kept. `labels`/`cause` override (hook door)."""
+    s = state(key_id)
+    labels = _labels(policy, tool) if labels is None else labels
     if "untrusted_source" in labels and not s["tainted"]:
-        s["tainted"] = _cause(tool, args)
+        s["tainted"] = cause or _cause(tool, args)
     if "private_data" in labels and not s["holds_private"]:
-        s["holds_private"] = _cause(tool, args)
+        s["holds_private"] = cause or _cause(tool, args)
 
 
-def check(policy: dict, key_id: str, tool: str) -> str | None:
+def check(policy: dict, key_id: str, tool: str, labels: list | None = None) -> str | None:
     """Before a call. Returns the block message, or None to allow. block_flow.action (block|approve) is applied by the caller."""
     t = policy.get("taint") or {}
-    if t.get("enabled") is False or "public_sink" not in _labels(policy, tool):
+    if t.get("enabled") is False or "public_sink" not in (_labels(policy, tool) if labels is None else labels):
         return None
     s = STATE.get(key_id)
     if not s or not (s["tainted"] and s["holds_private"]):

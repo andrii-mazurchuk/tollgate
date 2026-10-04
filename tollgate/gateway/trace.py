@@ -19,7 +19,7 @@ def stage_of(rule: str, detail: str = "") -> str:
     """Which check in the chain a reason belongs to."""
     if rule == "auth.invalid" or (rule == "role.denied" and detail.startswith("key not bound")):
         return "key"
-    if rule in ("role.denied", "pin.changed", "model.denied"):
+    if rule in ("role.denied", "role.builtin_denied", "pin.changed", "model.denied"):
         return "role"
     if rule in ("role.constraint", "loop.cutoff") or rule.startswith("request."):
         return "arguments"
@@ -51,7 +51,7 @@ def stages(ev: AuditEvent) -> list[dict]:
             outcome = "skip"
         elif s == "key" and ev.key_id == "local" and not rs:
             outcome = "skip"  # in-process call: no key to check
-        elif s == "budget" and ev.door == "tool":
+        elif s == "budget" and ev.door in ("tool", "hook"):
             outcome = "skip"  # tool calls are not metered
         elif s == "approval":
             rules = {r.rule for r in rs}

@@ -375,8 +375,16 @@ def matrix(data: dict, tools: dict) -> dict:
                        else "write" if t["write"] else "read")
                 row["cells"][role] = {"access": acc,
                                       "limits": [x for x in t.get("limits") or [] if x != "asks a human first"]}
+    b = data.get("builtins") or {}
+    deny = {r: set(((data["roles"][r] or {}).get("builtins") or {}).get("deny") or []) for r in roles}
+    builtins = [{"name": n, "plain": explain.tool(f"builtin.{n}"),
+                 "labels": ([f"{edge.LABEL_WORDS[k]} (by command)" for k in v if k in edge.LABEL_WORDS]
+                            if isinstance(v, dict) else [edge.LABEL_WORDS[x] for x in v or []]),
+                 "cells": {r: {"access": "denied" if n in deny[r] else "allowed"} for r in roles}}
+                for n, v in list(b.items()) + [(n, []) for n in sorted(set().union(*deny.values()) - set(b))]]
     return {"roles": [{"role": r, "agent": explain.AGENTS.get(r, r)} for r in roles],
-            "servers": [{"name": s, "tools": list(ts.values())} for s, ts in rows.items()]}
+            "servers": [{"name": s, "tools": list(ts.values())} for s, ts in rows.items()],
+            "builtins": builtins}
 
 
 def rules(data: dict, feed_state: dict) -> list[dict]:

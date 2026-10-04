@@ -36,6 +36,19 @@ labels:                                        # taint labels per tool
   tickets.query:      [private_data]           # can read the customers table (PII)
   tickets.reply:      [public_sink]            # replies are visible to the ticket's author
 
+builtins:                                      # agent-native tools seen through POST /hook (Claude Code names; `tollgate hook` maps others)
+  Read:      [private_data]                    # files on the laptop: company code and data
+  Grep:      [private_data]
+  Glob:      []
+  Edit:      []
+  Write:     []
+  WebFetch:  [untrusted_source]                # anyone can write a web page
+  WebSearch: [untrusted_source]
+  Bash:                                        # labels by command pattern (fnmatch, case-insensitive, per part of a compound command; first match wins), else `default`
+    public_sink:      ["git push*", "gh pr create*", "gh issue comment*", "curl * -d *", "curl *--data*", "curl * -F *", "scp *", "wget --post*"]
+    untrusted_source: ["curl *", "wget *", "gh issue view*", "gh pr view*"]
+    default:          []
+
 taint:                                         # session taint; a session = one issued role key
   enabled: true                                # still on: it costs ~0.005 ms per call (audit/perf.json)
   block_flow: { from: private_data, to: public_sink, action: approve }   # the call waits for a human: GET /admin/approvals, then approve/deny with the admin token

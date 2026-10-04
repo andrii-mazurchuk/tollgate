@@ -24,5 +24,5 @@ def test_ac16_balanced_is_the_active_policy():
     """policy.yaml is the balanced profile: gateway sections identical."""
     active = yaml.safe_load((ROOT / "policy.yaml").read_text(encoding="utf-8"))
     bal = yaml.safe_load((ROOT / "policies" / "balanced.yaml").read_text(encoding="utf-8"))
-    for k in ("mode", "servers", "roles", "labels", "taint", "loops"):
+    for k in ("mode", "servers", "roles", "labels", "builtins", "taint", "loops"):
         assert active[k] == bal[k], k

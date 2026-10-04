@@ -150,6 +150,9 @@ def validate(p) -> dict:
             raise ValueError(f"roles.{role}.models: need a list of model names")
         if not isinstance(r.get("approval") or [], list) or not all(isinstance(t, str) for t in r.get("approval") or []):
             raise ValueError(f"roles.{role}.approval: need a list of tool names")
+        bd = r.get("builtins") or {}
+        if not isinstance(bd, dict) or set(bd) - {"deny"} or not isinstance(bd.get("deny") or [], list)                 or not all(isinstance(t, str) for t in bd.get("deny") or []):
+            raise ValueError(f"roles.{role}.builtins: need {{deny: [built-in tool names]}}")
         tpd = (r.get("budget") or {}).get("tokens_per_day")
         if tpd is not None and (not isinstance(tpd, int) or isinstance(tpd, bool) or tpd < 0):
             raise ValueError(f"roles.{role}.budget.tokens_per_day: need a non-negative integer")
@@ -157,6 +160,17 @@ def validate(p) -> dict:
     if not isinstance(labels, dict) or not all(
             isinstance(v, list) and set(v) <= LABELS for v in labels.values()):  # a typo would silently drop a sink
         raise ValueError(f"labels: need {{tool: [...]}} with labels from {sorted(LABELS)}")
+    b = p.get("builtins") or {}
+    if not isinstance(b, dict):
+        raise ValueError("builtins: need {tool: [labels]} (Bash: {label: [command patterns], default: [labels]})")
+    for name, v in b.items():
+        ok = isinstance(v, list) and set(v) <= LABELS
+        if isinstance(v, dict):  # Bash-style: labels by command pattern
+            ok = set(v) <= LABELS | {"default"} and all(isinstance(x, list) and all(isinstance(y, str) for y in x)
+                                                         for x in v.values()) and set(v.get("default") or []) <= LABELS
+        if not ok:
+            raise ValueError(f"builtins.{name}: need [labels] or {{label: [patterns], default: [labels]}}, "
+                             f"labels from {sorted(LABELS)}")
     t = p.get("taint") or {}
     if not isinstance(t, dict) or (t.get("block_flow") or {}).get("action", "block") not in ("block", "approve"):
         raise ValueError("taint.block_flow.action: need block|approve")
