@@ -4,6 +4,7 @@ Every case is scanned; cases are split 70/30 by a fixed hash of their id. Tier 2
 and every reported metric comes from the held-out 30. Tier 2 scores are cached in audit/t2_cache.json.
 """
 import copy
+import os
 import hashlib
 import json
 import statistics
@@ -16,7 +17,7 @@ from tollgate.eval.corpus import CORPUS, load
 
 WEIGHTS = {"pii": 3, "secrets": 3, "injection": 3, "signatures": 1, "obfuscation": 1}
 ROOT = CORPUS.parents[1]
-CACHE = ROOT / "audit" / "t2_cache.json"
+CACHE = ROOT / "audit" / "t2_cache.json"  # TOLLGATE_T2_CACHE overrides (tests point it at a tmp file)
 PROFILES = {"strict": 0.10, "balanced": 0.05, "lenient": 0.02}  # benign FPR ceiling when choosing tier 2 `high`
 MIN_HELD_OUT = 10  # below this many held-out cases a control's posture uses its full-corpus pass rate
 NEVER = 1.01  # a `high` tier 2 can never reach
@@ -86,13 +87,14 @@ def run(policy: dict, cases: list[dict] | None = None) -> dict:
     content = _content(policy)
     cases = load() if cases is None else cases
     inj = content.get("injection")
-    tier2.CACHE = json.loads(CACHE.read_text()) if CACHE.exists() else {}
+    cache = Path(os.environ.get("TOLLGATE_T2_CACHE") or CACHE)
+    tier2.CACHE = json.loads(cache.read_text()) if cache.exists() else {}
     try:
         return _run(content, cases, inj if isinstance(inj, dict) and "high" in inj else None)
     finally:
         if tier2.CACHE:
-            CACHE.parent.mkdir(exist_ok=True)
-            CACHE.write_text(json.dumps(tier2.CACHE))
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps(tier2.CACHE))
         tier2.CACHE = None
 
 
