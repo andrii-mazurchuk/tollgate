@@ -221,7 +221,25 @@ def routes(policy) -> list:
         tl = [{k: v for k, v in e.items() if k != "text"} for e in edge.timeline(evs, sid)]
         return JSONResponse({"session": meta, "timeline": tl})
 
+    async def get_policy(request):
+        st, data = request.app.state, policy.data
+        tools = {n: await src.list_tools() for n, src in (getattr(st, "sources", None) or {}).items()}
+        return JSONResponse({"status": policy_status(policy), "matrix": matrix(data, tools),
+                             "rules": rules(data, st.feed.state), "history": policy.history[::-1],
+                             "profiles": profiles(data)})
+
+    async def set_profile(request):
+        try:
+            name = (await request.json()).get("profile")
+        except (ValueError, AttributeError):
+            name = None
+        if name not in PROFILES or not policy.path:
+            return JSONResponse({"error": f"profile must be one of {list(PROFILES)}"}, 400)
+        backup = switch_profile(policy, name)
+        return JSONResponse({"status": policy_status(policy), "backup": backup})
+
     api = [Route("/status", admin(status)), Route("/overview", admin(get_overview)),
+           Route("/policy", admin(get_policy)), Route("/policy/profile", admin(set_profile), methods=["POST"]),
            Route("/peers", admin(list_peers)), Route("/peers/{id}", admin(get_peer)),
            Route("/peers/{id}/roles", admin(set_roles), methods=["POST"]),
            Route("/peers/{id}/revoke", admin(revoke), methods=["POST"]),
@@ -230,3 +248,148 @@ def routes(policy) -> list:
            Route("/sessions", admin(list_sessions)), Route("/sessions/{id}", admin(one_session))]
     return [Mount("/console/api", routes=api), Route("/console", lambda r: RedirectResponse("/console/")),
             Mount("/console", app=StaticFiles(directory=UI, html=True))]
+
+
+# --- Policy view (docs/ui-spec.md "Server console, revision 2") ---
+PROFILES = ("strict", "balanced", "lenient")
+RANK = {"allow": 0, "flag": 1, "redact": 2, "approve": 3, "block": 4}
+
+
+def _r(v) -> int:  # looseness of an action: higher = looser
+    return -RANK.get(v, 0)
+
+
+def _act(v) -> str:
+    return edge.ACTION_WORDS.get(v, v)
+
+
+# ponytail: hand-picked settings, not a generic YAML differ; add a row when the profiles start differing elsewhere
+SETTINGS = [  # (path, plain, default, looseness, words)
+    (("taint", "block_flow", "action"), "Private data to a public destination", "block", _r, _act),
+    (("approval", "timeout_s"), "Time a human has to approve", 30, float, lambda v: f"{v} s"),
+    (("loops", "max_identical_calls"), "Identical calls in a row before cut-off", 5, float, str),
+    *[(("roles", r, "budget", "tokens_per_day"), f"{a} tokens per day", 0, float, lambda v: f"{v:,}")
+      for r, a in explain.AGENTS.items()],
+    *[(("roles", r, "models"), f"{a} models", [], len, lambda v: ", ".join(v) or "none")
+      for r, a in explain.AGENTS.items()],
+    (("roles", "role-2", "constrain", "files.fs.write", "path"), "Support assistant file writes", "",
+     lambda v: not v, lambda v: edge.limit_words("path", v) if v else "no limit"),
+    *[(("content", "pii", k), w[0].upper() + w[1:], "redact", _r, _act) for k, w in edge.PII.items()],
+    (("roles", "role-2", "content", "secrets"), "Support assistant secrets", "block", _r, _act),  # global: block
+    (("content", "injection", "tier1_action"), "Known injection phrases", "allow", _r, _act),
+    (("content", "injection", "tool_result_action"), "Injection found in a tool result", "flag", _r, _act),
+    (("content", "injection", "high"), "Classifier certainty that blocks", 0.9, float, lambda v: f"{round(v * 100)}%"),
+    (("content", "injection", "low"), "Classifier certainty that flags", 0.5, float, lambda v: f"{round(v * 100)}%"),
+]
+
+
+def _get(d: dict, path: tuple, default=None):
+    for k in path:
+        d = d.get(k) if isinstance(d, dict) else None
+    return default if d is None else d
+
+
+def _profile(name: str) -> dict:
+    import yaml
+    from tollgate.gateway.policy import DEFAULT_PATH
+    return yaml.safe_load((DEFAULT_PATH.parent / "policies" / f"{name}.yaml").read_text(encoding="utf-8"))
+
+
+def changes(old: dict, new: dict) -> list[dict]:
+    """What would get stricter or looser going from `old` to `new`, in plain sentences."""
+    out = []
+    for path, plain, dflt, loose, words in SETTINGS:
+        a, b = _get(old, path, dflt), _get(new, path, dflt)
+        if loose(a) != loose(b):
+            out.append({"plain": f"{plain}: {words(a)} → {words(b)}",
+                        "direction": "looser" if loose(b) > loose(a) else "stricter"})
+    return out
+
+
+def profiles(data: dict) -> dict:
+    ps = {n: _profile(n) for n in PROFILES}
+    diff = [{"setting": ".".join(p), "plain": plain, "values": {n: words(_get(ps[n], p, d)) for n in PROFILES}}
+            for p, plain, d, _, words in SETTINGS if len({repr(_get(ps[n], p, d)) for n in PROFILES}) > 1]
+    return {"current": data.get("mode") if data.get("mode") in PROFILES else None, "names": list(PROFILES),
+            "diff": diff, "changes": {n: changes(data, ps[n]) for n in PROFILES}}
+
+
+def modified(data: dict) -> bool:
+    """The active file's gateway sections (all but Track B's `content`) differ from its profile's file."""
+    if data.get("mode") not in PROFILES:
+        return False
+    p = _profile(data["mode"])
+    return any(data.get(k) != p.get(k) for k in set(data) | set(p) if k != "content")
+
+
+def policy_status(policy) -> dict:
+    data = policy.data
+    return {**policy.status(), "profile": data.get("mode"), "modified": modified(data)}
+
+
+def matrix(data: dict, tools: dict) -> dict:
+    """Rows are tools grouped by server, one cell per role: read | write | hidden | asks, plus limits in words."""
+    roles, rows = list(data.get("roles") or {}), {}
+    for role in roles:
+        approval = set((data["roles"][role] or {}).get("approval") or [])
+        for s in edge.agent(data, role, tools, {}, {})["servers"]:
+            for t in s["allowed"] + s["denied"]:
+                row = rows.setdefault(s["name"], {}).setdefault(t["name"], {
+                    "name": t["name"], "plain": t["plain"], "write": t["write"],
+                    "labels": [edge.LABEL_WORDS[x] for x in (data.get("labels") or {}).get(t["name"]) or []],
+                    "cells": {}})
+                acc = ("hidden" if t not in s["allowed"] else "asks" if t["name"] in approval
+                       else "write" if t["write"] else "read")
+                row["cells"][role] = {"access": acc,
+                                      "limits": [x for x in t.get("limits") or [] if x != "asks a human first"]}
+    return {"roles": [{"role": r, "agent": explain.AGENTS.get(r, r)} for r in roles],
+            "servers": [{"name": s, "tools": list(ts.values())} for s, ts in rows.items()]}
+
+
+def rules(data: dict, feed_state: dict) -> list[dict]:
+    """One plain card per rule family, generated from the live policy."""
+    g = edge.agent(data, "", {}, feed_state, {})  # no role: the global content section
+    flow, c, roles = g["flow_rule"], g["content"], data.get("roles") or {}
+    name = explain.AGENTS.get
+    done = {"redact": "masked", "block": "blocked", "approve": "held for a human", "allow": "allowed"}
+    over = [f"for {name(r, r)}, " + ", ".join(f"{edge.PII.get(k, k)} are {done.get(v, v)}"
+                                              for k, v in rp["content"].items() if isinstance(v, str))
+            for r, rp in roles.items() if (rp or {}).get("content")]
+    per = [f"{name(r, r)} may use {', '.join(rp.get('models') or []) or 'no models'} and "
+           f"{(rp.get('budget') or {}).get('tokens_per_day') or 0:,} tokens a day." for r, rp in roles.items()]
+    sig = c["signatures"]
+    loops = (data.get("loops") or {}).get("max_identical_calls", 5)
+    ts = (data.get("approval") or {}).get("timeout_s", 30)
+    return [
+        {"id": "data_flow", "title": "Data-flow rule", "sentence": flow["sentence"],
+         "action": _act(flow["action"]) if flow["enabled"] else "off"},
+        {"id": "masked", "title": "Masked data", "action": "mask",
+         "sentence": f"Masked before the agent sees it: {', '.join(c['masked']) or 'nothing'}."
+                     + (f" Instead, {'; '.join(over)}." if over else "")},
+        {"id": "blocked", "title": "Blocked data", "action": "block",
+         "sentence": f"A call carrying any of these is blocked: {', '.join(c['blocked']) or 'nothing'}."},
+        {"id": "injection", "title": "Injection check", "action": "block", "sentence": c["injection"]["words"]},
+        {"id": "signatures", "title": "Signatures", "action": "block",
+         "sentence": f"Every call is checked against {sig['count']} known attack patterns from the {sig['source']}."},
+        {"id": "loops", "title": "Loop guard", "action": "block",
+         "sentence": f"The same call repeated more than {loops} times in a row is cut off."},
+        {"id": "budgets", "title": "Budgets and models per role", "action": "block", "sentence": " ".join(per)},
+        {"id": "approval_timeout", "title": "Approval timeout", "action": "block",
+         "sentence": f"A call waiting for a human is refused if nobody answers within {ts} seconds."},
+    ]
+
+
+def switch_profile(policy, name: str) -> str:
+    """Backs up the active file, puts policies/<name>.yaml in its place (atomic replace), reloads. Returns the backup."""
+    import os
+    import shutil
+    from tollgate.gateway.policy import DEFAULT_PATH, history_path
+    backup = (history_path().parent / "policy-backups"
+              / f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{policy.version}.yaml")
+    backup.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(policy.path, backup)
+    tmp = policy.path.with_name(policy.path.name + ".tmp")
+    shutil.copyfile(DEFAULT_PATH.parent / "policies" / f"{name}.yaml", tmp)
+    os.replace(tmp, policy.path)  # atomic on Windows too: a hot reload never sees half a file
+    policy.reload()
+    return str(backup)
