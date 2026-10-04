@@ -7,7 +7,7 @@ import secrets
 import logging
 from pathlib import Path
 
-SECRET_FILE = Path(__file__).resolve().parents[2] / "audit" / "secret.key"  # audit/ is gitignored
+SECRET_FILE = Path(__file__).resolve().parents[2] / "audit/secret.key"  # audit/ is gitignored
 _installed: dict[str, bytes] = {}
 
 
