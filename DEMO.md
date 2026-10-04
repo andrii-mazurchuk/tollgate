@@ -13,10 +13,10 @@ uv sync
 uv run tollgate test                                   # once: downloads + warms the classifier, writes audit/eval.json for Self-test
 Copy-Item policy.yaml audit/policy.demo.yaml -Force
 uv run tollgate seed-fleet --policy audit/policy.demo.yaml
-uv run tollgate admin create --email you@acme.io --name "Your name"   # console owner (asks for a 12+ char password); sign in at /console/
+uv run tollgate admin create --email you@acme.io --name "Your name"   # console owner account (asks for a 12+ char password)
 uv run tollgate up --scripted-model --policy audit/policy.demo.yaml
 ```
-bash: `cp policy.yaml audit/policy.demo.yaml`; the rest is identical.
+bash: `cp policy.yaml audit/policy.demo.yaml`; the rest is identical. Then sign in at http://127.0.0.1:8080/console/ as the owner (Admin): every revoke and policy edit below is attributed to you. Every key in this run is minted per launch by `tollgate connect` (no hand-issued keys); `seed-fleet` and `connect` both use the demo copy `audit/policy.demo.yaml`.
 
 **T2, the "demo laptop"**, a sandbox repo (the push is denied before it runs, so the remote never has to exist):
 ```powershell
@@ -46,9 +46,9 @@ bash: `T=$(uv run --project $R tollgate enroll-token | head -1 | cut -d' ' -f3)`
 
 Launch `claude` once in `C:\demo\acme`: accept "trust this folder" and the `tollgate` MCP server from `.mcp.json`, then `/exit` without a prompt (session stays clean). Start `claude` again; leave it at the empty prompt.
 
-**Tabs, in order:** deck (`docs/Tollgate.pdf`) · http://127.0.0.1:8080/console (Overview) · /console **Sessions** · http://127.0.0.1:8080/edge (step details, on demand) · editor on `audit/policy.demo.yaml`.
+**Tabs, in order:** deck (`docs/Tollgate.pdf`) · http://127.0.0.1:8080/console (Overview, signed in) · /console **Try it** · /console **Self-test** · /console **Peers & roles** · /console **Policy** · editor on `audit/policy.demo.yaml`. The edge (http://127.0.0.1:8080/edge) only on demand.
 
-Check: Overview "Attacks stopped" > 0 and the chip says Balanced; Peers & roles shows `demo-laptop` with Support assistant.
+Check: Overview "Attacks stopped" > 0 and the access map shows the seeded fleet; the chip shows your name and Admin; Peers & roles shows `demo-laptop` with Support assistant.
 
 ## Run (3:00)
 
@@ -60,11 +60,11 @@ Check: Overview "Attacks stopped" > 0 and the chip says Balanced; Peers & roles 
 | 0:40–0:50 | **4** The gate | slide | Every call, one gate. One policy file, one MCP server per role. Content checked on the laptop. |
 | 0:50–1:00 | **5** Same attack stopped | slide | Untrusted + private + public write = blocked at step 3, with the reason. "On a real agent:" |
 | 1:00–1:45 | **6** Enroll → connect → work, **LIVE** | T2 Claude Code: paste `prompt.txt`, Enter (if it asks permission for a step: Enter = allow). curl ✓ → Read payroll ✓ → `git push` **blocked**: "Tollgate: this session read text written by outsiders and holds private data, so `git push origin main` could leak it." | Real Claude Code, unmodified. Enrolled once, one `tollgate connect`. Hooks see built-ins: shell, files, web. Developer sees only the block. |
-| 1:45–2:05 | **7** Security team's view | /console **Sessions** → search `demo-laptop` → top row (Support assistant, live dot) → steps Run a shell command → Read a file on the laptop → **Run a shell command · Blocked** → Overview tab: **Data-flow rule** sentence, state Untrusted + Holds private data → **Fingerprint** tab | Same session, security lead's screen, seconds later. Hub keeps the decision + SHA-256; text stays on the laptop. |
-| 2:05–2:20 | **9** Key per launch | **Peers & roles** → `demo-laptop` → **Revoke this laptop** → **Revoke demo-laptop**. T2 Claude Code: type `git status`, Enter → blocked: "Tollgate unreachable: HTTP 401 {"error":"invalid or revoked key"}" | Revoke the laptop: every key it minted dead at the next call. |
-| 2:20–2:35 | **9** Fails closed | Editor: append `roles: [oops` to `audit/policy.demo.yaml`, save → **Policy**: red "Edit rejected at …: ParserError … Still enforcing <version>." Delete the line, save. (Spare seconds: **Switch profile…** → Strict → diff → **Switch to Strict**, or **Edit access**.) | One file, hot reload. Broken edit rejected, last good policy keeps enforcing. Never fails open. |
-| 2:35–2:50 | **8** Proof | **Try it** → **Injection** chip → verdict + rule names. **Self-test** → headline vs targets, misses listed. | Any ad-hoc text, judges' too. 1,411 cases, 30% held out. Injection recall 0.837 vs 0.85: **missed, we say so.** FP 0.9%. Posture 0.931. |
-| 2:50–3:00 | **10** Try it | slide | `uv sync` · `tollgate up` · `tollgate test`. Public, MIT. Five minutes. |
+| 1:45–2:05 | **7** Every laptop, every agent, every block | /console **Overview**: access map, `demo-laptop` → Support assistant → **Agent built-ins** edge in red → click `demo-laptop` → **Latest sessions** top row → Sessions: steps Run a shell command → Read a file on the laptop → **Run a shell command · Blocked** → Overview tab (**Data-flow rule**, Untrusted + Holds private data) → **Fingerprint** tab | Same session, security lead's screen, seconds later. Every laptop, every agent. Hub keeps the decision + SHA-256; text stays on the laptop. |
+| 2:05–2:20 | **8** Proof | **Try it** → **Injection** chip → verdict + rule names. **Self-test** → headline vs targets, misses listed. | Any ad-hoc text, judges' too. 377 fast tests, 1,411 cases, 30% held out. Injection recall 0.837 vs 0.85: **missed, we say so.** FP 0.9%. Posture 0.931. |
+| 2:20–2:35 | **9** Key per launch | **Peers & roles** → `demo-laptop` → **Revoke this laptop** → **Revoke demo-laptop**. T2 Claude Code: type `git status`, Enter → blocked: "Tollgate unreachable: HTTP 401 {"error":"invalid or revoked key"}" | Revoke the laptop: every key it minted dead at the next call. Every change attributed to the signed-in admin. |
+| 2:35–2:50 | **9** Fails closed | Editor: append `roles: [oops` to `audit/policy.demo.yaml`, save → **Policy**: red "Edit rejected at …: ParserError … Still enforcing <version>." Delete the line, save. | One file, hot reload. Broken edit rejected, last good policy keeps enforcing. Hub down = call denied. Never fails open. |
+| 2:50–3:00 | **10** Try it | slide | `uv sync` · `tollgate up` · `tollgate test`. Public, MIT. Five minutes. Next: edge/hub split, model door v2. |
 
 ## Fallbacks (decide in 5 s; never debug on stage)
 
@@ -72,7 +72,7 @@ Check: Overview "Attacks stopped" > 0 and the chip says Balanced; Peers & roles 
 |---|---|
 | Claude Code login / trust prompt / model slow (1:00) | T2: `uv run --project $R python $R\scripts\demo_claude.py` (same `TOLLGATE_KEY`). Sends Claude Code's exact hook JSON through the real `tollgate hook claude-code` shim; prints `3. Bash(git push origin main) -> DENIED` + the same sentence. Console beat unchanged (same peer). |
 | Interactive `claude` misbehaves, headless works (1:00) | `Get-Content prompt.txt -Raw \| claude -p` (Windows truncates a multi-line `-p` argument: use stdin). bash: `claude -p < prompt.txt` |
-| No network: curl fails (1:00) | `demo_claude.py` (needs no network; replays the hook calls through the real shim, same peer), or T2: `uv run tollgate replay github` (taint ON: step 3 **BLOCK**, "session read untrusted text … and private data") / `uv run tollgate agent --scripted`. |
+| No network: curl fails (1:00) | `demo_claude.py` (needs no network; replays the hook calls through the real shim, same peer), or T2: `uv run tollgate replay github` (taint ON: step 3 **BLOCK**, "session read untrusted text … and private data") / `uv run tollgate agent --scripted` (classifier installed: the model door blocks the injected prompt first, `t2.injection`; with `TOLLGATE_T2=off` the PR is blocked by `taint.flow`; both are correct). There is no Scenario view any more. |
 | Hub down (any time) | Make it the point: any Claude Code call → "Tollgate unreachable: … refused" = fails closed (slide 9). Restart T1, carry on. |
 | Revoke shows nothing in Claude Code (2:05) | `uv run --project $R python $R\scripts\demo_claude.py` → `1. Bash(curl -s https://example.com) -> DENIED  Tollgate unreachable: HTTP 401 {"error":"invalid or revoked key"}` |
 | Console empty | `uv run tollgate seed-fleet --policy audit/policy.demo.yaml` (hub keeps running) |

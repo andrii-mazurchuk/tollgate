@@ -39,7 +39,7 @@ verdict = scan(text: str, point: ScanPoint, policy: dict) -> Verdict
 
 ## 2. `AuditEvent` (A writes, B reads)
 
-One JSON object per line, appended to `audit/events.jsonl`. It is the `dataclasses.asdict()` form of `AuditEvent`.
+One JSON object per line, appended to `audit/events.jsonl`. It is the `dataclasses.asdict()` form of `AuditEvent`. `door` is `"tool"` (MCP door), `"model"` (model door) or `"hook"` (hook door: the agent's built-in tools and prompts; `tool` is then `builtin.<Name>` or the MCP tool name).
 
 ```json
 {"ts": "2026-10-04T10:12:03.441Z", "role": "role-2", "key_id": "k_41c", "door": "tool",

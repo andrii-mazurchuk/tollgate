@@ -7,7 +7,7 @@ Tollgate checks agents through three doors. Each one is optional, and they combi
 | Door | What it sees | Who uses it |
 |---|---|---|
 | **Per-role MCP** `/mcp/{role}/` (Streamable HTTP + `Authorization: Bearer <key>`) | The MCP tools the role may use, with their arguments and results | Any MCP client: Claude Code, Codex, Cursor, Gemini CLI, Hermes, OpenClaw, VS Code |
-| **Hook** `POST /hook` (new) | **Every** tool call the agent makes, built-ins included (shell, file read/write, web fetch), its result, and the user's prompt | Claude Code (native `type: "http"` hook); Codex, Cursor, Gemini CLI and Hermes through `tollgate hook <agent>` |
+| **Hook** `POST /hook` | **Every** tool call the agent makes, built-ins included (shell, file read/write, web fetch), its result, and the user's prompt | Every agent through the `tollgate hook <agent>` command hook (fails closed); Claude Code optionally with its native `type: "http"` hook (`--fast`, fails open) |
 | **Model door** `/v1/chat/completions` | Prompts and replies, the model allow-list, the token budget | OpenAI-compatible clients: Hermes, OpenClaw, the OpenAI Agents SDK, LangChain, our demo agent |
 
 **Later:** Anthropic Messages (`/v1/messages`) and OpenAI Responses (`/v1/responses`), with streaming, so Claude Code's and Codex's own model traffic can also pass through. This is not in this build.
@@ -42,7 +42,7 @@ The response is in Claude Code's format. The shim translates it per agent.
 
 Every hook call writes a normal audit event (`door: "hook"`, `tool: "builtin.<Name>"` or the MCP tool name, the verdict, reasons, stages, state before/after, trace fields). It shows in the edge and the console like any other call.
 
-**Failure behaviour:** the shim fails **closed** (it exits 2 when the hub is unreachable). Claude Code's native http hook behaviour on errors isn't verified; we document it.
+**Failure behaviour:** the shim fails **closed**: hub unreachable, bad key, a 5xx, a non-JSON answer, bad stdin or an unknown event all answer with the agent's deny form ("Tollgate unreachable: …"). Claude Code's native http hooks (`connect claude-code --fast`) skip the process start per call but fail **open** on a connection error (per Claude Code's docs).
 
 ## Built-in tools in the policy
 ```yaml
@@ -62,7 +62,7 @@ roles:
   role-2:
     builtins: { deny: [WebSearch] }   # optional per role. Absent = every built-in allowed (Andrey: allowed, labelled, guarded by taint)
 ```
-Patterns are a convenience, not the boundary: a built-in floor (`hooks.SINKS`: curl data/upload flags, git push, scp, rsync, nc, ssh, wget --post, gh pr create / issue comment) also labels `public_sink`, after folding case/whitespace and stripping the program's path. Once a session is **untrusted and holds private data**, every Bash command that is not plainly read-only (`ls`, `cat`, `head`, `tail`, `grep`, `rg`, `wc`, `pwd`, `echo`, `cd`, `git status|diff|log|show`; no `$`, backticks, redirects or `&`) is treated as a public sink and denied with `taint.flow`.
+Patterns are a convenience, not the boundary: a built-in floor (`hooks.SINKS`: curl data/upload flags, git push, scp, rsync, nc, ssh, wget --post, gh pr create / issue comment) also labels `public_sink`, after folding case/whitespace and stripping the program's path. **Bash when tainted:** once a session is **untrusted and holds private data**, only read-only commands pass. Every part of the command (split on `&&`, `||`, `;`, `|`, newline) must be on the allowlist: `ls`, `cat`, `head`, `tail`, `grep`, `rg`, `wc`, `pwd`, `echo`, `cd`, `git status|diff|log|show`; and the command must contain no `$`, backticks, `<`, `>`, a lone `&`, or flags such as `-exec`, `-delete`, `--output`, `--pre`, `--ext-diff`. Anything else is treated as a public sink and denied with `taint.flow`. In a clean session Bash runs normally (labels and the sink floor still apply).
 
 **PreToolUse:**
 1. key → role;
@@ -79,11 +79,11 @@ Patterns are a convenience, not the boundary: a built-in floor (`hooks.SINKS`: c
 MCP tools called through the hook (`mcp__tollgate__…`) were already checked by the MCP door. The hook allows them and doesn't double-count them.
 
 ## `tollgate connect <agent>`
-`tollgate connect claude-code|codex|cursor|gemini|hermes --role R --peer P [--port N] [--write]`
-- It mints a key and prints the MCP entry plus hooks for that agent.
-- `--write` writes them into the **project's** config: `.mcp.json` + `.claude/settings.json`, `.codex/config.toml`, `.cursor/mcp.json` + `.cursor/hooks.json`, `.gemini/settings.json`, or Hermes' `~/.hermes/config.yaml` (it prints a diff first and never overwrites unrelated keys).
-- **Claude Code:** an http hook pointing at `/hook`, with the key header taken from `TOLLGATE_KEY`.
-- **Others:** a command hook running `tollgate hook <agent>`.
+`tollgate connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--port P] [--host H] [--policy F] [--write [--dir PATH]] [--fast]`
+- It mints a key and prints the MCP entry plus hooks for that agent, and the `TOLLGATE_KEY` line to set (PowerShell and bash). `print` prints the key on its first line, then the MCP URL, model door URL and header. `--host`/`--port` point at a remote hub.
+- `--write` writes them into the **project's** config (in `--dir`, default the current folder): `.mcp.json` + `.claude/settings.json`, `.codex/config.toml`, `.cursor/mcp.json` + `.cursor/hooks.json`, `.gemini/settings.json`, or Hermes' `~/.hermes/config.yaml` (it prints a diff first and never overwrites unrelated keys).
+- **Default, every agent (Claude Code included):** a command hook running `tollgate hook <agent> <event>` with the venv's absolute python; it fails closed. The key is never written to a file, only referenced as `TOLLGATE_KEY`.
+- **`--fast` (Claude Code only):** native `type: "http"` hooks pointing at `/hook`, key header from `TOLLGATE_KEY`; no process start per call, but fail-open on a connection error.
 
 **Company-wide enforcement (docs only):**
 - Claude Code: `managed-settings.json` with `allowManagedHooksOnly`, `allowManagedMcpServersOnly` and `allowedHttpHookUrls`.
@@ -95,12 +95,12 @@ MCP tools called through the hook (`mcp__tollgate__…`) were already checked by
 ```yaml
 servers:
   github:   { url: "https://api.githubcopilot.com/mcp/", headers: { Authorization: "Bearer ${GITHUB_TOKEN}" } }
-  files:    { command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"] }
+  files:    { command: "bunx", args: ["@modelcontextprotocol/server-filesystem", "/workspace"] }
   tickets:  { mock: mocks.tickets }
 ```
 Tollgate connects to each upstream (through a fastmcp client or proxy) and keeps exposing only the role's tools under `/mcp/{role}/`, with every check unchanged. `${VAR}` is expanded from the environment; secrets never go into policy.yaml.
 
-Shape (checked by `validate`): exactly one of `mock:`, `url:` (+ `headers:`, `transport: http|sse`) or `command:` (+ `args:`, `env:`, `cwd:`). A missing `${VAR}` stops startup with an error naming the variable, never its value. Upstream tools appear as `<server>.<tool>` with `_` turned into `.` (filesystem's `read_text_file` is `files.read.text.file`), so `tools:`, `constrain:` and `labels:` use that spelling. Each upstream is probed once at startup; one that does not answer is logged, reported in `/healthz` (`upstreams`) and shown as unreachable in the role detail, and the other servers keep working. Stdio processes are kept alive for the hub's lifetime and stopped on shutdown. Verified with `bunx @modelcontextprotocol/server-filesystem <dir>` (bun runs the npm package; no npx needed).
+Shape (checked by `validate`): exactly one of `mock:`, `url:` (+ `headers:`, `transport: http|sse`) or `command:` (+ `args:`, `env:`, `cwd:`). A missing `${VAR}` stops startup with an error naming the variable, never its value. Upstream tools appear as `<server>.<tool>` with `_` turned into `.` (filesystem's `read_text_file` is `files.read.text.file`), so `tools:`, `constrain:` and `labels:` use that spelling. Each upstream is probed once at startup; one that does not answer is logged, reported in `/healthz` (`upstreams`) and shown as unreachable in the role detail, and the other servers keep working. Stdio processes are kept alive for the hub's lifetime and stopped on shutdown. Verified with `bunx @modelcontextprotocol/server-filesystem <dir>` (bun runs the npm package).
 
 ## Sources
 - **Claude Code:**

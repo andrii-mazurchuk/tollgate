@@ -17,7 +17,7 @@
   <!-- main path -->
   <rect class="box" x="0" y="95" width="140" height="100" rx="8"/>
   <text class="t" x="70" y="138" text-anchor="middle">Agent</text>
-  <text class="s" x="70" y="162" text-anchor="middle">MCP client</text>
+  <text class="s" x="70" y="162" text-anchor="middle">MCP client + hooks</text>
 
   <rect class="edge" x="190" y="40" width="250" height="210" rx="8"/>
   <text class="t" x="315" y="74" text-anchor="middle" fill="#2f5fa7">Edge</text>
@@ -33,7 +33,7 @@
   <text x="640" y="146" text-anchor="middle">argument limits</text>
   <text x="640" y="178" text-anchor="middle">session taint</text>
   <text x="640" y="210" text-anchor="middle">budget / loop cut-off</text>
-  <text x="640" y="242" text-anchor="middle">human approval</text>
+  <text x="640" y="242" text-anchor="middle">approval (API/CLI)</text>
 
   <rect class="box" x="840" y="70" width="195" height="150" rx="8"/>
   <text class="t" x="937" y="104" text-anchor="middle">Source MCPs</text>
@@ -73,5 +73,5 @@
   <path class="ln" d="M745,270 V336"/>
   <path class="ln" d="M830,372 H876"/>
   <rect class="box" x="880" y="340" width="155" height="64" rx="8"/>
-  <text class="t" x="957" y="378" text-anchor="middle">Dashboard</text>
+  <text class="t" x="957" y="378" text-anchor="middle">/console + /edge</text>
 </svg>

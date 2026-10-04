@@ -1,5 +1,15 @@
 # UI spec (agreed in review, 2026-10-03)
 
+## Status as built (final, 2026-10-04)
+
+| UI | Views, as built | Code |
+|---|---|---|
+| **Server console** `/console` | **built:** Overview (live access map on top, KPIs, trend, attacks stopped) · Peers & roles · Sessions (fingerprints) · **Try it** (dry-run content check of any text for a role and scan point) · Policy (view, profile switch, Edit access) · Threat feed (list, publish) · Self-test (results, run) · Users (admin only) · Export (JSONL/CSV, top bar) · sign-in / owner setup / invite accept | `tollgate/console.py`, `console_auth.py`, `console_feed.py`, `console_try.py`, `console_map.py`, `telemetry.py`, `tollgate/ui/console/` |
+| **Local edge** `/edge` | **built:** Overview · Sessions (master–detail trace) · Events · Setup (incl. local settings). On demand only (opened by the deny link or `tollgate open`). | `tollgate/edge.py`, `tollgate/ui/edge/` |
+| Removed | **Scenario** view (fallback: `scripts/demo_claude.py`, `tollgate replay github`, `tollgate agent --scripted`); the early **Streamlit dashboard** (superseded by `/console`); approvals UI (API/CLI only) | — |
+
+The sections below are the review history, oldest first; where they disagree with this table, the table wins.
+
 Two interfaces, same visual style:
 - **Server console**: the company's security lead.
 - **Local edge**: the developer whose agent runs on their laptop.
@@ -24,7 +34,7 @@ Two interfaces, same visual style:
    - Optional, low priority: per-session stats (model, sources touched such as files and tickets, counts).
 2. **Analytics** (local): charts like the server's, but for this laptop only: actions over time by verdict, blocked and masked counts, top reasons, per-session breakdown.
 3. **Setup**: connection details, key (masked, copy), config snippets for Claude Code / Cursor / OpenAI SDK, Test connection, and what stays local vs. what is sent to the server.
-4. **Scenario** (to be confirmed after a walkthrough): the Acme steps from SCENARIO.md run through the real gateway, expected vs. actual, PASS/FAIL. *Removed 2026-10-04: the no-network fallback is `scripts/demo_claude.py` (replays the hook calls through the real shim) and the `tollgate replay github` / `tollgate agent --scripted` terminal commands.*
+4. ~~**Scenario**~~ (to be confirmed after a walkthrough): the Acme steps from docs/process/SCENARIO.md run through the real gateway, expected vs. actual, PASS/FAIL. *Removed 2026-10-04: the no-network fallback is `scripts/demo_claude.py` (replays the hook calls through the real shim) and the `tollgate replay github` / `tollgate agent --scripted` terminal commands.*
 
 **Dropped:** the "My agent" panel (tools/model/budget sidebar).
 
@@ -182,7 +192,7 @@ Order on the page, top to bottom: status line → KPI strip → trend → (reaso
   - the token is one-time, created in the console (or with `tollgate enroll-token`), and expires after 24 h.
 - **The admin sets which roles each peer may run** (in Peers & roles). A role is what the agent is, not who owns the laptop. One laptop can run several roles.
 - **Agent keys are minted automatically, one per agent launch.**
-  - `tollgate connect <client> --role R --peer P` (clients: `claude-code`, `cursor`, `print`) mints a key and prints or writes the client config.
+  - `tollgate connect <agent> --role R --peer P` (agents: `claude-code`, `codex`, `cursor`, `gemini`, `hermes`, or `print`) mints a key and prints or writes the agent's MCP entry and hooks.
   - The key is `tg_<role>_<peer>-<n>_<mac>`. The format is unchanged and `<peer>-<n>` is the key ID, so enforcement doesn't change.
   - Minting is refused if the peer is revoked or the role isn't allowed for it.
   - Nobody issues keys by hand any more. `tollgate key issue` stays for tests and dev.
@@ -205,11 +215,14 @@ Order on the page, top to bottom: status line → KPI strip → trend → (reaso
   - There are no heartbeats, and per-peer app/feed versions are not shown (no data).
 - **Demo fleet:** `tollgate seed-fleet` enrolls about 6 peers across both roles, with believable owners and devices. It then drives a mix of normal calls and the Acme attack through the **real in-process gateway** with minted keys, so every number in the console is real.
 
-#### Console API (`/console/api/*`; loopback or the admin token, like `/admin/*`)
+#### Console API (`/console/api/*`, complete as built)
+Auth: a console account session (cookie `tg_session`; writes also need `X-CSRF-Token`, a same-origin `Origin` and `Content-Type: application/json`) or `Authorization: Bearer $TOLLGATE_ADMIN_TOKEN`. GETs: Admin or Viewer; POSTs: Admin only, except `POST try` (a dry run). Host must be loopback or in `TOLLGATE_ALLOWED_HOSTS`. Before the owner account exists, loopback may read but not write.
+
 | Method / path | Returns |
 |---|---|
 | `GET status` | `{health: {level, message, ts?, session_id?, trace_id?}, admin, policy: {version, profile}, feed: {version}, app_version}`. Health counts the last hour, like the edge. "N attacks stopped" counts blocked injection/signature/data-flow events. |
 | `GET overview?range=15m\|1h\|today\|all` | `{kpis: {checked, blocked, attacks, peers_online} (each {value, prev}), series, bucket_s, by_reason: [{label, count}], by_role: [{role, agent, count}], attacks: [item]}`. `item` = the edge `_item` + `peer`, `peer_label`. |
+| `GET map?range=` | the access map: peers → agents/roles → servers and built-ins, calls and blocks per edge, latest sessions |
 | `GET peers` | `{roles: [{role, agent, peers, servers: [{name, allowed: n, hidden: n}], actions, blocked}], peers: [{id, owner, device, roles, online, last_seen, sessions, actions, blocked, revoked}]}`, including the "Unenrolled" row when legacy keys exist. |
 | `GET peers/{id}` | the peer + `sessions` (edge session shape) + `keys: [{key_id, role, first_ts, last_ts, n}]` |
 | `POST peers/{id}/roles` `{roles: [...]}` | the updated peer (roles must exist in the policy) |
@@ -218,10 +231,41 @@ Order on the page, top to bottom: status line → KPI strip → trend → (reaso
 | `GET roles/{role}` | the edge `agent(...)` shape for that role (servers, allowed/hidden tools with limits, models, budget, content, labels) + `peers: [...]` |
 | `GET sessions?peer=&role=&state=` | edge session list items + `peer`, `peer_label` |
 | `GET sessions/{id}` | the edge timeline **without `text`**. Each step keeps `content_sha256` (the fingerprint). |
+| `GET policy` | status, role × tool matrix (built-ins included), rules, history, profiles (see revision 2) |
+| `POST policy/profile` `{profile}` | `{status, backup}` |
+| `POST policy/access` `{base_version, changes}` | `{status, backup, sentences}`; 409 on a concurrent edit |
+| `GET feed` | signatures in force (plain words, action, tags, source) + feed status |
+| `POST feed/publish` `{id, pattern, action, tags}` | `{version, id, replaced, note}` (ReDoS-checked); 400 with `fields` on a bad entry, 409 when no feed is configured |
+| `GET selftest` | the latest `audit/eval.json` headline vs targets, per-corpus rows, misses, test results |
+| `POST selftest/run` | 202 `{run}`; 409 if one is already running |
+| `GET try` | `{roles, points, presets}` |
+| `POST try` `{role, point, text}` | dry-run verdict: `{verdict, action, reasons, sent, transforms, stages, total_ms, classifier…}`; changes nothing, no audit event |
+| `GET export?format=csv\|jsonl&range=&peer=&role=&state=&q=` | the audit log as a download, never the text |
+| `GET auth/me` | `{email, name, role, csrf}` or `{setup, can_setup}` |
+| `POST auth/setup` / `auth/login` / `auth/logout` / `auth/accept` | owner account (loopback only) / sign in / sign out / accept an invite |
+| `GET users` | users + recent admin actions (admin only) |
+| `POST users/invite` `{email, role}` | a one-time link `/console/#/accept/<token>` (24 h) |
+| `POST users/{email}/role`, `POST users/{email}/disabled` | change role / disable or enable |
+
+#### Edge API (`/edge/api/*`, as built)
+Loopback client **and** a loopback (or `TOLLGATE_ALLOWED_HOSTS`) Host; POSTs need JSON and, when sent, a loopback `Origin`. The Scenario endpoints were removed with the view.
+
+| Method / path | Returns |
+|---|---|
+| `GET status?since=` | account (role, agent, key id), server, app/policy/feed/classifier versions, health |
+| `GET overview?range=` | KPIs, trend, top reasons, top tools, recent events for this laptop |
+| `GET sessions` | this laptop's sessions |
+| `GET sessions/{id}` | `{session, timeline}` with the full text (local store) |
+| `GET events?range=&action=&agent=&check=` | blocked / masked / flagged items |
+| `GET setup` | server, MCP and model URLs, masked key, peer, the `tollgate connect` line, config snippets |
+| `POST setup/test` | lists the role's tools through the real MCP door |
+| `GET agent` | what this agent may do (servers, tools, limits, models, budget, labels, content checks) |
+| `GET settings`, `POST settings` | local settings (keep text, retention); stricter-only against the policy |
+| `GET stream` | server-sent events: one `trace_id` per new audit event |
 
 #### Views (revision 1 builds the first three)
 **Shell:** the same as the edge.
-- Left nav: Overview · Peers & roles · Sessions, then Policy · Threat feed · Self-test greyed until built.
+- Left nav (built): Overview · Peers & roles · Sessions · Try it · Policy · Threat feed · Self-test · Users (admin only).
 - Top bar, 28 px: health on the left; on the right the view's controls, a status chip (Admin · hub, with policy, feed and app versions in the tooltip) and the theme toggle.
 - The same CSS tokens, badges and type scale as the edge. Red only for Blocked.
 
@@ -349,7 +393,7 @@ The latest evaluation (`audit/eval.json`) and test suite results, in plain words
    - `tollgate open [edge|console] [TRACE]` opens it.
    - Later: `tollgate status` / `tollgate why`.
 4. **On stage:** the console plus the agent's terminal. The edge appears only as the no-network fallback.
-5. **The console Overview gets a live access map on top:** laptops → agents/roles → MCP servers and built-ins, live traffic, red for blocks, click → session. The existing content moves below it. It is time-boxed and merged only if clean.
+5. **(Built.)** **The console Overview gets a live access map on top:** laptops → agents/roles → MCP servers and built-ins, live traffic, red for blocks, click → session. The existing content moves below it. It is time-boxed and merged only if clean.
 
 These texts will be revised, and both frontends rebuilt, several times. This spec is the source of truth for each rebuild.
 

@@ -2,19 +2,21 @@
 
 ## Status (final, 2026-10-04; first written at checkpoint 20:21, tag `checkpoint-2010`)
 
-**The whole 15h schedule below is built.** M0 was done at 16:53, M1 at 17:25, the M2 scope at about 19:00, and red-teaming at 19:30. `submission-1` is tagged, and the repo is public at https://github.com/andrii-mazurchuk/tollgate (MIT). Since then: local edge UI `/edge`, server console `/console` (peers, key per launch, revocation, sessions, policy view/switch/edit, threat feed, self-test), `seed-fleet`.
+**The whole 15h schedule below is built.** M0 was done at 16:53, M1 at 17:25, the M2 scope at about 19:00, and red-teaming at 19:30. `submission-1` is tagged, and the repo is public at https://github.com/andrii-mazurchuk/tollgate (MIT). Since then: local edge UI `/edge`, server console `/console` (access map, peers, key per launch, revocation, sessions, Try it, policy view/switch/edit, threat feed, self-test, JSONL/CSV export), console accounts (Admin/Viewer), the hook door (`/hook`, `tollgate hook`, `tollgate connect` for Claude Code, Codex, Cursor, Gemini CLI, Hermes), hardening (per-install secrets, fail-closed hooks, Host/Origin guards), `seed-fleet`.
 
 **Tests:**
-- 247 fast tests pass, plus 7 slow ones.
-- All 53 acceptance tests pass.
+- 377 fast tests pass, plus 7 slow ones (`uv run pytest -q -m "not slow"`).
+- All 53 acceptance tests pass (48 fast + 5 slow).
 - AC1–AC16: 14 green, 2 partial. AC8 injection recall is 0.837 against 0.85 (FPR 0.009). AC15 tier 2 short-text p95 is ~65–90 ms against 80 ms (borderline).
 
-**Open, to review with Andrey before building:**
-1. Content-triggered taint: a tool-result injection flag taints the session.
-2. A "Known limits" section in the docs.
-3. Live Ollama: install, live agent run, tier 3 judge.
-4. Target misses (AC8, AC15).
-5. Optional: Edge as a separate process, admin UI, OSV auto-sync.
+**Done since the first status:** "Known limits" section (README); admin UI (console Policy → Edit access, Peers & roles, Users); MCP-door injection taint (a flagged tool result taints the session).
+
+**Open (after the hackathon):**
+1. Target misses (AC8 recall, AC15 classifier latency).
+2. Edge/hub split (`--role edge|hub`) with policy sync from the hub.
+3. Model door v2: Anthropic Messages / OpenAI Responses, streaming.
+4. Budgets in money, memory controls, SSO for the console.
+5. Tier 3 judge, OSV auto-sync.
 
 **TDD loop unchanged:**
 1. Write a failing test.
@@ -47,7 +49,7 @@ There are 3h20 of buffer between h15 and the deadline. Overruns eat buffer, neve
 
 | | Track A: Gateway | Track B: Content and evidence |
 |---|---|---|
-| Owns | `tollgate/gateway/`, `mocks/`, `tollgate/cli.py` | `tollgate/content/`, `tollgate/eval/`, `dashboard/`, `tests/corpus/`, `signatures.yaml` |
+| Owns | `tollgate/gateway/`, `mocks/`, `tollgate/cli.py` | `tollgate/content/`, `tollgate/eval/`, `tests/corpus/`, `signatures.yaml` (the Streamlit `dashboard/` was removed) |
 | Session | Claude session 1, worktree `rebel/` | Claude session 2, worktree `rebel-b/` |
 | Branches | `a/<feature>` | `b/<feature>` |
 
@@ -100,7 +102,7 @@ The test suite stays large and grows with the data: size it live, don't fix it i
 3. AC13 summary → M2. Submission 1 only needs docs + snapshot, so never trade the docs for a feature.
 
 ## Later (only if M2 finishes early, in this order)
-1. Approval flow (dashboard button).
+1. Approval flow (built: API/CLI).
 2. Tier 3 judge.
 3. Tool description pinning.
 4. Admin UI role builder.

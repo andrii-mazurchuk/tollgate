@@ -19,7 +19,7 @@ Every role gets its own MCP server, generated from one policy file, that exposes
 - Python 3.13, **uv** (never pip directly). bun/bunx for any JS (never npm/npx).
 - **fastmcp==4.0.10, pinned.** It uses `httpx2`, not `httpx`.
 - pytest + pytest-asyncio (`asyncio_mode=auto`).
-- Later: onnxruntime (tier 2), Ollama (model door), the `/console` and `/edge` UIs.
+- onnxruntime (tier 2), Ollama optional (model door); the `/console` and `/edge` UIs are plain JS in `tollgate/ui/`.
 
 ## Run
 ```

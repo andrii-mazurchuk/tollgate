@@ -73,6 +73,7 @@ section img { border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 
 .kw { font-size: 34px; line-height: 1.25; margin: 0; padding: 0; list-style: none; }
 .kw li { margin: 0 0 16px; } .kw li b { color: var(--blue); }
 .kw li span { display: block; font-size: 22px; color: var(--mute); font-weight: 400; }
+.kw.tight { font-size: 28px; } .kw.tight li { margin: 0 0 8px; } .kw.tight li span { font-size: 19px; }
 </style>
 
 <!-- 1 · ONE INCIDENT -->
@@ -209,7 +210,7 @@ salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
 # Proof: <code style="font-size:44px">uv run tollgate test</code>
 
 <div class="m">
-<div><b>255</b><span>fast tests · +7 slow</span></div>
+<div><b>377</b><span>fast tests · +7 slow</span></div>
 <div><b>1,411</b><span>eval cases · 30% held out</span></div>
 <div><b>&lt; 1 ms</b><span>hub checks, p95</span></div>
 <div><b class="blue">0.967</b><span>PII recall</span></div>
@@ -228,10 +229,12 @@ salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
 <div class="row" style="gap:50px">
 <div style="flex:1.1">
 <p class="kick">Why it holds</p>
-<ul class="kw">
-<li><b>Fails closed</b><span>hub down = call denied</span></li>
+<ul class="kw tight">
+<li><b>Fails closed</b><span>hub down or bad key = call denied</span></li>
+<li><b>Per-install secrets</b><span>no shared default keys</span></li>
 <li><b>Signed threat feed</b><span>tampered bundle rejected</span></li>
-<li><b>Key per agent launch</b><span>revoke laptop = all keys dead</span></li>
+<li><b>Key per agent launch</b><span>revoke laptop = all its keys dead</span></li>
+<li><b>Console accounts</b><span>Admin / Viewer, every change attributed</span></li>
 <li><b>Company-wide</b><span>enforced via managed settings</span></li>
 </ul>
 </div>
@@ -262,7 +265,7 @@ uv run tollgate test<br>
 
 <p class="big"><em class="blue" style="font-style:normal">github.com/andrii-mazurchuk/tollgate</em> <span class="mute" style="font-size:28px">· public · MIT</span></p>
 
-<p class="mute" style="font-size:26px;margin-top:14px">Next: hooks for every agent · live access map · budgets in money</p>
+<p class="mute" style="font-size:26px;margin-top:14px">Next: edge/hub split + policy sync · model door v2 (Anthropic, streaming)<br>budgets in money · memory controls · SSO</p>
 
 <!--
 SOURCES (checked 2026-10-04)

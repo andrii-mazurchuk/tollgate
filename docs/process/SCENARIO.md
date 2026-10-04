@@ -1,5 +1,7 @@
 # SCENARIO.md: the Acme golden scenario (DRAFT for review)
 
+> **Historical design doc** (2026-10-03). Steps are stale: the Scenario view was removed; the runnable steps live in `scenario/acme.yaml`. Current demo: [DEMO.md](../../DEMO.md).
+
 One story that exercises every feature, with a **fixed expected result per step**. You run it after every commit to see that Tollgate still behaves. The UI is built around showing exactly these steps.
 
 ## The story
