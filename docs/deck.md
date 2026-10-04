@@ -189,19 +189,14 @@ salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
 
 <div class="tag">SECURITY REPORTING · 20%</div>
 
-# Every block, <em>traced to its session.</em>
+# Every laptop. Every agent. <em>Every block.</em>
 
-![w:1160](img/deck2-kpis.png)
+![w:1000](img/deck2-map.png)
 
-<div class="row" style="align-items:center; margin-top:18px">
-<div style="flex:1.35">
-
-![w:700](img/deck2-fingerprint.png)
-
-</div>
+<div class="row" style="align-items:center; margin-top:10px">
 <div style="flex:1">
 <p class="big" style="margin:0">Text never leaves the laptop.</p>
-<p class="mute" style="font-size:26px">Server keeps the decision + a fingerprint.</p>
+<p class="mute" style="font-size:26px;margin:0">Server keeps the decision + a fingerprint.</p>
 </div>
 </div>
 
