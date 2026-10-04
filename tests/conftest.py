@@ -5,6 +5,16 @@ import pytest
 def _audit_to_tmp(tmp_path, monkeypatch):
     """No test writes the real audit/events.jsonl; tests that set their own path override this."""
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "audit.jsonl"))
+    monkeypatch.setenv("TOLLGATE_PEERS", str(tmp_path / "peers.json"))  # nor the real peer registry
+
+
+@pytest.fixture(autouse=True)
+def _fresh_budgets():
+    """Token budgets are process-wide per (role, UTC day); without this, earlier tests' spend leaks into AC11."""
+    from tollgate.gateway import model_door
+    model_door.USED.clear()
+    yield
+    model_door.USED.clear()
 
 
 @pytest.fixture(autouse=True)

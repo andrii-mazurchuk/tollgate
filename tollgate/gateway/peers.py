@@ -54,6 +54,8 @@ def _update(fn):
         tmp = p.with_suffix(".tmp")
         tmp.write_text(json.dumps(reg, indent=1, ensure_ascii=False), encoding="utf-8")
         os.replace(tmp, p)
+        st = p.stat()  # refresh the cache from what we wrote: two writes in one mtime tick with equal size would read stale
+        _CACHE.update(sig=(str(p), st.st_mtime_ns, st.st_size), data=reg)
         return out
 
 
