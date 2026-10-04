@@ -4,6 +4,7 @@ import copy
 import json
 import os
 from pathlib import Path
+from tollgate import paths
 
 import httpx2
 import yaml
@@ -14,7 +15,7 @@ from fastmcp.exceptions import ToolError
 from tollgate import explain
 from tollgate.gateway import keys, model_door, taint
 
-PATH = Path(__file__).resolve().parents[1] / "scenario" / "acme.yaml"
+PATH = paths.default("scenario/acme.yaml")
 
 
 def load(path: Path = PATH) -> dict:

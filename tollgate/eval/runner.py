@@ -11,6 +11,7 @@ import statistics
 from collections import defaultdict
 from pathlib import Path
 
+from tollgate import paths
 from tollgate.content import scan, tier2
 from tollgate.content.normalise import normalise
 from tollgate.eval.corpus import CORPUS, load
@@ -18,7 +19,7 @@ from tollgate.util import now_z
 
 WEIGHTS = {"pii": 3, "secrets": 3, "injection": 3, "signatures": 1, "obfuscation": 1}
 ROOT = CORPUS.parents[1]
-CACHE = ROOT / "audit" / "t2_cache.json"  # TOLLGATE_T2_CACHE overrides (tests point it at a tmp file)
+CACHE = paths.AUDIT / "t2_cache.json"  # TOLLGATE_T2_CACHE overrides (tests point it at a tmp file)
 PROFILES = {"strict": 0.10, "balanced": 0.05, "lenient": 0.02}  # benign FPR ceiling when choosing tier 2 `high`
 MIN_HELD_OUT = 10  # below this many held-out cases a control's posture uses its full-corpus pass rate
 NEVER = 1.01  # a `high` tier 2 can never reach
@@ -62,7 +63,7 @@ def _content(policy: dict) -> dict:
     content = copy.deepcopy(policy.get("content") or {})
     sig = content.get("signatures")
     if isinstance(sig, str) and not Path(sig).is_absolute():
-        content["signatures"] = str(ROOT / sig)  # policy paths are relative to the repo root
+        content["signatures"] = str(paths.HOME / sig)  # policy paths are relative to the Tollgate home
     return content
 
 
@@ -214,15 +215,15 @@ def main(policy_path: str = "policy.yaml", out: str = "audit/eval.json") -> dict
 
     import yaml
 
-    with open(ROOT / policy_path, encoding="utf-8") as fh:
+    with open(paths.HOME / policy_path, encoding="utf-8") as fh:
         policy = yaml.safe_load(fh)
     t0 = time.perf_counter()
     res = run(policy)
     res.update(ran_at=now_z("seconds"),
                duration_s=round(time.perf_counter() - t0, 1), profile=policy.get("mode"))
     print(report(res))
-    p = ROOT / out
-    p.parent.mkdir(exist_ok=True)
+    p = paths.HOME / out
+    p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(res, indent=1), encoding="utf-8")
     return res
 
@@ -233,8 +234,8 @@ class Tally:
         st = terminalreporter.stats
         out = {k: len(st.get(k, [])) for k in ("passed", "failed", "error", "skipped", "xfailed", "xpassed", "deselected")}
         out.update(exit_code=int(exitstatus), ran_at=now_z("seconds"))
-        p = ROOT / "audit" / "tests.json"
-        p.parent.mkdir(exist_ok=True)
+        p = paths.AUDIT / "tests.json"
+        p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(out, indent=1), encoding="utf-8")
 
 

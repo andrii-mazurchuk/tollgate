@@ -56,7 +56,7 @@ def _emitted_rules() -> set[str]:
             found |= {f"{a}.{b}" for a, b in pat.findall(p.read_text(encoding="utf-8"))}
     found |= {r[0] for r in T1}
     found |= {"approval.denied", "approval.timeout"}  # built as f"approval.{...}"
-    return found - {"model.door"}
+    return found - {"model.door", "secret.key"}  # secret.key: the install secret file name (gateway/keys.py)
 
 
 def test_every_rule_has_a_plain_explanation():

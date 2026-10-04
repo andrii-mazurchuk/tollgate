@@ -25,7 +25,7 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
-from tollgate import explain
+from tollgate import explain, paths
 from tollgate.content import scan
 from tollgate.contract import SEVERITY, AuditEvent, Reason, Verdict
 from tollgate.feed import Puller
@@ -363,7 +363,7 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
             cfg = policy.data.get("feed") or {}
             if cfg.get("url"):
                 feed.state["url"] = cfg["url"]
-                await feed.pull((policy.data.get("content") or {}).get("signatures") or "signatures.yaml")
+                await feed.pull(paths.HOME / ((policy.data.get("content") or {}).get("signatures") or "signatures.yaml"))
             await asyncio.sleep(float(cfg.get("interval_s", 10)))
 
     @contextlib.asynccontextmanager

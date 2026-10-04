@@ -10,6 +10,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from tollgate import paths
 
 import yaml
 from starlette.requests import Request
@@ -21,7 +22,7 @@ from tollgate.content import signatures as sigs
 from tollgate.feed import _STAMP, SRC, add, check_signatures
 from tollgate.util import iso_z, now_z
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[1]  # source tree: tests/corpus + the eval run (dev checkout only)
 FEED_HOWTO = ("Publishing needs a signature feed. Add `feed: {url: http://127.0.0.1:8090/bundle.json, interval_s: 10}` "
               "to policy.yaml (optionally `dir:` for the feed's source folder, default `feed/`) and run "
               "`tollgate feed serve`.")
@@ -92,12 +93,12 @@ def plain(e: dict) -> str:
 # --- Threat feed ---
 def feed_dir(data: dict) -> Path:
     d = Path((data.get("feed") or {}).get("dir") or "feed")
-    return d if d.is_absolute() else ROOT / d
+    return d if d.is_absolute() else paths.HOME / d
 
 
 def feed_view(data: dict, fs: dict) -> dict:
     rel = (data.get("content") or {}).get("signatures") or "signatures.yaml"
-    path = Path(rel) if Path(rel).is_absolute() else ROOT / rel
+    path = Path(rel) if Path(rel).is_absolute() else paths.HOME / rel
     try:
         text = path.read_text(encoding="utf-8")
         entries = yaml.safe_load(text) or []

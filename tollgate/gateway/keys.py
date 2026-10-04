@@ -6,8 +6,9 @@ import secrets
 
 import logging
 from pathlib import Path
+from tollgate import paths
 
-SECRET_FILE = Path(__file__).resolve().parents[2] / "audit/secret.key"  # audit/ is gitignored
+SECRET_FILE = paths.AUDIT / "secret.key"  # audit/ is gitignored
 _installed: dict[str, bytes] = {}
 
 

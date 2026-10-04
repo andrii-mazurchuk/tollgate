@@ -79,10 +79,12 @@ Patterns are a convenience, not the boundary: a built-in floor (`hooks.SINKS`: c
 MCP tools called through the hook (`mcp__tollgate__…`) were already checked by the MCP door. The hook allows them and doesn't double-count them.
 
 ## `tollgate connect <agent>`
-`tollgate connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--port P] [--host H] [--policy F] [--write [--dir PATH]] [--fast]`
+`tollgate connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--scope project|user] [--port P] [--host H] [--policy F] [--write [--dir PATH]] [--fast]`
 - It mints a key and prints the MCP entry plus hooks for that agent, and the `TOLLGATE_KEY` line to set (PowerShell and bash). `print` prints the key on its first line, then the MCP URL, model door URL and header. `--host`/`--port` point at a remote hub.
 - `--write` writes them into the **project's** config (in `--dir`, default the current folder): `.mcp.json` + `.claude/settings.json`, `.codex/config.toml`, `.cursor/mcp.json` + `.cursor/hooks.json`, `.gemini/settings.json`, or Hermes' `~/.hermes/config.yaml` (it prints a diff first and never overwrites unrelated keys).
-- **Default, every agent (Claude Code included):** a command hook running `tollgate hook <agent> <event>` with the venv's absolute python; it fails closed. The key is never written to a file, only referenced as `TOLLGATE_KEY`.
+- `--scope user` (default `project`) targets the user-level files instead, so every project is covered: `~/.claude/settings.json`, `~/.codex/config.toml`, `~/.cursor/mcp.json` + `~/.cursor/hooks.json` (Cursor's user hooks), `~/.gemini/settings.json`; Hermes is user-level anyway. Claude Code's user MCP entry lives in `~/.claude.json`, its live state file, so Tollgate does not edit it and prints `claude mcp add --transport http --scope user --header 'Authorization: Bearer ${TOLLGATE_KEY}' tollgate <url>` instead (Claude Code expands `${VAR}` in headers at every scope). Same merge rules: idempotent, unrelated keys kept, diff printed. The key stays an env var; at user scope persist it yourself (`setx TOLLGATE_KEY …` / a line in `~/.bashrc` or `~/.zshrc`); Tollgate never edits shell profiles.
+- `tollgate doctor` lists which agents have Tollgate configured at user (`~/…`) and project (current folder) scope.
+- **Default, every agent (Claude Code included):** a command hook running `tollgate hook <agent> <event>` with the absolute python of the install that wrote it (the installed tool's venv, or the dev venv in a checkout); it fails closed. The key is never written to a file, only referenced as `TOLLGATE_KEY`.
 - **`--fast` (Claude Code only):** native `type: "http"` hooks pointing at `/hook`, key header from `TOLLGATE_KEY`; no process start per call, but fail-open on a connection error.
 
 **Company-wide enforcement (docs only):**

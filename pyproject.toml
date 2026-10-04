@@ -34,6 +34,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["tollgate", "mocks"]
 
+[tool.hatch.build.targets.wheel.force-include]  # defaults for installed mode (tollgate/paths.py, `tollgate init`)
+"policy.yaml" = "tollgate/_defaults/policy.yaml"
+"signatures.yaml" = "tollgate/_defaults/signatures.yaml"
+"policies" = "tollgate/_defaults/policies"
+"scenario/acme.yaml" = "tollgate/_defaults/scenario/acme.yaml"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"

@@ -154,7 +154,8 @@ def feed(sub: str) -> int:
         from tollgate.gateway.policy import DEFAULT_PATH, load_policy
         data = load_policy(_opt("--policy") or DEFAULT_PATH).data
         url = _opt("--url") or (data.get("feed") or {}).get("url") or "http://127.0.0.1:8090/bundle.json"
-        target = (data.get("content") or {}).get("signatures") or "signatures.yaml"
+        from tollgate import paths
+        target = str(paths.HOME / ((data.get("content") or {}).get("signatures") or "signatures.yaml"))
         puller = Puller(url)
         wrote = asyncio.run(puller.pull(target))
         print(json.dumps({**puller.state, "wrote": wrote, "target": target}))
@@ -255,10 +256,9 @@ def connect(client: str) -> int:
     from tollgate.gateway import peers
     from tollgate.gateway.policy import DEFAULT_PATH, load_policy
 
-    role, pid = _opt("--role"), _opt("--peer")
-    if client not in (*conn.AGENTS, "print") or not role or not pid:
-        print(f"usage: tollgate connect {'|'.join(conn.AGENTS)}|print --role R --peer P [--port N] [--host H]"
-              " [--write [--dir PATH]] [--fast]", file=sys.stderr)
+    role, pid, scope = _opt("--role"), _opt("--peer"), _opt("--scope", "project")
+    if client not in (*conn.AGENTS, "print") or not role or not pid or scope not in ("user", "project"):
+        print("usage: tollgate " + USAGE["connect"], file=sys.stderr)
         return 2
     try:
         key = peers.mint(pid, role, load_policy(_opt("--policy") or DEFAULT_PATH).data["roles"])
@@ -277,9 +277,10 @@ def connect(client: str) -> int:
         return 0
     where = None
     if "--write" in sys.argv:
-        where = Path(_opt("--dir") or (Path.home() / ".hermes" if client == "hermes" else "."))
+        user_root = Path.home() / ".hermes" if client == "hermes" else Path.home()
+        where = Path(_opt("--dir") or (user_root if scope == "user" or client == "hermes" else "."))
     try:
-        print(conn.connect(client, key, role, base, where, fast="--fast" in sys.argv))
+        print(conn.connect(client, key, role, base, where, fast="--fast" in sys.argv, scope=scope))
     except ValueError as e:  # TOML/JSON in the user's file we can't merge into: nothing was written
         print(f"not written: {e}", file=sys.stderr)
         return 1
@@ -351,8 +352,14 @@ USAGE = {  # one line per subcommand; `tollgate <cmd> --help` prints its line an
     "key": "key issue --role R [--key-id K] [--port P]   hand-issued key (dev; needs allow_unenrolled_keys: true)",
     "enroll-token": "enroll-token   one-time token to enroll a laptop",
     "enroll": "enroll TOKEN --owner O --device D   enroll this laptop",
-    "connect": "connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--port P] [--host H] [--policy F]"
-               " [--write [--dir PATH]] [--fast]   mint a key per agent launch + that agent's config",
+    "connect": "connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--scope project|user] [--port P]"
+               " [--host H] [--policy F] [--write [--dir PATH]] [--fast]   mint a key per agent launch + that agent's config"
+               " (user scope: ~/.claude, ~/.codex, ~/.cursor, ~/.gemini)",
+    "init": "init [--force] [--fetch-model]   create the Tollgate home: default policy, signatures, install secret"
+            " (--force: reset, keeps .bak; --fetch-model: download the ~739 MB tier 2 classifier now)",
+    "doctor": "doctor [--port 8080]   check the install, home, policy, secret, hub, console owner, agent configs",
+    "service": "service install|uninstall|status [--port 8080] [--yes]   start the hub at logon (systemd --user / launchd /"
+               " Scheduled Task); dry run without --yes",
     "hook": "hook AGENT [EVENT] [--url http://127.0.0.1:8080]   hook shim (agent JSON on stdin)",
     "open": "open [edge|console] [TRACE_ID] [--port N]   open a UI or one step's details",
     "seed-fleet": "seed-fleet [--policy F]   demo fleet traffic through the real gateway",
@@ -364,8 +371,10 @@ USAGE = {  # one line per subcommand; `tollgate <cmd> --help` prints its line an
 def usage(cmd: str | None = None) -> str:
     if cmd in USAGE:
         return "usage: tollgate " + USAGE[cmd]
-    return "usage: tollgate <command> [options]   (tollgate <command> --help)\n" + "\n".join(
+    from tollgate import paths
+    return ("usage: tollgate [--home DIR] <command> [options]   (tollgate <command> --help)\n" + "\n".join(
         "  " + u for u in dict.fromkeys(USAGE.values()))
+        + f"\nhome: {paths.HOME}   (env TOLLGATE_HOME or --home; holds policy.yaml and audit/)")
 
 def admin(sub: str) -> int:
     """Console accounts: create (first admin) | invite | list | disable. Works on the store directly (same machine)."""
@@ -406,11 +415,37 @@ def admin(sub: str) -> int:
 
 
 def main() -> int:
+    import os
+    if "--home" in sys.argv[1:-1]:  # global: before anything imports tollgate.paths
+        i = sys.argv.index("--home")
+        os.environ["TOLLGATE_HOME"] = sys.argv[i + 1]
+        del sys.argv[i:i + 2]
+    if sys.stdout is None:  # pythonw (the Windows Scheduled Task): no console, log to the home
+        from tollgate import paths
+        paths.AUDIT.mkdir(parents=True, exist_ok=True)
+        sys.stdout = sys.stderr = open(paths.AUDIT / "hub.log", "a", encoding="utf-8", buffering=1)
     sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252 and mangle "…" in redactions
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:  # before anything runs: `up --help` must not start a server
         print(usage(cmd))
         return 0
+    if cmd == "init":
+        from tollgate.install import init
+        print(init("--force" in sys.argv, "--fetch-model" in sys.argv))
+        return 0
+    if cmd == "doctor":
+        from tollgate.install import doctor
+        report, rc = doctor(int(_opt("--port", "8080")))
+        print(report)
+        return rc
+    if cmd == "service" and sys.argv[2:3] in (["install"], ["uninstall"], ["status"]):
+        from tollgate.install import service
+        return service(sys.argv[2], int(_opt("--port", "8080")), "--yes" in sys.argv)
+    if cmd in ("up", "serve", "agent", "replay", "connect", "seed-fleet", "perf") and not _opt("--policy"):
+        from tollgate.gateway.policy import DEFAULT_PATH
+        if not DEFAULT_PATH.exists():
+            print(f"No policy at {DEFAULT_PATH}. Run `tollgate init` first (or pass --policy F).", file=sys.stderr)
+            return 1
     if cmd == "test":
         args = sys.argv[2:]
         rc = 0

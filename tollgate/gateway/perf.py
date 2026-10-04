@@ -9,6 +9,7 @@ import statistics
 import tempfile
 import time
 from pathlib import Path
+from tollgate import paths
 
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
@@ -16,7 +17,7 @@ from fastmcp.exceptions import ToolError
 from tollgate.gateway import build_role_server, taint
 from tollgate.gateway.policy import PolicyHolder, load_policy
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = paths.HOME
 TARGET_MS = {"hub": 5.0, "t1": 5.0, "t2_short": 80.0}  # AC15 p95 targets
 IBAN = "PL61 1090 1014 0000 0712 1981 2874"
 

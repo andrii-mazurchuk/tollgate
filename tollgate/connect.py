@@ -143,7 +143,7 @@ def hook(agent: str, event: str | None, stdin: str | bytes, url: str | None = No
     req = {"hook_event_name": ev if ev in CLAUDE_EVENTS else "PreToolUse", "tool_name": ""}  # for a deny on bad input
     resp, why = None, "Tollgate: hook error"
     try:
-        payload = json.loads((stdin.decode("utf-8") if isinstance(stdin, bytes) else stdin) or "{}")
+        payload = json.loads((stdin.decode("utf-8-sig") if isinstance(stdin, bytes) else stdin) or "{}")  # utf-8-sig: PowerShell pipes a BOM
         if not isinstance(payload, dict):
             raise ValueError("hook input is not a JSON object")
         r = to_claude(agent, event, payload)
@@ -306,17 +306,32 @@ NOTES = {
 def env_lines(key: str) -> str:
     return (f"# PowerShell (this window):  $env:TOLLGATE_KEY = \"{key}\"\n"
             f"# PowerShell (persistent):   setx TOLLGATE_KEY \"{key}\"\n"
-            f"# bash/zsh:                  export TOLLGATE_KEY='{key}'")
+            f"# bash/zsh:                  export TOLLGATE_KEY='{key}'\n"
+            "# bash/zsh (persistent):     add that export line to ~/.bashrc or ~/.zshrc (not done for you)")
 
 
-def connect(agent: str, key: str, role: str, base: str, write_dir: Path | None, fast: bool = False) -> str:
-    """The text `tollgate connect <agent>` prints; with write_dir, also merges the files there."""
+def claude_mcp_add(base: str, role: str) -> str:
+    """User-scope MCP for Claude Code goes through its own CLI: ~/.claude.json is Claude Code's live state file, which
+    it rewrites while running, so we never edit it. Single quotes keep ${TOLLGATE_KEY} literal in bash and PowerShell."""
+    return ("claude mcp add --transport http --scope user --header 'Authorization: Bearer ${TOLLGATE_KEY}' "
+            f"tollgate {base}/mcp/{role}/")
+
+
+def connect(agent: str, key: str, role: str, base: str, write_dir: Path | None, fast: bool = False,
+            scope: str = "project") -> str:
+    """The text `tollgate connect <agent>` prints; with write_dir, also merges the files there. scope "user": the same
+    files under ~ (write_dir is then the home dir), except Claude Code's MCP entry, which is a `claude mcp add` line."""
     files = configs(agent, base, role, fast)
-    parts = [f"Tollgate for {agent}: role {role}, MCP {base}/mcp/{role}/, hooks -> {base}/hook",
+    parts = [f"Tollgate for {agent}: role {role}, MCP {base}/mcp/{role}/, hooks -> {base}/hook ({scope} scope)",
              "Set the key in the shell that launches the agent (the configs only reference the env var):",
              env_lines(key), ""]
+    if scope == "user" and agent == "claude-code":
+        files = [f for f in files if f[0] != ".mcp.json"]
+        parts += ["Register the MCP server at user scope (Claude Code's own CLI writes ~/.claude.json):",
+                  claude_mcp_add(base, role), ""]
     for path, content in files:
-        shown = ("~/.hermes/" if agent == "hermes" and write_dir is None else "") + path
+        prefix = "~/.hermes/" if agent == "hermes" else "~/" if scope == "user" else ""
+        shown = (prefix if write_dir is None else "") + path
         if write_dir is None:
             parts += [f"--- {shown}", dump(path, content).rstrip(), ""]
         else:
