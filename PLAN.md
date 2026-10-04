@@ -1,13 +1,13 @@
 # PLAN.md
 
-## Status at checkpoint 20:21 (tag `checkpoint-2010`)
+## Status (final, 2026-10-04; first written at checkpoint 20:21, tag `checkpoint-2010`)
 
-**The whole 15h schedule below is built.** M0 was done at 16:53, M1 at 17:25, the M2 scope at about 19:00, and red-teaming at 19:30. `submission-1` is tagged, and the repo is pushed (private) to `andrii-mazurchuk/tollgate`.
+**The whole 15h schedule below is built.** M0 was done at 16:53, M1 at 17:25, the M2 scope at about 19:00, and red-teaming at 19:30. `submission-1` is tagged, and the repo is public at https://github.com/andrii-mazurchuk/tollgate (MIT). Since then: local edge UI `/edge`, server console `/console` (peers, key per launch, revocation, sessions, policy view/switch/edit, threat feed, self-test), `seed-fleet`.
 
 **Tests:**
-- 207 fast tests pass, plus 6 slow ones.
+- 247 fast tests pass, plus 7 slow ones.
 - All 53 acceptance tests pass.
-- AC1–AC16: 14 green, 2 partial. AC8 injection recall is 0.837 against 0.85. AC15 tier 2 short-text p95 is 84–141 ms against 80 ms.
+- AC1–AC16: 14 green, 2 partial. AC8 injection recall is 0.837 against 0.85 (FPR 0.009). AC15 tier 2 short-text p95 is ~65–90 ms against 80 ms (borderline).
 
 **Open, to review with Andrey before building:**
 1. Content-triggered taint: a tool-result injection flag taints the session.

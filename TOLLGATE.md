@@ -1,7 +1,7 @@
 # Tollgate: product spec and acceptance criteria
 
 **Task:** HackYeah 2026, partner task Goldman Sachs, "AI Control Layer".
-**Status:** aligned 2026-10-03 (revision 2). Built through M2 plus approvals, pinning and the signature feed; see [Status at submission 1](#status-at-submission-1-2026-10-03).
+**Status:** final 2026-10-04. Built through M2 plus approvals, pinning, the signature feed, the local edge UI (`/edge`) and the server console (`/console`: peers, sessions, policy editing, threat feed, self-test); see [Status (final)](#status-final-2026-10-04).
 **Team:** 1 person, about 30 hours, full Python.
 **Visual walkthrough:** [Tollgate product map](https://claude.ai/artifact/VScYMyEP8mAdALTqa3jxq6). It includes a role builder, an attack replay and a tier 1 playground. Background research is in [RESEARCH.md](RESEARCH.md).
 
@@ -9,28 +9,28 @@
 
 ---
 
-## Status at submission 1 (2026-10-03)
+## Status (final, 2026-10-04)
 
-Measured on the day on `main` + the approval flow, pinning, `tollgate up`, Supabase replay, perf and profiles. Fast suite: `uv run pytest -q -m "not slow"` → **143 passed, 6 deselected** (slow = real tier 2 model / full eval). Eval: `uv run tollgate test --eval-only` on **1355 corpus cases**, 30% held out (374 cases). Latency: `uv run tollgate perf` (200 rounds in-process, writes `audit/perf.json`).
+Measured on `main` on 2026-10-04. Fast suite: `uv run pytest -q -m "not slow"` → **247 passed, 7 deselected** (slow = real tier 2 model / full eval). Eval: `uv run tollgate test --eval-only` on **1,411 cases**, 30% held out (`sha256(id) % 100 >= 70`, 390 cases), thresholds tuned on the other 70%; a 30-case red-team holdout was scored once by hand and never re-run. Latency: `uv run tollgate perf` (200 rounds in-process, writes `audit/perf.json`).
 
 | AC | Status | Evidence |
 |---|---|---|
-| AC1 one command | green | `tollgate up` starts the gateway (role MCPs, 3 in-process mocks, model door, `/healthz`, `/admin/*`) and the Streamlit dashboard on :8501; the dashboard stops with the gateway (`test_ac07_hot_reload.py::test_ac01_app_serves_healthz_and_roles`). Ollama is external (`ollama serve`); without it only the model door returns 502. No separate Edge process. |
+| AC1 one command | green | `tollgate up` starts the gateway (role MCPs, 3 in-process mocks, model door, `/healthz`, `/admin/*`, the `/console` and `/edge` UIs; `--scripted-model` for an offline LLM; the superseded Streamlit dashboard only with `--streamlit`) (`test_ac07_hot_reload.py::test_ac01_app_serves_healthz_and_roles`). Ollama is external (`ollama serve`); without it only the model door returns 502. No separate Edge process. |
 | AC2 role scoping | green | `tests/acceptance/test_ac02_role_scoping.py` |
 | AC3 exact tools | green | `tests/acceptance/test_ac03_exact_tools.py` |
 | AC4 argument limits | green | `tests/acceptance/test_ac04_argument_limits.py` |
 | AC5 attack replay | green | GitHub: `tollgate replay github` leaks with taint off (PR body carries `SALARY_ALICE=182000`), blocks step 3 with `taint.flow: … tainted by github.issues.read #12` with taint on. Supabase: `tollgate replay supabase` with taint off writes the `customers` rows into ticket #3 (already masked `[EMAIL]`, `[IBAN:…2874]`); with taint on `tickets.reply` is blocked, `taint.flow: … tainted by tickets.read #3; private data from tickets.query SELECT * FROM customers`, 0 replies. `test_ac05_taint_replay.py` |
 | AC6 benign flow | green | `tests/acceptance/test_ac06_benign_flow.py` |
-| AC7 hot reload | green | `test_ac07_hot_reload.py`; checked by hand: adding `files: { tools: [fs.read] }` to role-1 shows `files.fs.read` on the next `tools/list`; an invalid file sets `/healthz` `policy.last_error`, old version kept; dashboard shows the REJECTED banner. Profiles switch live: `cp policies/strict.yaml policy.yaml`. |
-| AC8 content | partial | Held-out injection recall **0.837** (target 0.85, **missed**), FPR **0.009** (target ≤ 0.05, met), same at all three profiles (`high` = 0.50). IBAN redacted, PESEL blocked: `test_ac08_pii.py`, `test_ac08_injection.py`. PII control held-out pass rate 0.978; a separate PII recall/FPR figure is not reported. |
+| AC7 hot reload | green | `test_ac07_hot_reload.py`; checked by hand: adding `files: { tools: [fs.read] }` to role-1 shows `files.fs.read` on the next `tools/list`; an invalid file sets `/healthz` `policy.last_error`, old version kept; the console shows the red "Edit rejected … Still enforcing" notice. Profiles switch live: console Policy (diff dialog) or `cp policies/strict.yaml policy.yaml`. |
+| AC8 content | partial | Held-out injection (272 cases) recall **0.837** (target 0.85, **missed**), FPR **0.009** (1 of 113 harmless; target ≤ 0.05, met), same at all three profiles (`high` = 0.50). All checks (390 held-out): recall 0.891, FPR 0.048. IBAN redacted, PESEL blocked: `test_ac08_pii.py`, `test_ac08_injection.py`. Personal-data recall 0.967. |
 | AC9 normalisation | green | eval report: obfuscated recall 1.000 vs plain 1.000 with normalisation on (0.667 with it off) |
 | AC10 signatures | green | `tests/acceptance/test_ac10_signatures.py`. External feed (P6): `tollgate feed serve\|publish\|pull`; the gateway pulls an HMAC-signed bundle every 10 s, verifies it and atomically rewrites `signatures.yaml`, which the loader reloads; a tampered bundle is rejected (`/healthz` `feed.last_error`). Supply-chain signatures: pickle GLOBAL opcodes, `torch.load` without `weights_only`, `trust_remote_code=True`, unsafe `yaml.load`, LangChain PALChain (CVE-2023-36258 / CVE-2023-36188 / CVE-2023-36095, checked on OSV). |
 | AC11 budget + loops | green | `tests/acceptance/test_ac11_budget_loops.py` (429, `loop.cutoff`) |
 | AC12 model allow-list | green | `tests/acceptance/test_ac12_model_allowlist.py`; live: `qwen3:4b` for role-1 → 403 `model.denied` |
-| AC13 suite | green | `tollgate test`: 1361 cases, pass rate 0.912, FPR 0.034, posture **0.931**; `content.injection: off` → posture 0.718. `test_ac13_suite_summary.py`, `test_eval_posture.py`. Per-pattern P1–P10 coverage is not audited. |
-| AC14 dashboard | green | `dashboard/app.py` (verdicts, tainted sessions, budget burn, latency, posture, policy banner, pin-alert strip, approval panel with Approve/Deny, JSONL/CSV export); `tests/test_dashboard_data.py` |
-| AC15 latency | partial | `tollgate perf`: Hub checks (role + taint) p95 **0.52 ms**, tier 1 p95 **0.40 ms**, both under the 5 ms target: **met**. Gateway overhead per allowed call p95 5.3 ms wall clock. Tier 2 short text (≤ 64 tokens) p95 is noisy, **84–141 ms** across runs against 80 ms: **partial**. All texts p95 1603 ms, so tier 2 is only fit for sync on short text (sync share 0.779). |
-| AC16 deliverables | green | README quick start, `docs/slides.md` outline, [`docs/architecture.md`](docs/architecture.md) diagram, commented `policies/strict\|balanced\|lenient.yaml` profiles, 10-slide deck [`docs/Tollgate.pdf`](docs/Tollgate.pdf) (Marp source `docs/deck.md`, real dashboard screenshots in `docs/img/`). |
+| AC13 suite | green | `tollgate test`: 1,411 cases; all checks held-out recall 0.891, FPR 0.048, posture **0.931**; the console Self-test view shows the same numbers and the misses; `content.injection: off` → posture 0.718. `test_ac13_suite_summary.py`, `test_eval_posture.py`. Per-pattern P1–P10 coverage is not audited. |
+| AC14 dashboard | green | Server console `/console` (Overview, Peers & roles, Sessions with fingerprints, Policy view + profile switch + access editing, Threat feed, Self-test) and local edge `/edge` (Sessions trace, Checks per stage in ms, Setup, Scenario); `tests/test_console.py`, `tests/test_console3.py`, `tests/test_edge_*.py`. The earlier Streamlit `dashboard/app.py` remains (`tollgate dashboard`); `tests/test_dashboard_data.py` |
+| AC15 latency | partial | Hub checks (role + taint) p95 **under 1 ms**, tier 1 p95 **2.5 ms**, both under the 5 ms target: **met**. Tier 2 short text (≤ 64 tokens) p95 is **~65–90 ms** depending on the run, against 80 ms: **borderline (partial)**; it is gated so long tool results skip it in balanced. |
+| AC16 deliverables | green | README "Judges: start here", MIT `LICENSE`, public repo https://github.com/andrii-mazurchuk/tollgate, [`DEMO.md`](DEMO.md) run sheet, [`docs/architecture.md`](docs/architecture.md) diagram, commented `policies/strict\|balanced\|lenient.yaml` profiles, 10-slide deck [`docs/Tollgate.pdf`](docs/Tollgate.pdf) (Marp source `docs/deck.md`, screenshots in `docs/img/`). |
 
 **Count:** 14 green, 2 partial (AC8, AC15), 0 not built. Posture **0.931**.
 
@@ -42,10 +42,10 @@ Measured on the day on `main` + the approval flow, pinning, `tollgate up`, Supab
 
 **Known gaps, stated plainly:**
 - Injection recall 83.7% is below the 85% target. Misses concentrate in the `deepset` source (recall 0.371 held-out).
-- Tier 2 meets latency only on short text, and there p95 hovers around 80 ms; long tool results are deferred, not blocked synchronously.
+- Tier 2 meets latency only on short text, and there p95 is ~65–90 ms against 80 ms; long tool results skip it in balanced.
 - A content-level `approve` verdict still blocks; only taint and role approvals park.
 - Pins and pending approvals live in memory: re-pinning is a restart, and a restart fails waiting calls closed.
-- No separate Edge process: content checks run in the gateway process today.
+- No separate Edge process: content checks run in the gateway process today (the `/edge` UI is served by it too).
 
 ---
 
@@ -380,6 +380,8 @@ Stack:
 ---
 
 ## 9. Demo (3 min)
+
+The original plan below; the final run sheet (edge Scenario, console, live policy) is [DEMO.md](DEMO.md).
 
 1. **Roles only:** role-2 runs "check open issues". Poisoned issue #12 leads to a private repo read, then a public PR. **Leak.**
 2. **Tollgate:** the same run. The PR is **blocked**: *"session tainted by github.issues.read #12"*.
