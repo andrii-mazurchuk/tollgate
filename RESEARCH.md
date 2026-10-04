@@ -11,8 +11,8 @@ Research checked 2026-10-03. Every URL below was fetched live (HTTP 200 / HF Hub
 ## 1. Problem reference
 
 Sources:
-- [CRITERIA AI Control Layer.pdf](../../reference/english/Partner%20Task%20%5BGoldman%20Sachs%5D%20-%20AI%20Control%20Layer/CRITERIA%20AI%20Control%20Layer.pdf): task, requirements, evaluation
-- [RULES AI Control Layer.pdf](../../reference/english/Partner%20Task%20%5BGoldman%20Sachs%5D%20-%20AI%20Control%20Layer/RULES%20AI%20Control%20Layer.pdf): legal terms, submission, prize, weights
+- `CRITERIA AI Control Layer.pdf` (partner task pack, not in this repo): task, requirements, evaluation
+- `RULES AI Control Layer.pdf` (partner task pack, not in this repo): legal terms, submission, prize, weights
 
 What to build: a lightweight **gateway / proxy / middleware / SDK wrapper** that "intercepts and governs interactions with AI systems". It must cover agent↔agent, app↔agent, agent↔MCP and agent↔model traffic.
 
