@@ -22,3 +22,16 @@ def test_no_constant_feed_secret(tmp_path, monkeypatch):
     monkeypatch.setenv("TOLLGATE_SECRET_FILE", str(tmp_path / "secret.key"))
     canon = b'{"version":1}'
     assert feed._sig({"version": 1}) != hmac.new(b"tollgate-dev-feed-secret", canon, hashlib.sha256).hexdigest()
+
+
+from tests.test_hook_door import _app, _decision, _events, _hook, _key  # noqa: E402
+
+AWS = "AKIAIOSFODNN7EXAMPLE"
+
+
+@pytest.mark.track_a
+async def test_hook_pass_through_is_exact_server_name(monkeypatch):
+    async with _app(monkeypatch) as c:
+        k = _key()
+        await _hook(c, k, "PreToolUse", "mcp__tollgate-notes__x", {"q": "hi"})
+        assert _events()[-1]["tool"] == "mcp__tollgate-notes__x"  # checked and audited, not passed through

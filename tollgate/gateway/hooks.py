@@ -19,7 +19,7 @@ from tollgate.content import scan
 from tollgate.contract import AuditEvent, Reason
 from tollgate.gateway import apply_verdict, audit, content_policy, keys, local_text, taint, trace
 
-PASS_THROUGH = "mcp__tollgate"  # our own MCP door already checked and audited these calls
+PASS_THROUGH = "mcp__tollgate__"  # exactly the server `tollgate connect` writes: our own MCP door already checked and audited these calls
 SPLIT = re.compile(r"&&|\|\||[;|\n]")  # each part of a compound command is labelled on its own
 
 
