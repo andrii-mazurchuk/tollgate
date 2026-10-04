@@ -20,9 +20,11 @@ def admin_ok(authorization: str | None) -> bool:
 
 
 def admin_request(request) -> bool:
-    """Admin reads: loopback (the dashboard, the console) or the admin token. ponytail: behind a reverse proxy every
-    client looks loopback; send the token from the UI then."""
-    return bool(request.client and request.client.host in ("127.0.0.1", "::1", "localhost"))         or admin_ok(request.headers.get("authorization"))
+    """Admin reads (/admin/*): the admin token, or loopback until the first console account exists (then loopback no
+    longer bypasses sign-in). ponytail: behind a reverse proxy every client looks loopback; send the token then."""
+    from tollgate import accounts
+    return admin_ok(request.headers.get("authorization")) or (
+        not accounts.any_users() and bool(request.client and request.client.host in ("127.0.0.1", "::1", "localhost")))
 
 
 def _now() -> str:

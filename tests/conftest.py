@@ -6,6 +6,7 @@ def _audit_to_tmp(tmp_path, monkeypatch):
     """No test writes the real audit/events.jsonl; tests that set their own path override this."""
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "audit.jsonl"))
     monkeypatch.setenv("TOLLGATE_PEERS", str(tmp_path / "peers.json"))  # nor the real peer registry
+    monkeypatch.setenv("TOLLGATE_ACCOUNTS", str(tmp_path / "accounts.json"))  # nor the real console accounts
 
 
 @pytest.fixture(autouse=True)
