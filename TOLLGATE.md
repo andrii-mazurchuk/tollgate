@@ -11,7 +11,7 @@ Background research is in [RESEARCH.md](RESEARCH.md).
 
 ## Status (final, 2026-10-04)
 
-Measured on `main` on 2026-10-04. Fast suite: `uv run pytest -q -m "not slow"` → **377 passed, 7 deselected** (slow = real tier 2 model / full eval). Eval: `uv run tollgate test --eval-only` on **1,411 cases**, 30% held out (`sha256(id) % 100 >= 70`, 390 cases), thresholds tuned on the other 70%; a 30-case red-team holdout was scored once by hand and never re-run. Latency: `uv run tollgate perf` (200 rounds in-process, writes `audit/perf.json`).
+Measured on `main` on 2026-10-04. Fast suite: `uv run pytest -q -m "not slow"` → **378 passed, 10 deselected** (slow = real tier 2 model / full eval). Eval: `uv run tollgate test --eval-only` on **1,411 cases**, 30% held out (`sha256(id) % 100 >= 70`, 390 cases), thresholds tuned on the other 70%; a 30-case red-team holdout was scored once by hand and never re-run. Latency: `uv run tollgate perf` (200 rounds in-process, writes `audit/perf.json`).
 
 | AC | Status | Evidence |
 |---|---|---|

@@ -20,7 +20,7 @@ May 2025: an AI agent read one GitHub issue and published its owner's private co
 
 Tollgate is a local AI control layer for agents that use MCP tools and LLMs. One policy file generates a virtual MCP server per role that exposes exactly the tools that role may use. Every tool call, tool result and prompt is checked on the machine: normalisation, PII and secret validators, injection rules, an HMAC-signed signature feed and an on-device classifier. Session taint blocks the private-to-public flow once a session has read untrusted content, and names the cause. Fail-closed hooks cover built-in tools (shell, files, web) in Claude Code, Codex, Cursor, Gemini CLI and Hermes. A model door enforces model allow-lists, token budgets and loop cut-offs. Laptops enroll once, the admin sets their roles, and every agent launch gets its own revocable key. A server console shows an access map of attacks stopped, sessions as fingerprints (the text stays on the laptop), live policy edits, the threat feed and a self-test.
 
-On a held-out 30% of 1,411 cases: injection recall 0.837 (our 0.85 target, missed) at 0.9% false positives, posture score 0.931, hub checks under 1 ms p95. 384 automated tests; judges run everything with `uv run tollgate test`.
+On a held-out 30% of 1,411 cases: injection recall 0.837 (our 0.85 target, missed) at 0.9% false positives, posture score 0.931, hub checks under 1 ms p95. 388 automated tests; judges run everything with `uv run tollgate test`.
 
 ## The problem
 
@@ -47,7 +47,7 @@ In May 2025 a poisoned public GitHub issue made an agent copy private repository
 - All checks (390 held-out): recall 0.891, FPR 0.048. Personal-data recall 0.967. Posture score 0.931.
 - Normalisation ablation: obfuscated attacks caught 1.00 with normalisation, 0.67 without.
 - Latency p95: hub checks under 1 ms, tier 1 2.5 ms, classifier on short text ~65–90 ms vs an 80 ms target (borderline; gated so long tool results skip it in the balanced profile).
-- 377 fast + 7 slow automated tests pass. 14 of 16 acceptance criteria green; the two partial ones are the recall and classifier-latency targets above.
+- 378 fast + 10 slow automated tests pass. 14 of 16 acceptance criteria green; the two partial ones are the recall and classifier-latency targets above.
 
 ## How to open the project
 
@@ -79,6 +79,6 @@ The full judge guide (PowerShell and bash, ad-hoc prompts, live policy edits) is
 | Demo agent (scripted hijacked model or Ollama) | `tollgate/agent/` | done |
 | Content pipeline and signed signature feed | `tollgate/content/`, `signatures.yaml`, `tollgate/feed/` | done |
 | Eval suite, corpus, red-team sets, latency bench | `tollgate/eval/`, `tests/corpus/`, `tollgate perf` | done |
-| Automated tests | `tests/` | 377 fast + 7 slow |
+| Automated tests | `tests/` | 378 fast + 10 slow |
 | Mock MCP servers | `mocks/` (github, tickets, files) | done |
 | License | `LICENSE` (MIT) | done |

@@ -2,13 +2,13 @@
 
 **An AI control layer for agents that use MCP tools.** HackYeah 2026, Goldman Sachs task "AI Control Layer". Repo: https://github.com/andrii-mazurchuk/tollgate (public, [MIT](LICENSE)).
 
-> **Status (final, 2026-10-04):** 14 of 16 acceptance criteria green, 2 partial (AC8 injection recall 0.837 vs 0.85 target; AC15 classifier latency borderline). Details: [TOLLGATE.md › Status](TOLLGATE.md#status-final-2026-10-04). 377 fast + 7 slow tests.
+> **Status (final, 2026-10-04):** 14 of 16 acceptance criteria green, 2 partial (AC8 injection recall 0.837 vs 0.85 target; AC15 classifier latency borderline). Details: [TOLLGATE.md › Status](TOLLGATE.md#status-final-2026-10-04). 378 fast + 10 slow tests.
 
 ## Judges: start here (5 minutes)
 
 Needs Git and [uv](https://docs.astral.sh/uv/) (it installs Python 3.13). Ollama is **optional**: `--scripted-model` runs a scripted hijacked model offline.
 
-**1. Install and run the self-test suite.** The first `tollgate test` downloads the ~739 MB ONNX classifier (~5 min, once); warm runs take ~30 s. Fast path without the download: `uv run pytest -q -m "not slow"` (377 tests, ~75 s).
+**1. Install and run the self-test suite.** The first `tollgate test` downloads the ~739 MB ONNX classifier (~5 min, once); warm runs take ~30 s. Fast path without the download: `uv run pytest -q -m "not slow"` (378 tests, ~60 s).
 
 ```bash
 uv sync
@@ -169,6 +169,7 @@ Same binary, two roles; the demo runs both on one machine. Next step: split into
 | `TOLLGATE_EDGE_SETTINGS` | `audit/edge_settings.json` | the edge's local settings |
 | `TOLLGATE_EDGE_KEY` / `TOLLGATE_EDGE_ROLE` | a key for `role-2` | the agent key the local edge UI shows |
 | `TOLLGATE_T2` | on | `off` skips the tier 2 classifier (`seed-fleet` defaults to off) |
+| `TOLLGATE_T2_CACHE` | `audit/t2_cache.json` | classifier score cache used by the eval (tests point it at a temp file) |
 | `TOLLGATE_UPSTREAM` | `http://127.0.0.1:11434/v1` | model door upstream (`scripted` = offline hijacked model) |
 | `TOLLGATE_KEY` | — | the agent's minted key, read by the hooks, the MCP entry and `scripts/demo_claude.py` |
 | `TOLLGATE_URL` | `http://127.0.0.1:8080` | the hub the hook shim posts to |
