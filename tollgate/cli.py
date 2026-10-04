@@ -353,6 +353,44 @@ def seed_fleet() -> int:
     return 0
 
 
+def admin(sub: str) -> int:
+    """Console accounts: create (first admin) | invite | list | disable. Works on the store directly (same machine)."""
+    import getpass
+
+    from tollgate import accounts
+    try:
+        if sub == "create":
+            if "--password-stdin" in sys.argv:
+                pw = sys.stdin.readline().rstrip(chr(13) + chr(10))
+            else:
+                pw = getpass.getpass("Password (12+ characters): ")
+                if getpass.getpass("Again: ") != pw:
+                    print("The passwords differ.", file=sys.stderr)
+                    return 1
+            u = accounts.create_user(_opt("--email"), pw, _opt("--role", "admin"), _opt("--name"))
+            accounts.log("cli", f"Created {u['email']} as {u['role']}")
+            print(f"Created {u['email']} ({u['role']}). Sign in at /console/.")
+        elif sub == "invite":
+            t = accounts.invite(_opt("--email"), _opt("--role", "viewer"), "cli")
+            base = _opt("--url") or f"http://127.0.0.1:{_opt('--port', '8080')}"
+            print(f"{base}/console/#/accept/{t['token']}\nOne use, for {t['email']} ({t['role']}). Expires {t['expires_at']}.")
+        elif sub == "list":
+            for u in accounts.listing():
+                print(f"{u['email']:32} {u['role']:7} {'disabled' if u['disabled'] else 'active':9} "
+                      f"last login {u['last_login'] or 'never'}  {u['name']}")
+        elif sub == "disable":
+            accounts.set_disabled(accounts.norm_email(_opt("--email")), True, "cli")
+            print("Disabled; their sessions are signed out.")
+        else:
+            print("usage: tollgate admin create --email E [--name N] [--password-stdin] | invite --email E "
+                  "[--role viewer|admin] [--url BASE] | list | disable --email E", file=sys.stderr)
+            return 2
+    except (ValueError, KeyError) as e:
+        print(f"Refused: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252 and mangle "…" in redactions
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
@@ -399,6 +437,8 @@ def main() -> int:
         return hook(sys.argv[2:])
     if cmd == "open":
         return open_ui(sys.argv[2:])
+    if cmd == "admin":
+        return admin(sys.argv[2] if len(sys.argv) > 2 else "")
     if cmd == "seed-fleet":
         return seed_fleet()
     if cmd == "feed":

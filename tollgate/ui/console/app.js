@@ -9,8 +9,10 @@ PATHS.plus = ["M12 5v14M5 12h14"];
 const ui = { pol: null, view: "overview", range: load("c.range") || "today", since: load("c.since") || "", tab: "overview", stepMode: "list",
   f: {}, trace: null, peer: null, role: null, roleNames: {}, dirty: false };
 
-async function api(path, opts) {
-  const r = await fetch(API + path, opts);
+async function api(path, opts = {}) {
+  const write = (opts.method || "GET").toUpperCase() !== "GET";
+  const r = await fetch(API + path, write ? { ...opts, headers: { ...jsonHeaders(), ...(opts.headers || {}) } } : opts);
+  if (r.status === 401) showAuth();  // auth.js: the session ended
   if (!r.ok) {
     let msg = `${r.status} ${path}`;
     try { const j = await r.json(); if (j.error) msg = `${r.status} ${j.error}`; } catch { /* not JSON */ }
@@ -18,7 +20,7 @@ async function api(path, opts) {
   }
   return r.json();
 }
-const post = (path, body) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+const post = (path, body) => api(path, { method: "POST", body: JSON.stringify(body || {}) });
 const view = () => document.getElementById("view");
 const bar = (...kids) => document.getElementById("bar").replaceChildren(...kids.filter(Boolean));
 const enc = encodeURIComponent;
@@ -60,9 +62,11 @@ async function refreshStatus() {
     return;
   }
   renderHealth(st.health);
-  // st.admin says how the caller was let in ("loopback" | "token"), not who: show the role, keep the how in the tooltip
-  box.title = [`Signed in as admin (${st.admin})`, `Policy ${String(st.policy.version).slice(0, 7)} (${st.policy.profile})`, `Threat feed ${st.feed?.version ?? "local"}`, `App ${st.app_version}`].join("\n");
-  box.replaceChildren(h("span", { class: "who" }, icon("user"), "Admin"), h("span", { class: "sep" }), h("span", {}, h("span", { class: "cdot" }), location.host));
+  const me = ui.me || { name: "Admin", role: "admin", email: "" };
+  box.title = [`Signed in as ${me.name} <${me.email}> (${me.role})`, `Policy ${String(st.policy.version).slice(0, 7)} (${st.policy.profile})`, `Threat feed ${st.feed?.version ?? "local"}`, `App ${st.app_version}`].join("\n");
+  box.replaceChildren(h("span", { class: "who" }, icon("user"), h("span", { class: "ell who-n" }, me.name), h("span", { class: "muted" }, me.role === "admin" ? "Admin" : "Viewer")),
+    h("span", { class: "sep" }), h("span", {}, h("span", { class: "cdot" }), location.host), h("span", { class: "sep" }),
+    h("button", { class: "out", type: "button", onclick: signOut }, "Sign out"));
 }
 
 function renderHealth(hl) {
@@ -89,12 +93,12 @@ function renderBar() {
   if (ui.view === "peers" || ui.view === "roles") {
     return bar(h("div", { class: "seg", role: "group", "aria-label": "Peers or roles" }, [["peers", "Peers"], ["roles", "Roles"]].map(([k, l]) =>
       h("button", { type: "button", "aria-pressed": String(ui.view === k), onclick: () => { location.hash = k === "peers" ? peerHref(ui.peer) : roleHref(ui.role); } }, l))),
-      ui.view === "peers" ? h("button", { class: "btn", type: "button", onclick: enrollDialog }, icon("plus"), "Enroll a laptop") : null);
+      ui.view === "peers" ? h("button", { class: "btn adm", type: "button", onclick: enrollDialog }, icon("plus"), "Enroll a laptop") : null);
   }
   if (ui.view === "policy" && ui.pol) {
     return bar(h("span", { class: "bar-t" }, "Profile: ", h("strong", {}, profileLabel(ui.pol))),
-      h("button", { class: "btn", type: "button", "aria-pressed": String(!!ui.edit), onclick: toggleEdit }, ui.edit ? "Stop editing" : "Edit access"),
-      ui.edit ? null : h("button", { class: "btn", type: "button", onclick: () => switchDialog(ui.pol) }, "Switch profile…"));
+      h("button", { class: "btn adm", type: "button", "aria-pressed": String(!!ui.edit), onclick: toggleEdit }, ui.edit ? "Stop editing" : "Edit access"),
+      ui.edit ? null : h("button", { class: "btn adm", type: "button", onclick: () => switchDialog(ui.pol) }, "Switch profile…"));
   }
   bar();
 }
@@ -226,7 +230,7 @@ function drawPeer(box, p, roles) {
   } }, "Save");
   const locked = p.revoked || legacy;
   const checks = h("div", { class: "rolecheck" }, roles.map(r => h("label", {},
-    h("input", { type: "checkbox", value: r.role, checked: picked.has(r.role), disabled: locked, onchange: ev => {
+    h("input", { type: "checkbox", value: r.role, checked: picked.has(r.role), disabled: locked || ui.me?.role !== "admin", onchange: ev => {
       ev.target.checked ? picked.add(r.role) : picked.delete(r.role);
       ui.dirty = [...picked].sort().join() !== [...p.roles].sort().join();
       saveBtn.disabled = !ui.dirty; msg.textContent = ui.dirty ? "Unsaved changes" : "";
@@ -238,7 +242,7 @@ function drawPeer(box, p, roles) {
     h("div", { class: "sec" }, h("div", { class: "sec-h" }, h("h3", {}, "Roles this laptop may run")),
       checks,
       locked ? h("p", { class: "muted small", style: "margin:8px 0 0" }, p.revoked ? "This laptop is revoked: it cannot mint keys for any role." : "Legacy keys with no laptop. Enroll the laptop to manage its roles.")
-        : h("div", { class: "save-row" }, saveBtn, msg, h("span", { class: "muted small", style: "margin-left:auto" }, "Removing a role ends this laptop's keys for it."))),
+        : h("div", { class: "save-row adm" }, saveBtn, msg, h("span", { class: "muted small", style: "margin-left:auto" }, "Removing a role ends this laptop's keys for it."))),
     h("div", { class: "sec" }, h("div", { class: "sec-h" }, h("h3", {}, `Sessions (${n(sessions.length)})`),
       sessions.length ? h("a", { class: "small", href: "#/sessions", onclick: () => { ui.f = { peer: p.id }; } }, "Show in Sessions") : null),
       sessions.length ? tbl([null, "120px", "56px", "64px", "96px"], ["Agent", "Started", ["Steps", "r"], "State", "Last"],
@@ -252,7 +256,7 @@ function drawPeer(box, p, roles) {
           h("td", { class: "num muted", title: `${time(k.first_ts)} – ${time(k.last_ts)}` }, `${time(k.first_ts)} – ${time(k.last_ts).split(" ").pop()}`),
           h("td", { class: "num r" }, n(k.n)))))
         : h("div", { class: "muted" }, "No keys minted yet.")),
-    legacy || p.revoked ? null : h("div", { class: "sec" }, h("div", { class: "sec-h" }, h("h3", {}, "Revoke this laptop")),
+    legacy || p.revoked ? null : h("div", { class: "sec adm" }, h("div", { class: "sec-h" }, h("h3", {}, "Revoke this laptop")),
       h("p", { class: "muted", style: "margin:0 0 8px" }, "Every key it minted stops working at once. It must enroll again to run agents."),
       h("button", { class: "btn danger", type: "button", onclick: () => revokeDialog(p) }, "Revoke this laptop")));
 
@@ -352,7 +356,7 @@ const kcell = (k, v, tip) => h("div", tip ? { title: tip } : {}, h("div", { clas
 
 async function renderFeed(idArg) {
   const f = await api("/feed");
-  bar(h("button", { class: "btn", type: "button", onclick: () => publishDialog(f) }, icon("plus"), "Publish a signature…"));
+  bar(h("button", { class: "btn adm", type: "button", onclick: () => publishDialog(f) }, icon("plus"), "Publish a signature…"));
   const fd = f.feed;
   const check = !fd.enabled ? h("span", { class: "muted" }, "No feed") : fd.verified === true ? h("span", { class: "state" }, icon("check"), "Verified")
     : fd.verified === false ? h("span", { class: "badge fail" }, icon("x"), "Failed") : h("span", { class: "muted" }, "Not pulled yet");
@@ -443,7 +447,7 @@ function publishDialog(f) {
     if (Object.keys(local).length) return show(local);
     go.disabled = true; go.textContent = "Publishing…";
     try {
-      const r = await fetch(API + "/feed/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+      const r = await fetch(API + "/feed/publish", { method: "POST", headers: jsonHeaders(), body: JSON.stringify(req) });
       const j = await r.json().catch(() => ({}));
       if (r.ok) {
         ui.sig = j.id;
@@ -474,7 +478,7 @@ const EXPECT = { flag: "flag", block: "block", redact: "mask", allow: "allow", a
 async function renderSelftest() {
   const s = await api("/selftest");
   const e = s.eval, run = s.run;
-  const runBtn = h("button", { class: "btn", type: "button", disabled: run.running, onclick: async () => {
+  const runBtn = h("button", { class: "btn adm", type: "button", disabled: run.running, onclick: async () => {
     runBtn.disabled = true;
     try { await post("/selftest/run"); } catch { /* 409: already running; the view shows it */ }
     route(false);
@@ -927,7 +931,7 @@ function reviewDialog() {
     go.disabled = true; err.textContent = "";
     let r, j = {};
     try {
-      r = await fetch(API + "/policy/access", { method: "POST", headers: { "Content-Type": "application/json" },
+      r = await fetch(API + "/policy/access", { method: "POST", headers: jsonHeaders(),
         body: JSON.stringify({ base_version: ui.edit.base, changes: P.map(({ role, tool, allowed }) => ({ role, tool, allowed })) }) });
       j = await r.json().catch(() => ({}));
     } catch { err.textContent = "Could not reach the server. Nothing was saved."; go.disabled = false; return; }
@@ -951,7 +955,7 @@ function reviewDialog() {
 }
 
 /* ---------- routing + live refresh ---------- */
-const VIEWS = { overview: renderOverview, peers: renderPeers, roles: renderRoles, sessions: renderSessions, policy: renderPolicy, feed: renderFeed, selftest: renderSelftest, try: renderTry };
+const VIEWS = { overview: renderOverview, peers: renderPeers, roles: renderRoles, sessions: renderSessions, policy: renderPolicy, feed: renderFeed, selftest: renderSelftest, try: renderTry, users: renderUsers };
 async function route(focus) {
   const parts = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
   ui.view = VIEWS[parts[0]] ? parts[0] : "overview";
@@ -969,6 +973,8 @@ async function route(focus) {
   if (focus) view().focus({ preventScroll: true });
 }
 window.addEventListener("hashchange", () => {
+  if (location.hash.startsWith("#/accept/")) return boot();  // an invite link pasted into an open tab
+  if (!ui.me) return;
   if (ui.edit && !/^#\/?policy/.test(location.hash)) {  // leaving the Policy view: pending access edits ask first
     const k = pending().length;
     if (k && !confirm(`Discard ${k} unsaved access change${k === 1 ? "" : "s"}?`)) return history.replaceState(null, "", "#/policy");
@@ -979,13 +985,17 @@ window.addEventListener("hashchange", () => {
 window.addEventListener("beforeunload", ev => { if (ui.edit && pending().length) ev.preventDefault(); });
 
 // Poll every 10 s; skip the view while a dialog is open, a role edit is unsaved, or a control has focus.
+function start() {
 setInterval(() => {
+  if (!ui.me) return;  // signed out: the sign-in screen is up
   refreshStatus();
   if (document.querySelector("dialog[open], details.dd[open]") || ui.dirty || document.activeElement?.matches?.("input, select, textarea, #view :focus-visible")) return;
   route(false);
 }, 10000);
+refreshStatus();
+route(false);
+}
 
 renderThemeBtn();
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderThemeBtn);
-refreshStatus();
-route(false);
+boot();  // auth.js: sign in (or set up the owner), then start()
