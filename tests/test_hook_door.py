@@ -59,10 +59,17 @@ async def test_github_mcp_style_attack_through_hooks_only(monkeypatch):
                     tool_response="id,name\n1,Anna")
         r = await _hook(c, k, "PreToolUse", "Bash", {"command": "git  push   origin main"})
         assert _decision(r) == "deny"
-        assert r["hookSpecificOutput"]["permissionDecisionReason"] == (
+        reason = r["hookSpecificOutput"]["permissionDecisionReason"]
+        assert reason.startswith(
             "Tollgate: this session read text written by outsiders and holds private data, "
-            "so `git  push   origin main` could leak it.")
+            "so `git  push   origin main` could leak it. What you can do: Start a new session (new key)")
         ev = _events()[-1]
+        sid = keys.verify(k)[1]
+        url = f"http://127.0.0.1:8080/edge/#/sessions/{sid}/{ev['trace_id']}"
+        assert reason.endswith(f" Details: {url}")
+        # the link opens that exact step: the edge's session view holds this trace id
+        d = (await c.get(f"/edge/api/sessions/{sid}")).json()
+        assert ev["trace_id"] in [x["trace_id"] for x in d["timeline"]]
         assert ev["door"] == "hook" and ev["tool"] == "builtin.Bash" and ev["verdict"] == "block"
         assert [x["rule"] for x in ev["reasons"]] == ["taint.flow"] and ev["session_id"] == keys.verify(k)[1]
         assert ev["state_before"] == ev["state_after"] == "untrusted+holds_private" and ev["trace_id"]

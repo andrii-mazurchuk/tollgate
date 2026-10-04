@@ -2,6 +2,7 @@
 
 Every rule ID the gateway or content pipeline can emit has an entry (tests/test_explain.py greps for them).
 """
+from urllib.parse import quote
 
 AGENTS = {"role-1": "Intern bot", "role-2": "Support assistant"}
 
@@ -173,3 +174,15 @@ CHECKS = (("taint.", "Data-flow rule"), ("role.constraint", "Argument check"), (
 
 def check_name(rule_id: str | None) -> str:
     return next((name for pref, name in CHECKS if (rule_id or "").startswith(pref)), "Tollgate check")
+
+
+def details_url(base: str, session_id: str, trace_id: str | None = None, ui: str = "edge") -> str:
+    """Link to one step in the local edge/console; hash route matches stepHref/sessHref (encodeURIComponent)."""
+    q = lambda s: quote(str(s), safe="-_.!~*'()")  # noqa: E731 - encodeURIComponent's unreserved set
+    return f"{base.rstrip('/')}/{ui}/#/sessions/{q(session_id)}" + (f"/{q(trace_id)}" if trace_id else "")
+
+
+def next_step(rule_id: str | None, base: str | None, session_id: str, trace_id: str) -> str:
+    """' What you can do: <todo> Details: <url>' appended to a deny message (no link without a base URL)."""
+    out = f" What you can do: {rule(rule_id)[1]}" if rule_id else ""
+    return out + (f" Details: {details_url(base, session_id, trace_id)}" if base else "")

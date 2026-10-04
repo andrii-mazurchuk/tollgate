@@ -11,6 +11,7 @@ from fastmcp.exceptions import ToolError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from tollgate import explain
 from tollgate.content import scan
 from tollgate.contract import AuditEvent, Reason
 from tollgate.gateway import audit, keys, local_text, taint, trace
@@ -82,10 +83,16 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
         ev.state_before = ev.state_after = trace.label(taint.STATE.get(key_id))  # the model door never changes taint
         texts: dict = {}
 
+        base = str(request.base_url).rstrip("/")
+
+        def more() -> str:  # what to do + the step on the local edge
+            r = explain.main_reason({"reasons": [{"rule": x.rule} for x in ev.reasons]})
+            return "." + explain.next_step(r and r["rule"], base, key_id, ev.trace_id)
+
         def deny(status, rule, msg):
             ev.verdict = "block"
             ev.reasons.append(Reason(rule=rule, tier=0, detail=msg))
-            return _err(status, rule, f"{rule}: {msg}", ev.reasons)
+            return _err(status, rule, f"{rule}: {msg}" + more(), ev.reasons)
 
         try:
             t0 = time.perf_counter()
@@ -109,7 +116,7 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
                         if v.action == "redact":
                             m["content"] = v.redacted_text
             except ToolError as e:
-                return _err(400, "content.blocked", str(e), ev.reasons)
+                return _err(400, "content.blocked", str(e) + more(), ev.reasons)
 
             base, transport = os.environ.get("TOLLGATE_UPSTREAM") or DEFAULT_UPSTREAM, upstream
             if base == "scripted":  # offline demo: in-process hijacked-LLM replay, tagged model=scripted-hijacked
@@ -140,7 +147,7 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
                     if v.action == "redact":
                         msg["content"] = v.redacted_text
             except ToolError as e:
-                return _err(400, "content.blocked", str(e), ev.reasons)
+                return _err(400, "content.blocked", str(e) + more(), ev.reasons)
             if ev.verdict == "allow":
                 ev.scan_point = "response"
             return JSONResponse(out)
