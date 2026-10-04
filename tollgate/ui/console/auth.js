@@ -83,7 +83,7 @@ function authForm(kind, token, note) {
     signedIn(j);
   } }, Object.values(f).map(x => x.row), err, go);
 
-  const brand = h("div", { class: "brand" }, s("svg", { class: "i", viewBox: "0 0 24 24", "aria-hidden": "true" }, s("path", { d: "M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6z" })), "Tollgate");
+  const brand = h("div", { class: "brand" }, document.querySelector(".nav .brand svg").cloneNode(true), "Tollgate");
   const body = kind === "nosetup"
     ? [h("p", {}, "Create the owner account on the server itself: open this page there (", h("code", {}, "http://127.0.0.1:…/console/"), "), or run:"),
        h("pre", { class: "mono auth-cmd" }, "uv run tollgate admin create --email you@company.com")]
