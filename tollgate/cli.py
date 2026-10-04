@@ -237,30 +237,41 @@ def enroll(token: str) -> int:
 
 
 def connect(client: str) -> int:
-    """Mints a key for one agent launch and prints the client config (never writes the client's own files)."""
-    from tollgate import edge
+    """Mints a key for one agent launch and prints (or with --write merges) that agent's MCP entry + hooks."""
+    from pathlib import Path
+
+    from tollgate import connect as conn
     from tollgate.gateway import peers
     from tollgate.gateway.policy import DEFAULT_PATH, load_policy
 
     role, pid = _opt("--role"), _opt("--peer")
-    names = {"claude-code": "Claude Code", "cursor": "Cursor", "print": None}
-    if client not in names or not role or not pid:
-        print("usage: tollgate connect claude-code|cursor|print --role R --peer P [--port P]", file=sys.stderr)
+    if client not in (*conn.AGENTS, "print") or not role or not pid:
+        print(f"usage: tollgate connect {'|'.join(conn.AGENTS)}|print --role R --peer P [--port N] [--host H]"
+              " [--write [--dir PATH]]", file=sys.stderr)
         return 2
     try:
         key = peers.mint(pid, role, load_policy(_opt("--policy") or DEFAULT_PATH).data["roles"])
-    except (ValueError, KeyError) as e:
+    except KeyError:
+        print(f"refused: unknown peer {pid}", file=sys.stderr)
+        return 1
+    except ValueError as e:
         print(f"refused: {e}", file=sys.stderr)
         return 1
-    base = f"http://127.0.0.1:{_opt('--port', '8080')}"
-    mcp = f"{base}/mcp/{role}/"
-    if names[client]:
-        print(edge.SNIPPETS[names[client]].replace("{mcp}", mcp).replace("{KEY}", key))
-    else:
+    base = f"http://{_opt('--host', '127.0.0.1')}:{_opt('--port', '8080')}"
+    if client == "print":
         print(key)
-        print(f"MCP URL: {mcp}")
+        print(f"MCP URL: {base}/mcp/{role}/")
         print(f"Model door: {base}/v1/chat/completions")
         print(f"Header:  Authorization: Bearer {key}")
+        return 0
+    where = None
+    if "--write" in sys.argv:
+        where = Path(_opt("--dir") or (Path.home() / ".hermes" if client == "hermes" else "."))
+    try:
+        print(conn.connect(client, key, role, base, where))
+    except ValueError as e:  # TOML/JSON in the user's file we can't merge into: nothing was written
+        print(f"not written: {e}", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -358,6 +369,9 @@ def main() -> int:
         return enroll(sys.argv[2])
     if cmd == "connect" and len(sys.argv) > 2:
         return connect(sys.argv[2])
+    if cmd == "hook":
+        from tollgate.connect import main as hook
+        return hook(sys.argv[2:])
     if cmd == "seed-fleet":
         return seed_fleet()
     if cmd == "feed":
@@ -365,7 +379,7 @@ def main() -> int:
     print("usage: tollgate {up [--port P] [--policy F] [--scripted-model] [--streamlit [--dashboard-port D]]|serve [--port P] [--policy F] [--scripted-model]"
           "|agent [--role R] [--model M] [--base URL] [--scripted] TASK|dashboard"
           "|approve ID|deny ID [--port P]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]|feed serve|publish|pull"
-          "|enroll-token|enroll TOKEN --owner O --device D|connect claude-code|cursor|print --role R --peer P|seed-fleet}",
+          "|enroll-token|enroll TOKEN --owner O --device D|connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--write]|hook AGENT EVENT|seed-fleet}",
           file=sys.stderr)
     return 2
 

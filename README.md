@@ -46,7 +46,7 @@ curl -s -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
 
 Result: HTTP 400 `content.blocked` (`inj.ignore_prev` + `t2.injection`). Model `qwen3:4b` on role-1 gives 403 `model.denied`. The same key works for MCP: URL `http://127.0.0.1:8080/mcp/role-1/` (trailing slash matters), header `Authorization: Bearer <key>`, e.g. `uv run fastmcp list http://127.0.0.1:8080/mcp/role-1/ --auth <key>`.
 
-`tollgate key issue` is the dev path. The production path is one key per agent launch on an enrolled laptop: `uv run tollgate connect print --role role-2 --peer <id>` (peer IDs are printed by `seed-fleet` and shown in the console; `connect claude-code|cursor` prints that client's config). Minting is refused for a revoked laptop or a role it may not run.
+`tollgate key issue` is the dev path. The production path is one key per agent launch on an enrolled laptop: `uv run tollgate connect print --role role-2 --peer <id>` (peer IDs are printed by `seed-fleet` and shown in the console; `connect claude-code|codex|cursor|gemini|hermes` prints that agent's MCP entry and hooks, see [Connect your agent](#connect-your-agent)). Minting is refused for a revoked laptop or a role it may not run.
 
 **5. Change policy live.** In the console Policy view (Balanced → Strict through the diff dialog, or **Edit access** per role × server × tool), or edit `policy.yaml` while the server runs: the next call follows it, no restart. Save an invalid file (e.g. append `roles: [oops`) and it is **rejected**: the old policy keeps enforcing, `/healthz` shows `policy.last_error`, and the console shows a red "Edit rejected … Still enforcing <version>" notice. To keep the repo file clean, run on a copy (`audit/` is gitignored):
 
@@ -111,6 +111,22 @@ Held-out 30% split (`sha256(id) % 100 >= 70`); thresholds tuned on the other 70%
 | Old Streamlit dashboard | `uv run tollgate dashboard` (or `tollgate up --streamlit`) on :8501; superseded by `/console` |
 
 **Ollama (optional).** Without `--scripted-model`, the model door proxies to `http://127.0.0.1:11434/v1` (`TOLLGATE_UPSTREAM`): `ollama pull qwen3:1.7b` (role-1), `ollama pull qwen3:4b` (role-2). Without Ollama a clean, allowed prompt gets 502 `upstream.error`; the allow-list, budget and prompt scan still apply.
+
+## Connect your agent
+
+One command per agent launch on an enrolled laptop (`--peer` from `seed-fleet` or the console). It mints a key, prints the agent's MCP entry (the role's tools, remote HTTP) and its hooks, plus the `TOLLGATE_KEY` line to set (PowerShell and bash). Add `--write` to merge them into the project's config in `--dir` (default: current folder): unrelated keys are kept, a short diff is printed, and the key is never written to a file, only referenced as `TOLLGATE_KEY`.
+
+```bash
+uv run tollgate connect claude-code --role role-2 --peer <id> --write   # .mcp.json + .claude/settings.json (native http hooks -> /hook)
+uv run tollgate connect codex       --role role-2 --peer <id> --write   # .codex/config.toml ([features] hooks = true; trust once via /hooks)
+uv run tollgate connect cursor      --role role-2 --peer <id> --write   # .cursor/mcp.json + .cursor/hooks.json (failClosed)
+uv run tollgate connect gemini      --role role-2 --peer <id> --write   # .gemini/settings.json (BeforeTool / AfterTool / BeforeAgent)
+uv run tollgate connect hermes      --role role-2 --peer <id>           # ~/.hermes/config.yaml snippet (--write merges it)
+```
+
+**What gets checked.** The MCP entry exposes the role's MCP tools. The hooks see **every** tool call the agent makes, built-ins included (shell, file read/write, web fetch), each result (secrets and PII masked) and the user's prompt (injection blocked), against the same policy and session taint. Codex, Cursor, Gemini CLI and Hermes run `tollgate hook <agent> <event>` (the venv's absolute python, so it works from any folder), which maps their hook JSON onto Claude Code's and back. It fails **closed**: hub unreachable, bad key or a 5xx is a deny ("Tollgate unreachable: …"). Claude Code's native http hook is fail-open on a connection error (per its docs); where that matters, use a command hook running `tollgate hook claude-code <Event>`. Use `--host`/`--port` for a remote hub.
+
+**Company-wide enforcement** ([docs/connectivity.md](docs/connectivity.md)): Claude Code `managed-settings.json` with `allowManagedHooksOnly`, `allowManagedMcpServersOnly` and `allowedHttpHookUrls`; Codex `requirements.toml` with managed hooks and the MCP allowlist; Cursor enterprise `hooks.json`.
 
 ## Docs
 
