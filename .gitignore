@@ -26,3 +26,6 @@ models/
 .ruff_cache/
 !tests/corpus/*.jsonl
 .claude/worktrees/
+
+# personal session handoffs (kept locally)
+.claude/handoff/
