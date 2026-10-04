@@ -220,8 +220,8 @@ Same binary, two roles; the demo runs both on one machine. Next step: split into
 
 | | |
 |---|---|
-| ![Console Overview: access map of peers, agents and servers](docs/img/console5-map-light-1440.png) Console Overview: access map, blocks in red | ![Console Policy: who may do what, built-ins included](docs/img/hook-console-policy.png) Console Policy: role × tool, built-ins seen through the hook |
-| ![Console Sessions: a blocked step, fingerprints only](docs/img/hook-console-session.png) Console Sessions: the blocked step (the server keeps a fingerprint) | ![Console Try it: an injection blocked](docs/img/console4-try-injection-light.png) Console Try it: dry-run content check |
+| ![Console Overview: access map of peers, agents and servers](docs/img/console-access-map.png) Console Overview: access map, blocks in red | ![Console Policy: who may do what, built-ins included](docs/img/hook-console-policy.png) Console Policy: role × tool, built-ins seen through the hook |
+| ![Console Sessions: a blocked step, fingerprints only](docs/img/hook-console-session.png) Console Sessions: the blocked step (the server keeps a fingerprint) | ![Console Try it: an injection blocked](docs/img/console-try-it.png) Console Try it: dry-run content check |
 | ![Edge: the Claude Code session, shell command denied](docs/img/hook-edge-session.png) Edge: a real Claude Code session, `git push` denied by the hook | |
 
 ## Docs
@@ -233,7 +233,7 @@ Same binary, two roles; the demo runs both on one machine. Next step: split into
 - [docs/connectivity.md](docs/connectivity.md): the three doors, `tollgate connect`, the hook contract, built-ins in the policy
 - [docs/ui-spec.md](docs/ui-spec.md): the edge and console UIs and their APIs
 - [docs/Tollgate.pdf](docs/Tollgate.pdf): presentation · [docs/submission.md](docs/submission.md): submission text
-- [API_CONTRACT.md](API_CONTRACT.md), [RESEARCH.md](RESEARCH.md)
+- [docs/process/API_CONTRACT.md](docs/process/API_CONTRACT.md), [docs/research.md](docs/research.md), [docs/process/PLAN.md](docs/process/PLAN.md), [docs/publishing.md](docs/publishing.md) (PyPI runbook)
 
 ## Stack
 

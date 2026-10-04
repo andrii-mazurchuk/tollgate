@@ -3,7 +3,7 @@
 **Task:** HackYeah 2026, partner task Goldman Sachs, "AI Control Layer".
 **Status:** final 2026-10-04. Built through M2 plus approvals, pinning, the signature feed, the hook door for agents' built-in tools (`/hook`, `tollgate connect`), the local edge UI (`/edge`) and the server console (`/console`: access map, peers, sessions, Try it, policy editing, threat feed, self-test, accounts); see [Status (final)](#status-final-2026-10-04).
 **Team:** 1 person, about 30 hours, full Python.
-Background research is in [RESEARCH.md](RESEARCH.md).
+Background research is in [docs/research.md](docs/research.md).
 
 **One-liner:** every role gets its own MCP server, generated from one policy file, that exposes exactly the tools that role may use. Every tool call is checked locally for malicious content before it leaves the machine. The server also blocks the private → public data flow once a session has read untrusted content.
 
@@ -348,7 +348,7 @@ Targets in AC8, AC9 and AC15 are proposals. They stand until the first held-out 
 
 ---
 
-## 8. Build order (superseded: original 30h solo plan; the live 15h two-track plan is the PU map "Tollgate build plan locked", soon PLAN.md)
+## 8. Build order (superseded: original 30h solo plan; the live 15h two-track plan is the PU map "Tollgate build plan locked", now docs/process/PLAN.md)
 
 | # | Block | h | Unlocks |
 |---|---|---|---|

@@ -1,6 +1,6 @@
-"""Shared types between Track A (gateway) and Track B (content). Pinned by API_CONTRACT.md.
+"""Shared types between Track A (gateway) and Track B (content). Pinned by docs/process/API_CONTRACT.md.
 
-Change this file only together with API_CONTRACT.md, in its own commit on main.
+Change this file only together with docs/process/API_CONTRACT.md, in its own commit on main.
 """
 from dataclasses import dataclass, field
 from typing import Literal

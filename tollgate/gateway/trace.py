@@ -1,4 +1,4 @@
-"""Per-call trace (API_CONTRACT.md 2, optional fields): trace ids, session state labels, and the check chain
+"""Per-call trace (docs/process/API_CONTRACT.md 2, optional fields): trace ids, session state labels, and the check chain
 derived from an event's reasons, so both doors share one definition."""
 import secrets
 

@@ -1,6 +1,6 @@
 # Goldman Sachs: AI Control Layer (HackYeah 2026 research)
 
-> Background research, kept for reference. The chosen product and its acceptance criteria are in [TOLLGATE.md](TOLLGATE.md). Ideas B to E below were partly folded into Tollgate; see its feature tiers.
+> Background research, kept for reference. The chosen product and its acceptance criteria are in [TOLLGATE.md](../TOLLGATE.md). Ideas B to E below were partly folded into Tollgate; see its feature tiers.
 
 > "Build a flexible AI control layer to secure and govern interactions with Agentic AI systems (AI agents, MCP services, LLMs, APIs) ... Create the ultimate hybrid defense system for the generative AI era!"
 

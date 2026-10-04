@@ -1,8 +1,8 @@
 # CLAUDE.md
 
-Tollgate is a HackYeah 2026 project (Goldman Sachs, "AI Control Layer"). One operator drives **two Claude sessions**, one per track. The deadline is **Sun 2026-10-04 11:00**. Clock and gates are in `PLAN.md`.
+Tollgate is a HackYeah 2026 project (Goldman Sachs, "AI Control Layer"). One operator drives **two Claude sessions**, one per track. The deadline is **Sun 2026-10-04 11:00**. Clock and gates are in `docs/process/PLAN.md`.
 
-Read in this order before working: `PLAN.md` (what is next, for which track), `API_CONTRACT.md` (the boundary), `TOLLGATE.md` (spec and AC1–AC16). The product page is `README.md`; background is in `RESEARCH.md`.
+Read in this order before working: `docs/process/PLAN.md` (what is next, for which track), `docs/process/API_CONTRACT.md` (the boundary), `TOLLGATE.md` (spec and AC1–AC16). The product page is `README.md`; background is in `docs/research.md`.
 
 ## Pitch
 Every role gets its own MCP server, generated from one policy file, that exposes exactly the tools that role may use. Every tool call is checked locally for malicious content. Once a session has read untrusted content, the server blocks the private → public data flow.
@@ -13,7 +13,7 @@ Every role gets its own MCP server, generated from one policy file, that exposes
 | `rebel/` | **A: Gateway** | `tollgate/gateway/`, `mocks/`, `tollgate/cli.py` | `a/<feature>` |
 | `rebel-b/` | **B: Content and evidence** | `tollgate/content/`, `tollgate/eval/`, `tests/corpus/`, `signatures.yaml` | `b/<feature>` |
 
-**Never edit the other track's folders.** Shared files are `tollgate/contract.py`, `API_CONTRACT.md`, `PLAN.md`, `policy.yaml` (per the section ownership in the contract) and `tests/test_smoke.py`. Change them only on `main`, in small commits, and say so in your reply so the operator can tell the other session.
+**Never edit the other track's folders.** Shared files are `tollgate/contract.py`, `docs/process/API_CONTRACT.md`, `docs/process/PLAN.md`, `policy.yaml` (per the section ownership in the contract) and `tests/test_smoke.py`. Change them only on `main`, in small commits, and say so in your reply so the operator can tell the other session.
 
 ## Stack
 - Python 3.13, **uv** (never pip directly). bun/bunx for any JS (never npm/npx).
@@ -46,6 +46,6 @@ Unit tests only for validators and taint logic. Small commits; `main` is never b
 - Tests: in-memory `Client(server)`. For header tests, use `StreamableHttpTransport` with `httpx2.ASGITransport(app)` inside `app.router.lifespan_context(app)`.
 
 ## Conventions
-- Anything outside the current step goes to "Later" in `PLAN.md`, not into code.
+- Anything outside the current step goes to "Later" in `docs/process/PLAN.md`, not into code.
 - Secrets go in `.env` (gitignored); keys are documented in `.env.example`.
 - Reply to the operator tersely: what changed, test status, what is next.

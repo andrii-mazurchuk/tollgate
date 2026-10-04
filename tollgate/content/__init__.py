@@ -1,4 +1,4 @@
-"""Track B: local content pipeline. Entry point is scan(); see API_CONTRACT.md."""
+"""Track B: local content pipeline. Entry point is scan(); see docs/process/API_CONTRACT.md."""
 import time
 
 from tollgate.content import tier2

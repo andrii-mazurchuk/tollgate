@@ -32,3 +32,7 @@ models/
 
 # personal session handoffs (kept locally)
 .claude/handoff/
+
+# never commit a token by accident (incl. a file named after one)
+pypi-*
+*.token

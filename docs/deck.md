@@ -163,7 +163,7 @@ salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
 
 # Same attack. <span class="r">Stopped at step 3.</span>
 
-![w:1100](img/deck2-steps.png)
+![w:1100](img/deck-blocked-steps.png)
 
 <p class="big">“The session read outsiders' text and holds private data, so sending data out could leak it.”</p>
 
@@ -200,7 +200,7 @@ salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
 
 # Every laptop. Every agent. <em>Every block.</em>
 
-![w:1000](img/deck2-map.png)
+![w:1000](img/deck-access-map.png)
 
 <div class="row" style="align-items:center; margin-top:10px">
 <div style="flex:1">

@@ -1,4 +1,4 @@
-"""Audit JSONL writer (API_CONTRACT.md 2). One AuditEvent per call decision; never raw content."""
+"""Audit JSONL writer (docs/process/API_CONTRACT.md 2). One AuditEvent per call decision; never raw content."""
 import asyncio
 import dataclasses
 import json
