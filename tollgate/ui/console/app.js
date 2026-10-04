@@ -726,7 +726,7 @@ function matrixCard(m) {
       srv.tools.map(t => h("tr", {},
         h("th", { scope: "row", title: t.name }, h("div", { class: "two" }, h("span", { class: "ell" }, t.plain), h("span", { class: "ell muted small mono" }, t.name))),
         h("td", { class: (t.labels || []).length ? "" : "muted" }, (t.labels || []).join(", ") || "–"),
-        m.roles.map(r => cell(t.cells[r.role]))))),
+        m.roles.map(r => cell(t.cells[r.role])))))),
     (m.builtins || []).length ? h("tbody", {},
       h("tr", { class: "grp" }, h("th", { scope: "colgroup", colspan: String(m.roles.length + 2) }, "Agent built-in tools", h("span", { class: "sub-l small" }, "seen through the hook; read-only here"))),
       m.builtins.map(t => h("tr", {},
