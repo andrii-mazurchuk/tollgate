@@ -241,6 +241,8 @@ class RoleGate(Middleware):
         elif ev.verdict == "allow":
             ev.scan_point = "tool_result"
         taint.record(data, key_id, name, args)
+        if any(r.rule.startswith(("inj.", "sig.", "t2.injection")) for r in v.reasons):  # as the hook door does
+            taint.record(data, key_id, name, args, ["untrusted_source"], f"{taint._cause(name, args)} (injection)")
         return result
 
     async def _approval(self, ev: AuditEvent, why: list[tuple[str, str]], deny) -> None:
