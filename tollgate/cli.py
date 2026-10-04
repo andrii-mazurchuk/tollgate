@@ -211,6 +211,111 @@ def key_issue() -> int:
     return 0
 
 
+def enroll_token() -> int:
+    from tollgate.gateway import peers
+    t = peers.enroll_token()
+    print(f"tollgate enroll {t['token']} --owner <name> --device <name>")
+    print(f"one-time, expires {t['expires_at']}")
+    return 0
+
+
+def enroll(token: str) -> int:
+    """ponytail: writes the hub's registry directly (hub and laptop share a disk in the demo); POST to the hub later."""
+    from tollgate.gateway import peers
+    owner, device = _opt("--owner"), _opt("--device")
+    if not owner or not device:
+        print("usage: tollgate enroll <token> --owner O --device D", file=sys.stderr)
+        return 2
+    try:
+        pid = peers.enroll(token, owner, device)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 1
+    print(f"enrolled {device} ({owner}) as peer {pid}; the admin sets its roles in the console (Peers & roles)")
+    return 0
+
+
+def connect(client: str) -> int:
+    """Mints a key for one agent launch and prints the client config (never writes the client's own files)."""
+    from tollgate import edge
+    from tollgate.gateway import peers
+    from tollgate.gateway.policy import DEFAULT_PATH, load_policy
+
+    role, pid = _opt("--role"), _opt("--peer")
+    names = {"claude-code": "Claude Code", "cursor": "Cursor", "print": None}
+    if client not in names or not role or not pid:
+        print("usage: tollgate connect claude-code|cursor|print --role R --peer P [--port P]", file=sys.stderr)
+        return 2
+    try:
+        key = peers.mint(pid, role, load_policy(_opt("--policy") or DEFAULT_PATH).data["roles"])
+    except (ValueError, KeyError) as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 1
+    base = f"http://127.0.0.1:{_opt('--port', '8080')}"
+    mcp = f"{base}/mcp/{role}/"
+    if names[client]:
+        print(edge.SNIPPETS[names[client]].replace("{mcp}", mcp).replace("{KEY}", key))
+    else:
+        print(key)
+        print(f"MCP URL: {mcp}")
+        print(f"Model door: {base}/v1/chat/completions")
+        print(f"Header:  Authorization: Bearer {key}")
+    return 0
+
+
+# owner, device, roles, scenario steps (scenario/acme.yaml) its agents run; each fresh session is one launch = one key
+FLEET = [
+    ("Andrey Mazurchuk", "andrey-thinkpad", ["role-2"], ["3.1", "3.2", "3.3", "3.4a", "3.4b"]),
+    ("Marta Kowalska", "marta-macbook", ["role-2"], ["2.1", "2.2", "2.3", "2.4", "2.5"]),
+    ("Piotr Nowak", "piotr-xps", ["role-1"], ["1.1", "1.2"]),
+    ("Ola Wiśniewska", "ola-surface", ["role-1", "role-2"], ["1.1", "3.5a", "3.5b", "3.5c"]),
+    ("Tomasz Zieliński", "tomek-mbp", ["role-2"], ["3.4a", "3.4b", "2.1", "2.2", "5.1"]),
+    ("Kasia Lewandowska", "kasia-x1", ["role-1"], ["1.1", "1.2"]),
+]
+
+
+def seed_fleet() -> int:
+    """Enrolls the demo fleet (reused by device on reruns) and drives its traffic through the real in-process gateway
+    with minted keys into the shared audit log, so every console number is a real decision."""
+    import asyncio
+    import os
+
+    from tollgate import scenario
+    from tollgate.gateway import build_app, peers
+    from tollgate.gateway.policy import DEFAULT_PATH, load_policy
+
+    os.environ.setdefault("TOLLGATE_UPSTREAM", "scripted")
+    os.environ.setdefault("TOLLGATE_T2", "off")  # the classifier is a 739 MB download; TOLLGATE_T2=on to include it
+    holder = load_policy(_opt("--policy") or DEFAULT_PATH)
+    app = build_app(holder)
+
+    class Fleet(scenario.Runner):
+        def __init__(self, pid):
+            super().__init__(app)
+            self.pid = pid
+
+        def key(self, step):  # one minted key per scenario session, as one agent launch would get
+            sess = step["session"]
+            if sess not in self.keys:
+                self.keys[sess] = peers.mint(self.pid, self.spec["agents"][step["agent"]]["role"], holder.data["roles"])
+            return self.keys[sess]
+
+    async def go():
+        async with app.router.lifespan_context(app):
+            for owner, device, roles, steps in FLEET:
+                pid = next((i for i, p in peers.load()["peers"].items()
+                            if p["device"] == device and not p["revoked_at"]), None)
+                if pid is None:
+                    pid = peers.enroll(peers.enroll_token()["token"], owner, device)
+                    peers.set_roles(pid, roles)
+                r = Fleet(pid)
+                r.reset()
+                res = [await r.run(s) for s in steps]
+                print(f"{pid} {device:16} {owner:20} " + " ".join(f"{x['id']}:{x['status']}" for x in res))
+    asyncio.run(go())
+    return 0
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252 and mangle "…" in redactions
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
@@ -245,11 +350,20 @@ def main() -> int:
         return up()
     if cmd == "dashboard":
         return dashboard()
+    if cmd == "enroll-token":
+        return enroll_token()
+    if cmd == "enroll" and len(sys.argv) > 2:
+        return enroll(sys.argv[2])
+    if cmd == "connect" and len(sys.argv) > 2:
+        return connect(sys.argv[2])
+    if cmd == "seed-fleet":
+        return seed_fleet()
     if cmd == "feed":
         return feed(sys.argv[2] if len(sys.argv) > 2 else "")
     print("usage: tollgate {up [--port P] [--policy F] [--dashboard-port D]|serve [--port P] [--policy F] [--scripted-model]"
           "|agent [--role R] [--model M] [--base URL] [--scripted] TASK|dashboard"
-          "|approve ID|deny ID [--port P]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]|feed serve|publish|pull}",
+          "|approve ID|deny ID [--port P]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]|feed serve|publish|pull"
+          "|enroll-token|enroll TOKEN --owner O --device D|connect claude-code|cursor|print --role R --peer P|seed-fleet}",
           file=sys.stderr)
     return 2
 

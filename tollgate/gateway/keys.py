@@ -33,4 +33,7 @@ def verify(key: str) -> tuple[str, str] | None:
 def from_header(authorization: str | None) -> tuple[str, str] | None:
     if not authorization or not authorization.lower().startswith("bearer "):
         return None
-    return verify(authorization[7:].strip())
+    ident = verify(authorization[7:].strip())
+    from tollgate.gateway import peers  # late: peers mints with issue()
+    # every HTTP door (/mcp/{role}/ guard, RoleGate, model door) reads the key here: revoked peers stop at once
+    return ident if ident and peers.is_key_allowed(*ident) else None

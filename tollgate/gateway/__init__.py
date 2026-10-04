@@ -27,7 +27,7 @@ from tollgate.content import scan
 from tollgate.feed import Puller
 from tollgate.contract import SEVERITY, AuditEvent, Reason, Verdict
 from tollgate.gateway import audit, keys, local_text, model_door, taint, trace
-from tollgate.gateway.approvals import Approvals, admin_ok
+from tollgate.gateway.approvals import Approvals, admin_ok, admin_request
 from tollgate.gateway.pins import Pins
 from tollgate.gateway.policy import PolicyHolder
 
@@ -308,10 +308,9 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
                              "pin_alerts": list(pins.alerts.values()), "feed": feed.state})
 
     def admin_read(view):
-        """Read-only admin GETs: loopback (the dashboard) or the admin token. ponytail: behind a reverse proxy every
-        client looks loopback; send the token from the dashboard then."""
+        """Read-only admin GETs (approvals.admin_request: loopback or the admin token)."""
         async def get(request):
-            if (request.client and request.client.host in ("127.0.0.1", "::1", "localhost"))                     or admin_ok(request.headers.get("authorization")):
+            if admin_request(request):
                 return JSONResponse(view())
             return JSONResponse({"error": "admin token required (TOLLGATE_ADMIN_TOKEN)"}, 401)
         return get
@@ -337,8 +336,8 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
               Route("/admin/approvals/{id}", admin_decide, methods=["POST"]),
               Route("/v1/chat/completions", model_door.build_door(policy, upstream), methods=["POST"])]
     routes += [Mount(f"/mcp/{r}", app=require_key(r, a)) for r, a in apps.items()]
-    from tollgate import edge  # late: edge -> scenario -> gateway
-    routes += edge.routes(policy)
+    from tollgate import console, edge  # late: edge -> scenario -> gateway
+    routes += edge.routes(policy) + console.routes(policy)
     app = Starlette(routes=routes, lifespan=lifespan)
     app.state.approvals, app.state.pins, app.state.feed, app.state.sources = approvals, pins, feed, sources
     return app
