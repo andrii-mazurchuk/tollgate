@@ -1,5 +1,6 @@
 """Loads policy.yaml and hot reloads it (AC7). The gateway reads `holder.data` on every request; a changed file
-is validated and swapped in, an invalid one is rejected (old policy kept, error in `status()`)."""
+is validated and swapped in, an invalid one is rejected (old policy kept, error in `status()`). Every load and reload
+attempt is kept in `history` and appended to policy_history.jsonl next to the audit log (survives restarts)."""
 import hashlib
 import json
 import logging
@@ -24,6 +25,27 @@ class PolicyHolder:
         self.version = hashlib.sha256(raw or json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()[:8]
         self.loaded_at, self.last_error = _now(), None
         self._stamp = self._stat()
+        try:
+            lines = history_path().read_text(encoding="utf-8").splitlines()
+            self.history = [json.loads(x) for x in lines if x.strip()]
+        except (OSError, ValueError):
+            self.history = []
+        if self.path:
+            self._record(True, data.get("mode") if isinstance(data, dict) else None)
+
+    def _record(self, ok: bool, profile, version: str | None = None, error: str | None = None):
+        e = {"version": version or self.version, "at": _now(), "profile": profile, "ok": ok, "error": error}
+        last = self.history[-1] if self.history else {}
+        if ok and last.get("ok") and last.get("version") == e["version"]:
+            return  # a restart (or a CLI one-shot) on the same file is not a new version
+        self.history.append(e)
+        try:
+            hp = history_path()
+            hp.parent.mkdir(parents=True, exist_ok=True)
+            with hp.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(e) + "\n")
+        except OSError as x:
+            log.error("policy history not written: %s", x)
 
     def _stat(self):
         try:
@@ -41,22 +63,32 @@ class PolicyHolder:
         return self._data
 
     def reload(self) -> bool:
+        self._stamp, raw, data = self._stat(), None, None
         try:
             raw = self.path.read_bytes()
-            data = validate(yaml.safe_load(raw))
+            data = yaml.safe_load(raw)
+            validate(data)
         except Exception as e:  # any bad file: keep the old policy
             self.last_error = {"message": f"{type(e).__name__}: {e}", "at": _now()}
             log.error("policy reload rejected, keeping %s: %s", self.version, self.last_error["message"])
+            self._record(False, data.get("mode") if isinstance(data, dict) else None,
+                         raw and hashlib.sha256(raw).hexdigest()[:8], self.last_error["message"])
             return False
         self._data, self.last_error, self.loaded_at = data, None, _now()
         self.version = hashlib.sha256(raw).hexdigest()[:8]
         log.warning("policy reloaded: %s", self.version)
+        self._record(True, data.get("mode"))
         return True
 
     def status(self) -> dict:
         self.data  # pick up a pending edit first
         return {"version": self.version, "loaded_at": self.loaded_at, "last_error": self.last_error,
                 "path": str(self.path) if self.path else None}
+
+
+def history_path() -> Path:
+    from tollgate.gateway import audit
+    return Path(os.environ.get("TOLLGATE_AUDIT") or audit.DEFAULT_PATH).parent / "policy_history.jsonl"
 
 
 LABELS = {"untrusted_source", "private_data", "public_sink"}

@@ -1,7 +1,9 @@
 """Peer registry (enroll once, roles, mint, revoke) and the server console API (/console/api/*)."""
 import contextlib
 import json
+import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import httpx2
 import pytest
@@ -174,3 +176,102 @@ def test_peer_online_window():
                      "pb000": {"owner": "B", "device": "b", "roles": ["role-2"], "revoked_at": None}}, "tokens": {}}
     rows = {r["id"]: r for r in console.peer_rows([ev(1, "pa000-1"), ev(9, "pb000-2")], reg, now)}
     assert rows["pa000"]["online"] and not rows["pb000"]["online"] and "unenrolled" not in rows
+
+
+@contextlib.asynccontextmanager
+async def _policy_app(monkeypatch, tmp_path):
+    """Gateway on a tmp copy of policy.yaml: a profile switch must never overwrite the repo's file."""
+    monkeypatch.setenv("TOLLGATE_UPSTREAM", "scripted")
+    from tollgate.gateway import build_app
+    from tollgate.gateway.policy import DEFAULT_PATH, load_policy
+
+    path = tmp_path / "policy.yaml"
+    path.write_bytes(DEFAULT_PATH.read_bytes())
+    holder = load_policy(path)
+    app = build_app(holder)
+    async with app.router.lifespan_context(app):
+        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080") as c:
+            yield c, app, holder
+
+
+async def test_policy_view_shape_and_matrix(monkeypatch, tmp_path):
+    async with _policy_app(monkeypatch, tmp_path) as (c, _, holder):
+        p = (await c.get("/console/api/policy")).json()
+        assert set(p) == {"status", "matrix", "rules", "history", "profiles"}
+        st = p["status"]
+        assert st["version"] == holder.version and st["profile"] == "balanced" and st["modified"] is False
+        assert st["last_error"] is None and st["path"].endswith("policy.yaml") and st["loaded_at"]
+        assert p["matrix"]["roles"] == [{"role": "role-1", "agent": "Intern bot"},
+                                        {"role": "role-2", "agent": "Support assistant"}]
+        cell = {t["name"]: t for s in p["matrix"]["servers"] for t in s["tools"]}
+        assert {s["name"] for s in p["matrix"]["servers"]} == {"github", "tickets", "files"}
+        assert cell["github.pr.create"]["cells"]["role-1"]["access"] == "hidden"
+        assert cell["github.pr.create"]["cells"]["role-2"]["access"] == "write"
+        assert cell["github.pr.create"]["labels"] == ["public destination"]
+        assert cell["github.issues.read"]["cells"]["role-1"] == {"access": "read", "limits": []}
+        assert cell["files.fs.delete"]["cells"]["role-2"]["access"] == "hidden"
+        assert cell["tickets.query"]["cells"]["role-2"] == {"access": "write", "limits": ["sql: a single SELECT only"]}
+        assert cell["files.fs.read"]["cells"]["role-2"]["limits"] == ["path: only /workspace and below"]
+        assert {r["id"] for r in p["rules"]} == {"data_flow", "masked", "blocked", "injection", "signatures", "loops",
+                                                 "budgets", "approval_timeout"}
+        assert all(r["title"] and r["sentence"] and r["action"] for r in p["rules"])
+        assert p["history"][0]["version"] == holder.version and p["history"][0]["ok"]
+        pr = p["profiles"]
+        assert pr["current"] == "balanced" and pr["names"] == ["strict", "balanced", "lenient"]
+        flow = next(d for d in pr["diff"] if d["setting"] == "taint.block_flow.action")
+        assert flow["values"] == {"strict": "block", "balanced": "block", "lenient": "ask a human"}
+        assert pr["changes"]["balanced"] == [] or all(x["plain"] for x in pr["changes"]["balanced"])
+        assert pr["changes"]["strict"] and {x["direction"] for x in pr["changes"]["strict"]} == {"stricter"}
+        assert {"looser"} == {x["direction"] for x in pr["changes"]["lenient"]}
+
+
+async def test_profile_switch_backs_up_reloads_and_enforces(monkeypatch, tmp_path):
+    from fastmcp import Client
+    from fastmcp.client.transports import StreamableHttpTransport
+
+    from tollgate.gateway.keys import issue
+    from tollgate.gateway.policy import DEFAULT_PATH
+
+    repo_policy = DEFAULT_PATH.read_bytes()
+    async with _policy_app(monkeypatch, tmp_path) as (c, app, holder):
+        def factory(**kw):
+            return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t", **kw)
+
+        async def write(path):
+            async with Client(StreamableHttpTransport("http://t/mcp/role-2/", auth=issue("role-2"),
+                                                      httpx_client_factory=factory)) as m:
+                r = await m.call_tool("files.fs.write", {"path": path, "content": "x"}, raise_on_error=False)
+                return r.is_error
+
+        assert not await write("/workspace/notes.txt")  # balanced: no limit on writes
+        v0 = holder.version
+        assert (await c.post("/console/api/policy/profile", json={"profile": "nope"})).status_code == 400
+        assert (await c.post("/console/api/policy/profile", content=b"[1]")).status_code == 400
+        r = (await c.post("/console/api/policy/profile", json={"profile": "strict"})).json()
+        assert r["status"]["profile"] == "strict" and r["status"]["version"] != v0 and not r["status"]["modified"]
+        assert Path(r["backup"]).read_bytes() == repo_policy and v0 in Path(r["backup"]).name
+        assert (tmp_path / "policy.yaml").read_bytes() == (DEFAULT_PATH.parent / "policies" / "strict.yaml").read_bytes()
+        assert await write("/workspace/notes.txt")  # strict: writes only under /workspace/out
+        h = (await c.get("/console/api/policy")).json()["history"]
+        assert h[0]["ok"] and h[0]["profile"] == "strict" and h[0]["version"] == r["status"]["version"]
+
+        # a rejected edit is kept in history with its reason; the old policy stays in force
+        bad = tmp_path / "policy.yaml"
+        bad.write_text("mode: strict\nservers: {}\nroles: {role-1: {servers: {nope: {access: read}}}}\n")
+        os.utime(bad, ns=(10**18, 10**18))
+        p = (await c.get("/console/api/policy")).json()
+        assert p["history"][0]["ok"] is False and "nope" in p["history"][0]["error"]
+        assert p["status"]["version"] == r["status"]["version"] and p["status"]["last_error"]
+        assert (tmp_path / "policy_history.jsonl").read_text().count("\n") >= 3  # TOLLGATE_AUDIT's directory
+    assert DEFAULT_PATH.read_bytes() == repo_policy
+
+    from tollgate.gateway.policy import load_policy  # history survives a restart
+    assert load_policy(DEFAULT_PATH).history[-2]["ok"] is False
+
+
+async def test_policy_api_needs_admin(monkeypatch, tmp_path):
+    async with _policy_app(monkeypatch, tmp_path) as (_, app, _h):
+        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=("10.1.2.3", 5000)),
+                                      base_url="http://x") as remote:
+            assert (await remote.get("/console/api/policy")).status_code == 401
+            assert (await remote.post("/console/api/policy/profile", json={"profile": "strict"})).status_code == 401
