@@ -29,6 +29,7 @@ footer { color: var(--mute); font-size: 16px; left: 60px; }
 section::after { color: var(--mute); font-size: 16px; }
 code { background: var(--soft); color: var(--ink); border-radius: 6px; padding: 2px 10px; }
 section img { border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 4px 18px rgba(15,23,42,.10); }
+section img.logo { border: 0; border-radius: 0; box-shadow: none; background: none; display: block; width: auto; }
 
 /* call chain */
 .chain { display: flex; gap: 14px; align-items: stretch; }
@@ -79,6 +80,8 @@ section img { border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 
 </style>
 
 <!-- 1 · ONE INCIDENT -->
+
+<div style="text-align:left;margin:0 0 14px"><img class="logo" src="brand/tollgate-logo.svg" alt="Tollgate" style="height:56px;display:inline-block;margin:0"></div>
 
 <p class="kick">May 2025 · GitHub MCP · Claude</p>
 
@@ -255,6 +258,8 @@ salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
 <!-- 10 · TRY IT -->
 
 <div class="tag">IMPLEMENTABILITY · 10%</div>
+
+<div style="text-align:left;margin:0 0 6px"><img class="logo" src="brand/tollgate-logo.svg" alt="Tollgate" style="height:56px;display:inline-block;margin:0"></div>
 
 # Try it in <em>5 minutes.</em>
 
