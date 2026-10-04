@@ -56,7 +56,7 @@ RULES: dict[str, tuple[str, str]] = {
     "request.invalid": ("The request was not in the expected format.", "Send {model, messages: [...]} as JSON."),
     "request.stream": ("Streaming replies are not supported yet.", "Send stream: false."),
     # content pipeline
-    "content.blocked": ("The text contained something the content check blocks.", "See the details below."),
+    "content.blocked": ("The text contained something the content check blocks.", "Remove the blocked item from the text and try again."),
     "content.redact_failed": ("Sensitive data could not be masked safely, so the call was stopped.",
                               "Send the data in a simpler format."),
     "content.truncated": ("The text was very long, so only its start and end were checked.",
