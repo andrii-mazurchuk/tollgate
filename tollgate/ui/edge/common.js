@@ -75,6 +75,14 @@ function applyTheme(t) {
   save("theme", t === "system" ? "" : t); renderThemeBtn();
 }
 
+// Style preset (look only, never layout): <html data-style>, per viewer in localStorage tg.style. Self-wires the top-bar picker.
+function applyStyle(v) {
+  if (v) document.documentElement.dataset.style = v; else delete document.documentElement.dataset.style;
+  save("style", v || "");
+}
+const stylePick = document.getElementById("style");
+if (stylePick) { stylePick.value = document.documentElement.dataset.style || ""; stylePick.addEventListener("change", () => applyStyle(stylePick.value)); }
+
 function delta(k, range) {
   if (k.prev == null) return "all time";
   const d = k.value - k.prev;

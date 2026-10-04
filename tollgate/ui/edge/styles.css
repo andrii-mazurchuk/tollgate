@@ -1,0 +1,173 @@
+/* Style presets (per viewer, localStorage tg.style -> <html data-style>). Same layout in every preset: only type,
+   colour, radius, borders and shadows change. Red keeps meaning Blocked / real problems everywhere.
+   Each preset: light tokens, then dark tokens twice (system dark unless forced light, and forced dark). */
+
+.style-pick { height: 28px; padding: 0 4px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); color: var(--ink-2); font-size: 12px; cursor: pointer; }
+.style-pick:hover { background: var(--soft); }
+
+/* ---------- Claude Code: cream paper, warm ink, clay accent, serif headings, mono figures ---------- */
+:root[data-style="claude"] {
+  --bg: #f3f0e8; --panel: #faf8f3; --soft: #ece8dd; --soft-2: #e0dbcd; --line: #e3ddd0; --line-2: #d2cbbb;
+  --ink: #2b2722; --ink-2: #4a443b; --muted: #6b6357; --faint: #a39a8c;
+  --accent: #a3472a; --accent-soft: #f6e9e0; --on-accent: #fff;
+  --red: #b8202b; --red-soft: #f7dfdf; --red-ink: #861720;
+  --c-allow: #ddd6c6; --c-mid: #9a907f; --c-block: #c4262f; --bar: #e3ddd0; --mark: #ece8dd; --mark-ink: #2b2722;
+  --r: 8px; --shadow: 0 1px 2px rgba(70, 50, 30, .05);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --head: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root[data-style="claude"]:not([data-theme="light"]) {
+  --bg: #1a1915; --panel: #22211d; --soft: #2c2a25; --soft-2: #3a3731; --line: #34312b; --line-2: #45413a;
+  --ink: #ece7dc; --ink-2: #cfc8ba; --muted: #a0988a; --faint: #6d665b;
+  --accent: #e0835f; --accent-soft: #3a2a21; --on-accent: #1a1915;
+  --red: #f2646a; --red-soft: #3d1c1e; --red-ink: #ffb8b8;
+  --c-allow: #45413a; --c-mid: #7d7568; --c-block: #ef5a5f; --bar: #3a3731; --mark: #45413a; --mark-ink: #ece7dc;
+  --shadow: none;
+} }
+:root[data-style="claude"][data-theme="dark"] {
+  --bg: #1a1915; --panel: #22211d; --soft: #2c2a25; --soft-2: #3a3731; --line: #34312b; --line-2: #45413a;
+  --ink: #ece7dc; --ink-2: #cfc8ba; --muted: #a0988a; --faint: #6d665b;
+  --accent: #e0835f; --accent-soft: #3a2a21; --on-accent: #1a1915;
+  --red: #f2646a; --red-soft: #3d1c1e; --red-ink: #ffb8b8;
+  --c-allow: #45413a; --c-mid: #7d7568; --c-block: #ef5a5f; --bar: #3a3731; --mark: #45413a; --mark-ink: #ece7dc;
+  --shadow: none;
+}
+:root[data-style="claude"] h1, :root[data-style="claude"] h2 { font-weight: 600; letter-spacing: 0; }
+:root[data-style="claude"] .kpi .v, :root[data-style="claude"] .status, :root[data-style="claude"] .brand { font-family: var(--mono); }
+:root[data-style="claude"] .kpi .v { font-weight: 500; }
+
+/* ---------- Codex / OpenAI: monochrome, airy, neutral sans, pills, near-black accent ---------- */
+:root[data-style="codex"] {
+  --bg: #ffffff; --panel: #ffffff; --soft: #f4f4f4; --soft-2: #e6e6e6; --line: #ebebeb; --line-2: #d9d9d9;
+  --ink: #0d0d0d; --ink-2: #333333; --muted: #6b6b6b; --faint: #a8a8a8;
+  --accent: #0d0d0d; --accent-soft: #efefef; --on-accent: #ffffff;
+  --red: #d92d20; --red-soft: #fdeceb; --red-ink: #9a1c13;
+  --c-allow: #e0e0e0; --c-mid: #8a8a8a; --c-block: #d92d20; --bar: #ebebeb; --mark: #efefef; --mark-ink: #0d0d0d;
+  --r: 12px; --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 2px 8px rgba(0, 0, 0, .03);
+  --font: ui-sans-serif, -apple-system, "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root[data-style="codex"]:not([data-theme="light"]) {
+  --bg: #000000; --panel: #0f0f0f; --soft: #1a1a1a; --soft-2: #2a2a2a; --line: #222222; --line-2: #343434;
+  --ink: #f5f5f5; --ink-2: #d4d4d4; --muted: #9a9a9a; --faint: #5c5c5c;
+  --accent: #f5f5f5; --accent-soft: #242424; --on-accent: #000000;
+  --red: #ff6159; --red-soft: #3a1412; --red-ink: #ffb4ae;
+  --c-allow: #333333; --c-mid: #7a7a7a; --c-block: #ff6159; --bar: #2a2a2a; --mark: #343434; --mark-ink: #f5f5f5;
+  --shadow: none;
+} }
+:root[data-style="codex"][data-theme="dark"] {
+  --bg: #000000; --panel: #0f0f0f; --soft: #1a1a1a; --soft-2: #2a2a2a; --line: #222222; --line-2: #343434;
+  --ink: #f5f5f5; --ink-2: #d4d4d4; --muted: #9a9a9a; --faint: #5c5c5c;
+  --accent: #f5f5f5; --accent-soft: #242424; --on-accent: #000000;
+  --red: #ff6159; --red-soft: #3a1412; --red-ink: #ffb4ae;
+  --c-allow: #333333; --c-mid: #7a7a7a; --c-block: #ff6159; --bar: #2a2a2a; --mark: #343434; --mark-ink: #f5f5f5;
+  --shadow: none;
+}
+:root[data-style="codex"] :is(.btn, .icon-btn, .badge, .seg, .seg button, .status, .fpill, .search, .sel-in, .num-in, .style-pick, .nav a, .health, details.dd > summary) { border-radius: 999px; }
+:root[data-style="codex"] h1 { font-weight: 600; letter-spacing: -0.02em; }
+:root[data-style="codex"] .kpi .v { font-weight: 600; letter-spacing: -0.02em; }
+
+/* ---------- Publisher: broadsheet. Serif, ink rules, square corners, red only for Blocked ---------- */
+:root[data-style="publisher"] {
+  --bg: #f4f2ed; --panel: #fbfaf7; --soft: #efece5; --soft-2: #e2ded4; --line: #d9d4c9; --line-2: #1b1b1b;
+  --ink: #111111; --ink-2: #2e2e2e; --muted: #5f5a52; --faint: #9b958a;
+  --accent: #111111; --accent-soft: #e9e5dc; --on-accent: #fbfaf7;
+  --red: #c8102e; --red-soft: #f8e1e3; --red-ink: #8f0b20;
+  --c-allow: #d9d4c9; --c-mid: #6e695f; --c-block: #c8102e; --bar: #e2ded4; --mark: #efece5; --mark-ink: #111111;
+  --r: 0px; --shadow: none;
+  --font: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --head: "Bodoni Moda", "Didot", "Bodoni MT", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) { :root[data-style="publisher"]:not([data-theme="light"]) {
+  --bg: #121110; --panel: #1a1917; --soft: #24221f; --soft-2: #312e2a; --line: #34312c; --line-2: #e8e4da;
+  --ink: #f0ece3; --ink-2: #d2cdc2; --muted: #a39d92; --faint: #6b665e;
+  --accent: #f0ece3; --accent-soft: #2c2a26; --on-accent: #121110;
+  --red: #f2555f; --red-soft: #3b1519; --red-ink: #ffb3b9;
+  --c-allow: #3a3631; --c-mid: #8a8479; --c-block: #f2555f; --bar: #312e2a; --mark: #312e2a; --mark-ink: #f0ece3;
+} }
+:root[data-style="publisher"][data-theme="dark"] {
+  --bg: #121110; --panel: #1a1917; --soft: #24221f; --soft-2: #312e2a; --line: #34312c; --line-2: #e8e4da;
+  --ink: #f0ece3; --ink-2: #d2cdc2; --muted: #a39d92; --faint: #6b665e;
+  --accent: #f0ece3; --accent-soft: #2c2a26; --on-accent: #121110;
+  --red: #f2555f; --red-soft: #3b1519; --red-ink: #ffb3b9;
+  --c-allow: #3a3631; --c-mid: #8a8479; --c-block: #f2555f; --bar: #312e2a; --mark: #312e2a; --mark-ink: #f0ece3;
+}
+:root[data-style="publisher"] body { font-variant-numeric: tabular-nums lining-nums; }
+:root[data-style="publisher"] .card { border-width: 0 0 1px; border-top: 2px solid var(--ink); }
+:root[data-style="publisher"] h1, :root[data-style="publisher"] h2 { font-weight: 700; letter-spacing: 0; }
+:root[data-style="publisher"] .kpi .v { font-weight: 700; }
+:root[data-style="publisher"] .brand { font-family: var(--head); font-size: 16px; font-weight: 700; }
+:root[data-style="publisher"] .top { border-bottom: 1px solid var(--ink); }
+:root[data-style="publisher"] .nav a[aria-current="page"] { box-shadow: inset 3px 0 0 var(--ink); }
+
+/* ---------- Minimal: no card chrome, whitespace + one hairline, flat type scale, one teal accent ---------- */
+:root[data-style="minimal"] {
+  --bg: #ffffff; --panel: #ffffff; --soft: #f6f6f6; --soft-2: #ebebeb; --line: #ededed; --line-2: #e0e0e0;
+  --ink: #1a1a1a; --ink-2: #444444; --muted: #737373; --faint: #a3a3a3;
+  --accent: #0e7490; --accent-soft: #ecf6f8; --on-accent: #ffffff;
+  --red: #d42a2a; --red-soft: #fcebeb; --red-ink: #9b1c1c;
+  --c-allow: #e3e3e3; --c-mid: #9a9a9a; --c-block: #d42a2a; --bar: #ededed; --mark: #f0f0f0; --mark-ink: #1a1a1a;
+  --r: 4px; --shadow: none;
+}
+@media (prefers-color-scheme: dark) { :root[data-style="minimal"]:not([data-theme="light"]) {
+  --bg: #111111; --panel: #111111; --soft: #1b1b1b; --soft-2: #262626; --line: #232323; --line-2: #2e2e2e;
+  --ink: #e8e8e8; --ink-2: #c4c4c4; --muted: #8f8f8f; --faint: #5a5a5a;
+  --accent: #5ec8dc; --accent-soft: #0f2a30; --on-accent: #111111;
+  --red: #f06363; --red-soft: #3a1717; --red-ink: #ffb4b4;
+  --c-allow: #2e2e2e; --c-mid: #6e6e6e; --c-block: #f06363; --bar: #262626; --mark: #2e2e2e; --mark-ink: #e8e8e8;
+} }
+:root[data-style="minimal"][data-theme="dark"] {
+  --bg: #111111; --panel: #111111; --soft: #1b1b1b; --soft-2: #262626; --line: #232323; --line-2: #2e2e2e;
+  --ink: #e8e8e8; --ink-2: #c4c4c4; --muted: #8f8f8f; --faint: #5a5a5a;
+  --accent: #5ec8dc; --accent-soft: #0f2a30; --on-accent: #111111;
+  --red: #f06363; --red-soft: #3a1717; --red-ink: #ffb4b4;
+  --c-allow: #2e2e2e; --c-mid: #6e6e6e; --c-block: #f06363; --bar: #262626; --mark: #2e2e2e; --mark-ink: #e8e8e8;
+}
+:root[data-style="minimal"] .card { border-color: transparent; }
+:root[data-style="minimal"] .nav { border-right-color: transparent; }
+:root[data-style="minimal"] :is(.icon-btn, .status, .seg, .style-pick) { border-color: transparent; }
+:root[data-style="minimal"] h1 { font-size: 15px; font-weight: 500; letter-spacing: 0; }
+:root[data-style="minimal"] h2 { font-size: 13px; font-weight: 500; }
+:root[data-style="minimal"] .kpi .v { font-size: 18px; font-weight: 400; }
+
+/* ---------- Retro: monospace, hard 1px borders, bevels, no radius. Light = beige 90s desktop, dark = phosphor CRT ---------- */
+:root[data-style="retro"] {
+  --bg: #cfc8b4; --panel: #e4dfcf; --soft: #d6cfbb; --soft-2: #c4bca6; --line: #8a8370; --line-2: #3b372d;
+  --ink: #1b1a15; --ink-2: #2f2c24; --muted: #4f4a3e; --faint: #7c7563;
+  --accent: #000080; --accent-soft: #c9cce4; --on-accent: #ffffff;
+  --red: #b00000; --red-soft: #f0c8c0; --red-ink: #7a0000;
+  --c-allow: #a9a18b; --c-mid: #5b5546; --c-block: #b00000; --bar: #c4bca6; --mark: #f0e68c; --mark-ink: #1b1a15;
+  --bevel-hi: #fbf8ee; --bevel-lo: #8a8370;
+  --r: 0px; --shadow: inset 1px 1px 0 var(--bevel-hi), inset -1px -1px 0 var(--bevel-lo);
+  --font: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --mono: var(--font);
+}
+@media (prefers-color-scheme: dark) { :root[data-style="retro"]:not([data-theme="light"]) {
+  --bg: #030603; --panel: #081008; --soft: #0e1a0f; --soft-2: #163018; --line: #1d4a22; --line-2: #2f7a38;
+  --ink: #7dff9a; --ink-2: #5fd97a; --muted: #44b25e; --faint: #2a6e39;
+  --accent: #ffb000; --accent-soft: #2a1f00; --on-accent: #030603;
+  --red: #ff4b4b; --red-soft: #3a0a0a; --red-ink: #ff9a9a;
+  --c-allow: #1d4a22; --c-mid: #3fae58; --c-block: #ff4b4b; --bar: #163018; --mark: #2a1f00; --mark-ink: #ffb000;
+  --bevel-hi: #2f7a38; --bevel-lo: #000000;
+} }
+:root[data-style="retro"][data-theme="dark"] {
+  --bg: #030603; --panel: #081008; --soft: #0e1a0f; --soft-2: #163018; --line: #1d4a22; --line-2: #2f7a38;
+  --ink: #7dff9a; --ink-2: #5fd97a; --muted: #44b25e; --faint: #2a6e39;
+  --accent: #ffb000; --accent-soft: #2a1f00; --on-accent: #030603;
+  --red: #ff4b4b; --red-soft: #3a0a0a; --red-ink: #ff9a9a;
+  --c-allow: #1d4a22; --c-mid: #3fae58; --c-block: #ff4b4b; --bar: #163018; --mark: #2a1f00; --mark-ink: #ffb000;
+  --bevel-hi: #2f7a38; --bevel-lo: #000000;
+}
+:root[data-style="retro"] body { font-size: 12px; }
+:root[data-style="retro"] .card { border-color: var(--line-2); }
+:root[data-style="retro"] :is(.btn, .icon-btn, .style-pick, .seg, .status) { border-color: var(--line-2); box-shadow: var(--shadow); }
+:root[data-style="retro"] :is(.btn, .icon-btn):active { box-shadow: inset -1px -1px 0 var(--bevel-hi), inset 1px 1px 0 var(--bevel-lo); }
+:root[data-style="retro"] :is(.search, .sel-in, .num-in, input, select:not(.style-pick)) { box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi); }
+:root[data-style="retro"] :is(.badge, .nav a, .step, .seg button, .fpill, .tgl) { border-radius: 0; }
+:root[data-style="retro"] h1, :root[data-style="retro"] h2 { font-weight: 700; letter-spacing: 0; }
+:root[data-style="retro"] .nav a[aria-current="page"] { background: var(--accent); color: var(--on-accent); }
+@media (prefers-color-scheme: dark) { :root[data-style="retro"]:not([data-theme="light"]) body { text-shadow: 0 0 3px rgba(90, 255, 130, .35); } }
+:root[data-style="retro"][data-theme="dark"] body { text-shadow: 0 0 3px rgba(90, 255, 130, .35); }
+/* wider faces: keep the Blocked badge inside the narrow Last column */
+:root[data-style="publisher"] .badge { padding: 0 4px; gap: 3px; }
+:root[data-style="retro"] .badge { padding: 0 4px; gap: 3px; font-size: 11px; }
