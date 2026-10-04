@@ -34,7 +34,7 @@ Two interfaces, same visual style:
    - Optional, low priority: per-session stats (model, sources touched such as files and tickets, counts).
 2. **Analytics** (local): charts like the server's, but for this laptop only: actions over time by verdict, blocked and masked counts, top reasons, per-session breakdown.
 3. **Setup**: connection details, key (masked, copy), config snippets for Claude Code / Cursor / OpenAI SDK, Test connection, and what stays local vs. what is sent to the server.
-4. ~~**Scenario**~~ (to be confirmed after a walkthrough): the Acme steps from SCENARIO.md run through the real gateway, expected vs. actual, PASS/FAIL. *Removed 2026-10-04: the no-network fallback is `scripts/demo_claude.py` (replays the hook calls through the real shim) and the `tollgate replay github` / `tollgate agent --scripted` terminal commands.*
+4. ~~**Scenario**~~ (to be confirmed after a walkthrough): the Acme steps from docs/process/SCENARIO.md run through the real gateway, expected vs. actual, PASS/FAIL. *Removed 2026-10-04: the no-network fallback is `scripts/demo_claude.py` (replays the hook calls through the real shim) and the `tollgate replay github` / `tollgate agent --scripted` terminal commands.*
 
 **Dropped:** the "My agent" panel (tools/model/budget sidebar).
 

@@ -159,7 +159,7 @@ Same binary, two roles; the demo runs both on one machine. Next step: split into
 
 - [TOLLGATE.md](TOLLGATE.md): spec, AC1–AC16 with status, statistics, known gaps
 - [DEMO.md](DEMO.md): 3-minute run sheet with fallbacks
-- [SCENARIO.md](SCENARIO.md): the Acme golden scenario
+- [docs/process/SCENARIO.md](docs/process/SCENARIO.md): the Acme golden scenario (historical design doc)
 - [docs/architecture.md](docs/architecture.md): architecture and how a call flows
 - [docs/ui-spec.md](docs/ui-spec.md): the edge and console UIs
 - [docs/Tollgate.pdf](docs/Tollgate.pdf): presentation · [docs/submission.md](docs/submission.md): submission text
