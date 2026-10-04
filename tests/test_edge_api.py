@@ -74,7 +74,7 @@ async def test_edge_ui_served_and_local_only(monkeypatch):
     async with _edge(monkeypatch) as (c, app):
         assert (await c.get("/edge/")).status_code == 200
         async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=("10.1.2.3", 5000)),
-                                      base_url="http://x") as remote:
+                                      base_url="http://127.0.0.1") as remote:
             assert (await remote.get("/edge/api/setup")).status_code == 403
 
 

@@ -8,6 +8,10 @@ from pathlib import Path
 
 import httpx2
 import pytest
+
+from tests.conftest import ADMIN
+
+WRITE = {**ADMIN, "Content-Type": "application/json"}  # writes need the admin token (or a session) and JSON
 import yaml
 
 from tollgate import console3
@@ -35,7 +39,7 @@ async def _app(monkeypatch, tmp_path, feed: bool):
     path.write_text(yaml.safe_dump(data), encoding="utf-8")
     app = build_app(load_policy(path))
     async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080") as c:
+        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080", headers=WRITE) as c:
             yield c, app
 
 
@@ -137,7 +141,7 @@ async def test_selftest_run_starts_one_eval_subprocess(monkeypatch, tmp_path):
 async def test_feed_and_selftest_need_admin(monkeypatch, tmp_path):
     async with _app(monkeypatch, tmp_path, feed=False) as (_, app):
         async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=("10.1.2.3", 5000)),
-                                      base_url="http://x") as remote:
+                                      base_url="http://127.0.0.1") as remote:
             for path in ("/console/api/feed", "/console/api/selftest"):
                 assert (await remote.get(path)).status_code == 401
             for path in ("/console/api/feed/publish", "/console/api/selftest/run"):

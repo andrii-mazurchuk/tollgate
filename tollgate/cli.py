@@ -63,6 +63,9 @@ def serve() -> int:
     print(f"  health: {base}/healthz   taint: {base}/admin/taint   budget: {base}/admin/budget", flush=True)
     print(f"  approvals: {base}/admin/approvals   (tollgate approve|deny <id>)", flush=True)
     print(f"  edge UI: {base}/edge   console: {base}/console", flush=True)
+    if not os.environ.get("TOLLGATE_ADMIN_TOKEN"):
+        print("  WARNING: TOLLGATE_ADMIN_TOKEN is not set: the admin token is off (approve/deny and /admin/* from other "
+              "hosts need it). Console: sign in with an account (`tollgate admin create`).", flush=True)
     # open /edge tabs hold an endless SSE stream; without a cap uvicorn waits on it forever at Ctrl+C
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning", timeout_graceful_shutdown=1)
     return 0
@@ -107,19 +110,20 @@ def agent() -> int:
 
 
 def decide(id: str, decision: str) -> int:
-    """POST /admin/approvals/{id} with the admin token (env TOLLGATE_ADMIN_TOKEN, else the dev constant)."""
+    """POST /admin/approvals/{id} with the admin token (env TOLLGATE_ADMIN_TOKEN; there is no default)."""
     import json
     import os
     import urllib.error
     import urllib.request
 
-    from tollgate.gateway.approvals import ADMIN_DEV_TOKEN
-
+    if not os.environ.get("TOLLGATE_ADMIN_TOKEN"):
+        print("Set TOLLGATE_ADMIN_TOKEN (the same value the server runs with).", file=sys.stderr)
+        return 2
     req = urllib.request.Request(
         f"http://127.0.0.1:{_opt('--port', '8080')}/admin/approvals/{id}", method="POST",
         data=json.dumps({"decision": decision}).encode(),
         headers={"Content-Type": "application/json",
-                 "Authorization": f"Bearer {os.environ.get('TOLLGATE_ADMIN_TOKEN') or ADMIN_DEV_TOKEN}"})
+                 "Authorization": f"Bearer {os.environ['TOLLGATE_ADMIN_TOKEN']}"})
     try:
         with urllib.request.urlopen(req, timeout=10) as r:
             print(r.read().decode())

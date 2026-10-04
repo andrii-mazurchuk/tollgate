@@ -101,5 +101,5 @@ async def test_export_csv_jsonl_filters(monkeypatch):
 async def test_export_needs_admin(monkeypatch):
     async with _app(monkeypatch, _fleet()[1]) as (_, app):
         async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=("10.1.2.3", 5000)),
-                                      base_url="http://x") as remote:
+                                      base_url="http://127.0.0.1") as remote:
             assert (await remote.get("/console/api/export", params={"format": "csv"})).status_code == 401

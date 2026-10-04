@@ -8,6 +8,10 @@ from pathlib import Path
 import httpx2
 import pytest
 
+from tests.conftest import ADMIN
+
+WRITE = {**ADMIN, "Content-Type": "application/json"}  # writes need the admin token (or a session) and JSON
+
 from tollgate.gateway import keys, peers
 
 pytestmark = pytest.mark.track_a
@@ -73,7 +77,7 @@ async def _app(monkeypatch):
 
     app = build_app(load_policy())
     async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080") as c:
+        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080", headers=WRITE) as c:
             yield c, app
 
 
@@ -115,7 +119,7 @@ async def test_console_api_shapes(monkeypatch):
         assert (await scenario.Runner(app).run("2.1"))["pass"]
 
         st = (await c.get("/console/api/status")).json()
-        assert st["health"]["message"] == "1 attack stopped" and st["admin"] == "loopback"
+        assert st["health"]["message"] == "1 attack stopped" and st["admin"] == "token"
         assert set(st) == {"health", "admin", "policy", "feed", "app_version"}
 
         ov = (await c.get("/console/api/overview", params={"range": "15m"})).json()
@@ -157,10 +161,10 @@ async def test_console_api_shapes(monkeypatch):
 async def test_console_needs_loopback_or_admin_token(monkeypatch):
     async with _app(monkeypatch) as (_, app):
         async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=("10.1.2.3", 5000)),
-                                      base_url="http://x") as remote:
+                                      base_url="http://127.0.0.1") as remote:
             assert (await remote.get("/console/api/peers")).status_code == 401
-            assert (await remote.post("/console/api/enroll-token")).status_code == 401
-            from tollgate.gateway.approvals import ADMIN_DEV_TOKEN
+            assert (await remote.post("/console/api/enroll-token", json={})).status_code == 401
+            from tests.conftest import ADMIN_TOKEN as ADMIN_DEV_TOKEN
             r = await remote.get("/console/api/status", headers={"Authorization": f"Bearer {ADMIN_DEV_TOKEN}"})
             assert r.status_code == 200 and r.json()["admin"] == "token"
 
@@ -190,7 +194,7 @@ async def _policy_app(monkeypatch, tmp_path):
     holder = load_policy(path)
     app = build_app(holder)
     async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080") as c:
+        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080", headers=WRITE) as c:
             yield c, app, holder
 
 
@@ -235,7 +239,7 @@ async def test_profile_switch_backs_up_reloads_and_enforces(monkeypatch, tmp_pat
     repo_policy = DEFAULT_PATH.read_bytes()
     async with _policy_app(monkeypatch, tmp_path) as (c, app, holder):
         def factory(**kw):
-            return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t", **kw)
+            return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1", **kw)
 
         async def write(path):
             async with Client(StreamableHttpTransport("http://t/mcp/role-2/", auth=issue("role-2"),
@@ -272,7 +276,7 @@ async def test_profile_switch_backs_up_reloads_and_enforces(monkeypatch, tmp_pat
 async def test_policy_api_needs_admin(monkeypatch, tmp_path):
     async with _policy_app(monkeypatch, tmp_path) as (_, app, _h):
         async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=("10.1.2.3", 5000)),
-                                      base_url="http://x") as remote:
+                                      base_url="http://127.0.0.1") as remote:
             assert (await remote.get("/console/api/policy")).status_code == 401
             assert (await remote.post("/console/api/policy/profile", json={"profile": "strict"})).status_code == 401
 
@@ -305,7 +309,7 @@ async def test_access_edit_writes_smallest_form(monkeypatch, tmp_path):
                                                      "tickets.query": {"sql": "select_only"}}
         assert p["roles"]["role-2"]["content"] == {"secrets": "redact"} and p["content"]["secrets"] == "block"
         h = (await c.get("/console/api/policy")).json()["history"][0]
-        assert h["ok"] and h["note"] == "Edited in console" and h["version"] == holder.version
+        assert h["ok"] and h["note"] == "Edited in console by admin-token" and h["version"] == holder.version
 
         # all tools -> rw; only the read tools -> read; nothing -> the server key goes
         assert (await _access(c, holder, ("role-2", "files.fs.list", True))).status_code == 200
@@ -325,7 +329,7 @@ async def test_access_edit_enforced_on_next_call(monkeypatch, tmp_path):
     from tollgate.gateway.keys import issue
     async with _policy_app(monkeypatch, tmp_path) as (c, app, holder):
         def factory(**kw):
-            return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t", **kw)
+            return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1", **kw)
 
         async def names():
             async with Client(StreamableHttpTransport("http://t/mcp/role-1/", auth=issue("role-1"),
@@ -357,7 +361,7 @@ async def test_access_edit_refusals(monkeypatch, tmp_path):
         stale = await _access(c, holder, ("role-1", "github.pr.create", True), base=old)
         assert stale.status_code == 409 and stale.json()["version"] == holder.version != old
         async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=("10.1.2.3", 5000)),
-                                      base_url="http://x") as remote:
+                                      base_url="http://127.0.0.1") as remote:
             r = await remote.post("/console/api/policy/access", json={"base_version": holder.version, "changes": [
                 {"role": "role-1", "tool": "github.pr.create", "allowed": False}]})
             assert r.status_code == 401

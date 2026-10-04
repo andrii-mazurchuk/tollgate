@@ -6,6 +6,7 @@ import json
 import httpx2
 import pytest
 
+from tests.conftest import ADMIN
 from tollgate import accounts
 
 pytestmark = pytest.mark.track_a
@@ -58,17 +59,27 @@ def _write_routes(app) -> list[str]:
 
 async def test_zero_accounts_mode_unchanged(monkeypatch, tmp_path):
     async with _app(monkeypatch, tmp_path) as (c, app, _):
-        assert (await c.get("/console/api/status")).status_code == 200  # loopback, no login
-        assert (await c.post("/console/api/enroll-token")).status_code == 200
+        assert (await c.get("/console/api/status")).status_code == 200  # loopback reads, no login (first run)
+        r = await c.post("/console/api/enroll-token", json={})  # but a local process may not write unauthenticated
+        assert r.status_code == 401 and r.json()["setup"] is True
+        r = await c.post("/console/api/policy/profile", json={"profile": "lenient"})
+        assert r.status_code == 401
+        assert (await c.post("/console/api/enroll-token", json={}, headers=ADMIN)).status_code == 200
         me = (await c.get("/console/api/auth/me")).json()
         assert me == {"setup": True, "can_setup": True}
         async with _client(app, ("10.0.0.9", 1)) as remote:
             assert (await remote.get("/console/api/status")).status_code == 401
             r = await remote.get("/console/api/auth/me")
             assert r.status_code == 401 and r.json()["can_setup"] is False
-        # a browser on another site can no longer drive loopback writes
-        r = await c.post("/console/api/enroll-token", headers={"Origin": "https://evil.example"})
-        assert r.status_code == 403
+        # a browser on another site: cross-origin, simple (text/plain) POST, DNS rebinding
+        evil = {**ADMIN, "Origin": "https://evil.example", "Content-Type": "text/plain"}
+        assert (await c.post("/console/api/policy/profile", content='{"profile":"lenient"}', headers=evil)).status_code == 403
+        plain = {**ADMIN, "Content-Type": "text/plain"}
+        assert (await c.post("/console/api/policy/profile", content='{"profile":"lenient"}', headers=plain)).status_code == 415
+        assert (await c.get("/console/api/status", headers={"Host": "evil.example"})).status_code == 403
+        assert (await c.get("/healthz", headers={"Host": "evil.example"})).json() == {"ok": True}
+        monkeypatch.setenv("TOLLGATE_ALLOWED_HOSTS", "hub.acme.io")
+        assert (await c.get("/console/api/status", headers={"Host": "hub.acme.io:8080"})).status_code == 200
 
 
 async def test_setup_only_from_loopback_and_once(monkeypatch, tmp_path):
@@ -92,6 +103,7 @@ async def test_setup_only_from_loopback_and_once(monkeypatch, tmp_path):
 
 async def test_cookie_flags(monkeypatch, tmp_path):
     accounts.create_user("ola@acme.io", PW)
+    monkeypatch.setenv("TOLLGATE_ALLOWED_HOSTS", "hub.acme.io")
     for base, secure in ((BASE, False), ("https://hub.acme.io", True)):
         async with _app(monkeypatch, tmp_path, base=base) as (c, _, _h):
             r = await c.post("/console/api/auth/login", json={"email": "ola@acme.io", "password": PW},
@@ -112,7 +124,7 @@ async def test_login_logout_me_and_rotation(monkeypatch, tmp_path):
         assert me["email"] == "ola@acme.io" and me["name"] == "Ola" and me["role"] == "admin" and len(me["csrf"]) > 30
         await _signin(c, "ola@acme.io")  # login again: the old id is gone
         assert c.cookies.get("tg_session") != old and accounts.session(old) is None
-        assert (await c.post("/console/api/auth/logout", headers=ORIGIN)).status_code == 200
+        assert (await c.post("/console/api/auth/logout", json={}, headers=ORIGIN)).status_code == 200
         assert (await c.get("/console/api/auth/me")).status_code == 401
         assert (await c.get("/console/api/overview")).status_code == 401
 
@@ -156,13 +168,14 @@ async def test_csrf_and_origin_required_on_writes(monkeypatch, tmp_path):
     async with _app(monkeypatch, tmp_path) as (c, _, _h):
         h = await _signin(c, "ola@acme.io")
         p = "/console/api/enroll-token"
-        assert (await c.post(p, headers=ORIGIN)).status_code == 403
-        assert (await c.post(p, headers={**h, "X-CSRF-Token": "wrong"})).status_code == 403
-        assert (await c.post(p, headers={**h, "Origin": "https://evil.example"})).status_code == 403
-        assert (await c.post(p, headers={"X-CSRF-Token": h["X-CSRF-Token"], "Sec-Fetch-Site": "cross-site"})).status_code == 403
+        assert (await c.post(p, json={}, headers=ORIGIN)).status_code == 403
+        assert (await c.post(p, json={}, headers={**h, "X-CSRF-Token": "wrong"})).status_code == 403
+        assert (await c.post(p, json={}, headers={**h, "Origin": "https://evil.example"})).status_code == 403
+        assert (await c.post(p, json={}, headers={"X-CSRF-Token": h["X-CSRF-Token"], "Sec-Fetch-Site": "cross-site"})).status_code == 403
+        assert (await c.post(p, content="{}", headers={**h, "Content-Type": "text/plain"})).status_code == 415
         assert (await c.post("/console/api/auth/login", json={"email": "ola@acme.io", "password": PW},
                              headers={"Origin": "https://evil.example"})).status_code == 403
-        assert (await c.post(p, headers=h)).status_code == 200
+        assert (await c.post(p, json={}, headers=h)).status_code == 200
 
 
 async def test_invite_accept_once_and_expiry(monkeypatch, tmp_path):
@@ -217,15 +230,17 @@ async def test_last_admin_and_self_protection(monkeypatch, tmp_path):
 
 
 async def test_admin_token_still_works(monkeypatch, tmp_path):
-    from tollgate.gateway.approvals import ADMIN_DEV_TOKEN
     accounts.create_user("ola@acme.io", PW)
+    monkeypatch.delenv("TOLLGATE_ADMIN_TOKEN")
     async with _app(monkeypatch, tmp_path, client=("10.0.0.9", 1)) as (c, _, _h):
-        dev = {"Authorization": f"Bearer {ADMIN_DEV_TOKEN}"}
-        assert (await c.get("/console/api/status", headers=dev)).status_code == 401  # public default: refused
+        dev = {"Authorization": "Bearer tollgate-admin-dev"}  # the old public default: no token path when unset
+        assert (await c.get("/console/api/status", headers=dev)).status_code == 401
+        assert (await c.get("/admin/taint", headers=dev)).status_code == 401
+        assert (await c.get("/healthz")).json() == {"ok": True}  # details are admin-only
         monkeypatch.setenv("TOLLGATE_ADMIN_TOKEN", "s3cret-automation-token")
         tok = {"Authorization": "Bearer s3cret-automation-token"}
         assert (await c.get("/console/api/status", headers=tok)).status_code == 200
-        assert (await c.post("/console/api/enroll-token", headers=tok)).status_code == 200  # no cookie: no CSRF
+        assert (await c.post("/console/api/enroll-token", json={}, headers=tok)).status_code == 200  # no cookie: no CSRF
         assert (await c.get("/admin/taint", headers=tok)).status_code == 200
         assert accounts.recent_log(1)[0]["who"] == "admin-token"
 
@@ -242,7 +257,7 @@ async def test_attribution_in_history_and_admin_log(monkeypatch, tmp_path):
         r = await c.post("/console/api/policy/profile", json={"profile": "strict"}, headers=h)
         assert r.status_code == 200
         assert (await c.get("/console/api/policy")).json()["history"][0]["note"].endswith("by ola@acme.io")
-        assert (await c.post("/console/api/enroll-token", headers=h)).status_code == 200
+        assert (await c.post("/console/api/enroll-token", json={}, headers=h)).status_code == 200
         log = (await c.get("/console/api/users")).json()["log"]
         whats = [x["what"] for x in log]
         assert whats[0] == "Created a one-time enroll command" and all(x["who"] == "ola@acme.io" for x in log)

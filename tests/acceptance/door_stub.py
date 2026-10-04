@@ -36,7 +36,7 @@ def door(policy_data: dict, monkeypatch, tmp_path):
     app = build_app(PolicyHolder(policy_data), upstream=httpx2.ASGITransport(app=STUB))
 
     def client():
-        return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t")
+        return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1")
     return app, client
 
 

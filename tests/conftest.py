@@ -1,5 +1,8 @@
 import pytest
 
+ADMIN_TOKEN = "test-admin-token"
+ADMIN = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+
 
 @pytest.fixture(autouse=True)
 def _audit_to_tmp(tmp_path, monkeypatch):
@@ -7,6 +10,7 @@ def _audit_to_tmp(tmp_path, monkeypatch):
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "audit.jsonl"))
     monkeypatch.setenv("TOLLGATE_PEERS", str(tmp_path / "peers.json"))  # nor the real peer registry
     monkeypatch.setenv("TOLLGATE_ACCOUNTS", str(tmp_path / "accounts.json"))  # nor the real console accounts
+    monkeypatch.setenv("TOLLGATE_ADMIN_TOKEN", ADMIN_TOKEN)  # no default token exists; tests that write send it
 
 
 @pytest.fixture(autouse=True)

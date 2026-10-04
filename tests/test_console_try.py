@@ -6,6 +6,10 @@ from pathlib import Path
 import httpx2
 import pytest
 
+from tests.conftest import ADMIN
+
+WRITE = {**ADMIN, "Content-Type": "application/json"}  # writes need the admin token (or a session) and JSON
+
 pytestmark = pytest.mark.track_a
 
 
@@ -17,7 +21,7 @@ async def _app(monkeypatch):
 
     app = build_app(load_policy())
     async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080") as c:
+        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080", headers=WRITE) as c:
             yield c, app
 
 
@@ -69,6 +73,6 @@ async def test_try_is_admin_only_and_writes_no_audit(monkeypatch):
         await _try(c, "role-1", "tool_result", "import pickle\npickle.loads(blob)")
         assert not Path(os.environ["TOLLGATE_AUDIT"]).exists()
         async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=("10.1.2.3", 5000)),
-                                      base_url="http://x") as remote:
+                                      base_url="http://127.0.0.1") as remote:
             assert (await remote.get("/console/api/try")).status_code == 401
             assert (await remote.post("/console/api/try", json={"role": "role-1", "point": "prompt", "text": "x"})).status_code == 401

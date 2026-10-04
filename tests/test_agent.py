@@ -20,7 +20,7 @@ async def _run(policy_data, monkeypatch, tmp_path, upstream="scripted", model="q
     app, lines = build_app(PolicyHolder(policy_data)), []
 
     def factory(**kw):
-        return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t", **kw)
+        return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1", **kw)
 
     async with app.router.lifespan_context(app):
         steps = await run(TASK, "role-2", model, "http://t", issue("role-2"), factory=factory, log=lines.append)

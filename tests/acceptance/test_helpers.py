@@ -25,7 +25,7 @@ def _policy(**approval):
 
 def _client(app, key, role="role-2"):
     def factory(**kw):
-        return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t", **kw)
+        return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1", **kw)
     return Client(StreamableHttpTransport(f"http://t/mcp/{role}/", auth=key, httpx_client_factory=factory)), factory
 
 
@@ -38,7 +38,7 @@ async def test_approval_decision(tmp_path, monkeypatch, decision):
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "events.jsonl"))
     from mocks.github import PRS
     from tollgate.gateway import build_app
-    from tollgate.gateway.approvals import ADMIN_DEV_TOKEN
+    from tests.conftest import ADMIN_TOKEN as ADMIN_DEV_TOKEN
     from tollgate.gateway.keys import issue
 
     PRS.clear()

@@ -74,6 +74,6 @@ async def test_settings_api_persists_and_refuses_looser(monkeypatch, tmp_path):
         assert r.status_code == 400 and "company policy" in r.json()["error"]
         assert (await c.post("/edge/api/settings", content=b"nope")).status_code == 400
         async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=("10.1.2.3", 5000)),
-                                      base_url="http://x") as remote:
+                                      base_url="http://127.0.0.1") as remote:
             assert (await remote.post("/edge/api/settings", json={"keep_text": False})).status_code == 403
             assert (await remote.get("/edge/api/agent")).status_code == 403
