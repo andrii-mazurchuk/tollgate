@@ -245,4 +245,45 @@ Order on the page, top to bottom: status line → KPI strip → trend → (reaso
    - The detail is the edge trace layout with tabs **Overview · Checks · Fingerprint**. Fingerprint shows the SHA-256, plus the line "The text stays on the peer's laptop".
    - There is no Input/Output tab: the hub never has the text.
 
+### Server console, revision 2: Policy view (2026-10-04)
+
+The view is read-only except for the profile switch. It answers four questions: "what is in force", "who may do what", "what do the rules say", and "what would a different profile change".
+
+**Top bar:**
+- `Profile: Balanced` as plain text;
+- a **Switch profile…** button that opens a dialog. The dialog:
+  - shows the three profiles side by side, but only the settings that differ, with the current profile highlighted;
+  - lists, as plain sentences, what would get stricter or looser;
+  - has a confirm button naming the target ("Switch to Strict").
+- Switching writes `policies/<name>.yaml` over the active policy file. The old file is first saved to `audit/policy-backups/<UTC time>-<version>.yaml`. Hot reload applies it on the next call.
+
+**Content, top to bottom:**
+1. **In force:** a strip with version, profile, loaded at, and file. A line says "Live: edits to the policy file apply on the next call".
+   - If the last edit was rejected, a red notice says "Edit rejected at <time>: <message>. Still enforcing <version>." This is a real problem, so red is allowed.
+2. **Who may do what:** the role × tool matrix.
+   - Rows are tools, grouped by MCP server: the plain name plus a mono ID, and the data-flow labels in words (outside text / private data / public destination).
+   - There is one column per role (agent name + role ID).
+   - Each cell is Read, Write, Hidden (muted dash) or Asks a human. Limits (SELECT only, /workspace only) are a small second line in the cell.
+   - A sticky header and first column.
+3. **Rules in plain words:** one card per rule family. Each has a title, one or two plain sentences, and the action.
+   - Families: data-flow rule, masked data, blocked data, injection check, signatures, loop guard, budgets and models per role, approval timeout.
+4. **Version history:** each version this hub has seen since it started (version, time, profile, Applied/Rejected + reason), newest first.
+   - Kept in memory, and also appended to `audit/policy_history.jsonl` so it survives restarts.
+
+**API:**
+- `GET /console/api/policy` returns:
+  ```
+  {status: {version, profile, loaded_at, path, last_error},
+   matrix: {roles: [{role, agent}],
+            servers: [{name, tools: [{name, plain, write, labels: [words],
+                       cells: {<role>: {access: "read"|"write"|"hidden"|"asks", limits: [..]}}}]}]},
+   rules: [{id, title, sentence, action}],
+   history: [{version, at, profile, ok, error}],
+   profiles: {current, names: ["strict","balanced","lenient"],
+              diff: [{setting, plain, values: {strict, balanced, lenient}}],
+              changes: {<name>: [{plain, direction: "stricter"|"looser"}]}}}
+  ```
+  `current` is the active policy's `mode` when it names a profile, otherwise null. `status.modified` is true when the active file's gateway sections differ from that profile's file. The UI then says "Balanced (edited)" and warns in the switch dialog that the edits will be replaced; they are kept in the backup.
+- `POST /console/api/policy/profile` with `{profile}` returns `{status, backup}`. Unknown profile → 400; not admin → 401.
+
 These texts will be revised, and both frontends rebuilt, several times. This spec is the source of truth for each rebuild.
