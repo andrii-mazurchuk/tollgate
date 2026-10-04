@@ -272,7 +272,7 @@ table.g th { color: var(--mute); font-weight: 600; background: #f9fafb; }
 ```text
 git clone https://github.com/andrii-mazurchuk/tollgate && cd tollgate
 uv sync
-uv run tollgate up        # Hub + mock MCP servers, console /console/, edge /edge/
+uv run tollgate up --scripted-model   # Hub + mock MCPs + offline model; /console, /edge
 uv run tollgate test      # 247 tests + eval report
 ```
 
@@ -280,6 +280,6 @@ uv run tollgate test      # 247 tests + eval report
 
 ## What's next
 
-- Signature map in the console: which feed signature fired where.
+- A live access map in the console: every laptop, agent and tool call on one interactive view.
 - Cost budgets in money, not only tokens.
 - Memory controls for agents with long-term memory.
