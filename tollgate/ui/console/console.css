@@ -1,0 +1,46 @@
+/* Server console: only what the edge stylesheet (/edge/app.css) does not already have. */
+.nav .soon { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; color: var(--faint); cursor: default; }
+.nav .soon:first-of-type { margin-top: 8px; }
+.nav .soon small { margin-left: auto; font-size: 11px; }
+
+.odot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex: none; box-shadow: inset 0 0 0 1px var(--faint); }
+.odot.on { background: var(--ink-2); box-shadow: none; }
+.seen { display: inline-flex; align-items: center; gap: 6px; }
+
+.btn.danger { color: var(--red); }
+.btn.danger:hover { background: var(--red-soft); }
+.btn.danger-fill { background: var(--red); border-color: var(--red); color: #fff; }
+.btn.danger-fill:hover { filter: brightness(1.08); background: var(--red); }
+
+/* detail pane: header + strip fixed, the body scrolls */
+.pane.split > .body { flex: 1 1 0; overflow: auto; min-height: 0; }
+.sec { padding: 12px 16px 16px; border-top: 1px solid var(--line); }
+.sec:first-child { border-top: 0; }
+.sec .sec-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; min-height: 24px; }
+.sec .sec-h h3 { margin: 0; color: var(--ink); font-size: 13px; font-weight: 600; }
+.sec table.t { border: 1px solid var(--line); border-radius: var(--r); border-collapse: separate; border-spacing: 0; }
+.sec table.t th:first-child, .sec table.t td:first-child { padding-left: 12px; }
+.sec .grid2 > div { min-width: 0; }
+.rolecheck { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.rolecheck label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.rolecheck input:disabled + span { color: var(--faint); }
+.save-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.pane-h .right { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+
+/* dialogs (native <dialog>: modal focus, Esc to close) */
+dialog.dlg { width: 520px; max-width: calc(100vw - 32px); padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); box-shadow: 0 12px 32px rgba(0, 0, 0, .18); }
+dialog.dlg::backdrop { background: rgba(9, 9, 11, .4); }
+.dlg-h { padding: 16px 16px 0; }
+.dlg-b { padding: 12px 16px 16px; color: var(--ink-2); }
+.dlg-b p { margin: 0 0 12px; }
+.dlg-f { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.cmd { display: flex; gap: 8px; align-items: stretch; }
+.cmd pre { flex: 1; margin: 0; padding: 8px 12px; background: var(--soft); border-radius: var(--r); white-space: pre-wrap; overflow-wrap: break-word; }
+.cmd .btn { align-self: flex-start; }
+.fp { display: flex; gap: 8px; align-items: center; }
+.fp code { overflow-wrap: anywhere; }
+
+/* the peers table has five columns: give the master pane more room */
+.md.wide { grid-template-columns: minmax(520px, 42%) minmax(0, 1fr); }
+@media (max-width: 1100px) { .md.wide { grid-template-columns: minmax(0, 1fr); } }
+.sec .hbars.card-b { padding: 0; }
