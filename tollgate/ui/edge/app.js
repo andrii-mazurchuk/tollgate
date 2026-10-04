@@ -297,8 +297,11 @@ async function renderSetup() {
   const health = st ? [h("span", { class: "cdot" + (st.health.level === "alert" ? " off" : "") }), " ", st.health.message] : [h("span", { class: "cdot off" }), " Unreachable"];
   const snippets = h("details", { class: "snips" }, h("summary", {}, "Client config snippets: Claude Code, Cursor, OpenAI SDK"),
     Object.entries(c.snippets).map(([name, sn]) => h("div", { class: "snip" },
-      h("div", { class: "row" }, h("h3", { style: "margin:0;color:var(--ink)" }, name), h("button", { class: "btn sm", onclick: ev => copy(sn.replaceAll("{KEY}", c.key), ev.currentTarget) }, "Copy")),
-      h("pre", {}, sn.replaceAll("{KEY}", c.key_masked)))));
+      h("div", { class: "row" }, h("h3", { style: "margin:0;color:var(--ink)" }, name), h("button", { class: "btn sm", onclick: ev => copy(sn.replaceAll("{KEY}", "<key from tollgate connect>"), ev.currentTarget) }, "Copy")),
+      h("pre", {}, sn.replaceAll("{KEY}", "<key from tollgate connect>")))));
+  const peer = c.peer
+    ? `${c.peer.device} · ${c.peer.owner} · may run ${c.peer.roles.join(", ") || "no roles"}${c.peer.revoked ? " · revoked" : ""}`
+    : "Not enrolled (hand-issued key)" + (c.unenrolled_ok ? "" : ". Rejected: allow_unenrolled_keys is off");
 
   const servers = serverList(a.servers);
 
@@ -330,8 +333,10 @@ async function renderSetup() {
         card("Connection", h("span", { class: "muted small", title: `How ${a.agent} is connected and what it may do` },
           `${a.agent} · ${a.role} · policy ${String(a.policy.version).slice(0, 7)} · ${a.policy.profile}`), h("div", { class: "card-b" },
           field("Server", c.server), field("Health", health), field("MCP URL", c.mcp_url, copyBtn(c.mcp_url)), field("Model URL", c.model_url, copyBtn(c.model_url)),
-          field("Key", c.key_masked, h("button", { class: "btn sm", onclick: ev => copy(c.key, ev.currentTarget) }, "Copy key")),
-          field("Expiry", h("span", {}, "No expiry. Your security team can revoke it.")),
+          field("Laptop", h("span", {}, peer)),
+          field("Key", c.key_masked),
+          field("Keys", h("span", {}, "One key per agent launch; revoking this laptop stops every key.")),
+          field("Connect", c.connect, copyBtn(c.connect)),
           h("div", { style: "margin-top:8px" }, testBtn), result), snippets),
         card("Local settings", h("span", { class: "muted small" }, "Can only be stricter than the company policy"), h("div", { class: "card-b" },
           h("div", { class: "field set" }, h("label", { for: "keep" }, "Keep full text"), h("span", { class: "small muted" }, ceil.keep_text ? "Store prompts, arguments and results on this laptop for the Input/Output tabs." : "Turned off by the company policy."), keep),

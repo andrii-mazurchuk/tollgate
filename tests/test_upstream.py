@@ -128,7 +128,7 @@ async def test_upstreams_filtered_checked_and_degraded(policy):
 async def test_app_starts_with_dead_upstream_and_reports_it(policy):
     app = build_app(policy)
     async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app), base_url="http://t") as h:
+        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app), base_url="http://127.0.0.1") as h:
             up = (await h.get("/healthz")).json()["upstreams"]
             assert up["up"]["reachable"] and up["web"]["reachable"] and up["dead"]["reachable"] is False
             assert "s3cret" not in str(up)  # only the target, never headers/env

@@ -16,7 +16,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from tollgate import explain
-from tollgate.gateway import audit, keys, local_text
+from tollgate.gateway import audit, keys, local_text, peers
 
 UI = Path(__file__).resolve().parent / "ui" / "edge"
 ACTIONS = ("allow", "redact", "approve", "block")
@@ -340,11 +340,43 @@ def agent(data: dict, role: str, source_tools: dict, feed_state: dict, used: dic
     }
 
 
+LOOPBACK = ("127.0.0.1", "::1", "localhost")
+
+
+def allowed_hosts() -> set[str]:
+    """Host names the edge API answers to: loopback plus TOLLGATE_ALLOWED_HOSTS (comma-separated)."""
+    extra = os.environ.get("TOLLGATE_ALLOWED_HOSTS") or ""
+    return {*LOOPBACK, "[::1]", *(h.strip().lower() for h in extra.split(",") if h.strip())}
+
+
+def _hostname(netloc: str) -> str:
+    netloc = netloc.strip().lower()
+    if netloc.startswith("["):  # [::1]:8080
+        return netloc[:netloc.find("]") + 1]
+    return netloc.rsplit(":", 1)[0] if netloc.count(":") == 1 else netloc
+
+
+def local_refusal(request: Request) -> str | None:
+    """Why a request may not use the edge API, or None. Loopback peer AND a loopback Host (a DNS-rebound page
+    reaches 127.0.0.1 with its own Host); POSTs also need JSON and, when an Origin is sent, a loopback Origin."""
+    if not (request.client and request.client.host in LOOPBACK):
+        return "the edge UI is local only"
+    if _hostname(request.headers.get("host", "")) not in allowed_hosts():
+        return "unknown Host (set TOLLGATE_ALLOWED_HOSTS to allow it)"
+    if request.method == "POST":
+        origin = request.headers.get("origin")
+        if origin and _hostname(origin.split("://", 1)[-1]) not in allowed_hosts():
+            return "cross-origin request refused"
+        if request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
+            return "need Content-Type: application/json"
+    return None
+
+
 def routes(policy) -> list:
     def local(view):
         async def h(request: Request):
-            if not (request.client and request.client.host in ("127.0.0.1", "::1", "localhost", "testclient")):
-                return JSONResponse({"error": "the edge UI is local only"}, 403)
+            if why := local_refusal(request):
+                return JSONResponse({"error": why}, 403)
             return await view(request)
         return h
 
@@ -394,16 +426,30 @@ def routes(policy) -> list:
         mcp, v1 = f"{base}/mcp/{role}/", f"{base}/v1"
         model = ((policy.data.get("roles") or {}).get(role) or {}).get("models", ["qwen3:4b"])[0]
         return JSONResponse({"server": base, "mcp_url": mcp, "model_url": v1, "role": role,
-                             "agent": explain.AGENTS.get(role, role), "key": key, "key_masked": mask(key),
+                             "agent": explain.AGENTS.get(role, role), "key_masked": mask(key),  # never the raw key
+                             **laptop(key, role),
                              "snippets": {k: s.replace("{mcp}", mcp).replace("{v1}", v1).replace("{model}", model)
                                           .replace("{{", "{").replace("}}", "}") for k, s in SNIPPETS.items()}})
+
+    def laptop(key: str, role: str) -> dict:
+        """This laptop's peer (when the edge key is minted), whether a hand-issued key is let in, the connect line."""
+        key_id = (keys.verify(key) or ("", ""))[1]
+        pid = peers.peer_of(key_id)
+        p = peers.load()["peers"].get(pid) if pid else None
+        peer = p and {"id": pid, "device": p["device"], "owner": p["owner"], "roles": p["roles"],
+                      "revoked": bool(p["revoked_at"])}
+        return {"peer": peer, "unenrolled_ok": keys.unenrolled_ok(policy.data),
+                "connect": f"tollgate connect claude-code --role {role} --peer {pid if peer else '<peer id>'}"}
 
     async def setup_test(request):
         from fastmcp import Client
         from fastmcp.client.transports import StreamableHttpTransport
         import httpx2
         key = edge_key()
-        role = keys.verify(key)[0]
+        role, key_id = keys.verify(key)
+        if peers.peer_of(key_id) is None and not keys.unenrolled_ok(policy.data):
+            return JSONResponse({"ok": False, "error": "This laptop's edge key is not enrolled and the policy has "
+                                 "allow_unenrolled_keys off. Connect an agent with tollgate connect <agent>."})
 
         def factory(**kw):
             return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=request.app), base_url="http://edge", **kw)

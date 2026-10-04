@@ -72,7 +72,9 @@ async def test_settings_api_persists_and_refuses_looser(monkeypatch, tmp_path):
         assert json.loads((tmp_path / "edge_settings.json").read_text())["retention"] == 100
         r = await c.post("/edge/api/settings", json={"retention": 10 ** 6})
         assert r.status_code == 400 and "company policy" in r.json()["error"]
-        assert (await c.post("/edge/api/settings", content=b"nope")).status_code == 400
+        jh = {"Content-Type": "application/json"}
+        assert (await c.post("/edge/api/settings", content=b"nope", headers=jh)).status_code == 400
+        assert (await c.post("/edge/api/settings", content=b"{}")).status_code == 403  # not JSON: a simple form post
         async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=("10.1.2.3", 5000)),
                                       base_url="http://x") as remote:
             assert (await remote.post("/edge/api/settings", json={"keep_text": False})).status_code == 403

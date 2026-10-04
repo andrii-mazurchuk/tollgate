@@ -62,8 +62,9 @@ async def test_attack_then_views(monkeypatch):
 async def test_setup_and_test_connection(monkeypatch):
     async with _edge(monkeypatch) as (c, _):
         s = (await c.get("/edge/api/setup")).json()
-        assert s["mcp_url"] == "http://127.0.0.1:8080/mcp/role-2/" and s["key"].startswith("tg_role-2_")
-        assert "…" in s["key_masked"] and s["key"] not in s["key_masked"]
+        assert s["mcp_url"] == "http://127.0.0.1:8080/mcp/role-2/" and "key" not in s  # masked only
+        assert s["key_masked"].startswith("tg_role-")
+        assert s["peer"] is None and s["connect"] == "tollgate connect claude-code --role role-2 --peer <peer id>"
         assert set(s["snippets"]) == {"Claude Code", "Cursor", "OpenAI SDK"} and "{KEY}" in s["snippets"]["Cursor"]
         t = (await c.get("/edge/api/setup/test")).json()
         assert t["ok"] and {"name": "github.pr.create", "plain": "Open a pull request"} in t["tools"]
@@ -87,3 +88,39 @@ async def test_audit_write_notifies_listeners():
         assert q.get_nowait().startswith("t_")
     finally:
         audit.LISTENERS.discard(q)
+
+
+async def test_edge_api_refuses_rebinding_and_cross_origin(monkeypatch):
+    """DNS rebinding: a foreign page resolving to 127.0.0.1 sends its own Host; a cross-site POST sends its Origin."""
+    async with _edge(monkeypatch) as (c, _):
+        assert (await c.get("/edge/api/setup", headers={"Host": "attacker.example:8110"})).status_code == 403
+        assert (await c.get("/edge/api/setup", headers={"Host": "localhost:8107"})).status_code == 200
+        assert (await c.get("/edge/api/setup", headers={"Host": "[::1]:8107"})).status_code == 200
+        bad = {"Origin": "http://attacker.example", "Content-Type": "application/json"}
+        assert (await c.post("/edge/api/settings", headers=bad, content=b"{}")).status_code == 403
+        ok = {"Origin": "http://127.0.0.1:8080", "Content-Type": "application/json"}
+        assert (await c.post("/edge/api/settings", headers=ok, content=b"{}")).status_code == 200
+        monkeypatch.setenv("TOLLGATE_ALLOWED_HOSTS", "edge.corp")
+        assert (await c.get("/edge/api/setup", headers={"Host": "edge.corp"})).status_code == 200
+
+
+async def test_setup_shows_this_laptops_peer(monkeypatch):
+    from tollgate.gateway import peers
+    from tollgate.gateway.policy import load_policy
+    pid = peers.enroll(peers.enroll_token()["token"], "Ada", "ada-x1")
+    peers.set_roles(pid, ["role-2"])
+    monkeypatch.setenv("TOLLGATE_EDGE_KEY", peers.mint(pid, "role-2", load_policy().data["roles"]))
+    async with _edge(monkeypatch) as (c, _):
+        s = (await c.get("/edge/api/setup")).json()
+        assert s["peer"] == {"id": pid, "device": "ada-x1", "owner": "Ada", "roles": ["role-2"], "revoked": False}
+        assert s["connect"].endswith(f"--peer {pid}")
+        assert (await c.get("/edge/api/setup/test")).json()["ok"]
+
+
+async def test_setup_test_explains_a_rejected_unenrolled_key(monkeypatch):
+    from tollgate.gateway import keys
+    monkeypatch.setattr(keys, "unenrolled_ok", lambda data: False)  # the production default
+    async with _edge(monkeypatch) as (c, _):
+        assert (await c.get("/edge/api/setup")).json()["unenrolled_ok"] is False
+        t = (await c.get("/edge/api/setup/test")).json()
+        assert not t["ok"] and "allow_unenrolled_keys" in t["error"] and "tollgate connect" in t["error"]
