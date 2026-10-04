@@ -135,10 +135,10 @@ def peer_of(key_id: str) -> str | None:
     return key_id.split("-")[0] if "-" in key_id else None
 
 
-def is_key_allowed(role: str, key_id: str) -> bool:
+def is_key_allowed(role: str, key_id: str, allow_unenrolled: bool = False) -> bool:
     pid = peer_of(key_id)
-    if pid is None:
-        return True
+    if pid is None:  # hand-issued (`tollgate key issue`): only with policy allow_unenrolled_keys: true
+        return allow_unenrolled
     p = load()["peers"].get(pid)
     n = key_id.split("-", 1)[1]
     return bool(p and not p["revoked_at"] and role in p["roles"] and n.isdigit()

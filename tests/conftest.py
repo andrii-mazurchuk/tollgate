@@ -9,6 +9,14 @@ def _audit_to_tmp(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _tests_allow_unenrolled_keys(monkeypatch):
+    """Most tests call the doors with hand-issued keys (keys.issue): a policy that does not set allow_unenrolled_keys
+    lets them in here. Tests of the production default set allow_unenrolled_keys: false on their policy copy."""
+    from tollgate.gateway import keys
+    monkeypatch.setattr(keys, "unenrolled_ok", lambda data: data.get("allow_unenrolled_keys", True) is True)
+
+
+@pytest.fixture(autouse=True)
 def _fresh_budgets():
     """Token budgets are process-wide per (role, UTC day); without this, earlier tests' spend leaks into AC11."""
     from tollgate.gateway import model_door

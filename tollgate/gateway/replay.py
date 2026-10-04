@@ -25,7 +25,8 @@ TRACES = {"github": GITHUB_TRACE, "supabase": SUPABASE_TRACE}
 
 async def run_trace(policy: PolicyHolder, trace=GITHUB_TRACE, role: str = "role-2") -> list[dict]:
     """Per step: {tool, verdict: allow|block, text}. Redaction shows as allow with the redacted text."""
-    app, key = build_app(policy), keys.issue(role)
+    # its own hand-issued key: allowed on this in-process copy of the policy only
+    app, key = build_app(PolicyHolder({**policy.data, "allow_unenrolled_keys": True})), keys.issue(role)
 
     def factory(**kw):
         return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t", **kw)

@@ -61,7 +61,8 @@ def test_mint_refusals_and_revocation():
     assert keys.from_header(f"Bearer {k2}") is None
     with pytest.raises(ValueError):
         peers.mint(pid, "role-2", ROLES)
-    assert keys.from_header(f"Bearer {keys.issue('role-2')}")  # legacy keys keep working
+    assert keys.from_header(f"Bearer {keys.issue('role-2')}") is None  # unenrolled keys: refused by default
+    assert keys.from_header(f"Bearer {keys.issue('role-2')}", allow_unenrolled=True)  # policy allow_unenrolled_keys
     assert keys.from_header(f"Bearer {keys.issue('role-2', 'pabcd-1')}") is None  # unknown peer
 
 

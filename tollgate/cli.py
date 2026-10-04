@@ -55,7 +55,7 @@ def serve() -> int:
     base = f"http://127.0.0.1:{port}"
     print(f"Tollgate on {base}  policy {holder.status()['version']} ({holder.path})")
     for role in holder.data["roles"]:
-        print(f"  {role}: {base}/mcp/{role}/   (key: tollgate key issue --role {role})")
+        print(f"  {role}: {base}/mcp/{role}/   (key per agent launch: tollgate connect <agent> --role {role} --peer P)")
     import os
 
     from tollgate.gateway.model_door import DEFAULT_UPSTREAM
@@ -71,6 +71,7 @@ def serve() -> int:
 def agent() -> int:
     """Demo agent through both doors. --scripted without --base: in-process gateway + scripted hijacked model."""
     import asyncio
+    import os
 
     import httpx2
 
@@ -82,19 +83,18 @@ def agent() -> int:
         i += 1 if rest[i] == "--scripted" else 2
     task = rest[i] if i < len(rest) else "check the open issues on acme/website and handle them"
     role, model, base = _opt("--role", "role-2"), _opt("--model", "qwen3:4b"), _opt("--base")
-    key = issue(role)
+    key = os.environ.get("TOLLGATE_KEY") or issue(role)  # a running server takes a minted key (tollgate connect)
     print(f"[agent] role={role} model={model} task={task!r}")
     if base or "--scripted" not in sys.argv:
         asyncio.run(run(task, role, model, base or "http://127.0.0.1:8080", key))
         return 0
 
-    import os
-
     from tollgate.gateway import build_app
-    from tollgate.gateway.policy import DEFAULT_PATH, load_policy
+    from tollgate.gateway.policy import DEFAULT_PATH, PolicyHolder, load_policy
 
     os.environ["TOLLGATE_UPSTREAM"] = "scripted"
-    app = build_app(load_policy(_opt("--policy") or DEFAULT_PATH))
+    data = load_policy(_opt("--policy") or DEFAULT_PATH).data  # in-process: its own hand-issued key is allowed here
+    app = build_app(PolicyHolder({**data, "allow_unenrolled_keys": True}))
 
     def factory(**kw):
         return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t", **kw)
@@ -189,6 +189,8 @@ def key_issue() -> int:
         return 2
     key = issue(role, key_id)
     print(key)
+    print("warning: an unenrolled key; every door refuses it unless the policy sets allow_unenrolled_keys: true. "
+          "Per-laptop keys: tollgate enroll, then tollgate connect <agent>.", file=sys.stderr)
     base = f"http://127.0.0.1:{_opt('--port', '8080')}"
     print(f"MCP URL: {base}/mcp/{role}/")
     print(f"Model door: {base}/v1/chat/completions")

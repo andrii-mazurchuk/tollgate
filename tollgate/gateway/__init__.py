@@ -131,7 +131,7 @@ class RoleGate(Middleware):
     async def on_call_tool(self, context, call_next):
         name, args = context.message.name, context.message.arguments or {}
         auth = get_http_headers(include={"authorization"}).get("authorization")
-        ident = keys.from_header(auth)  # (role, key_id); None in-process (no HTTP)
+        ident = keys.from_header(auth, keys.unenrolled_ok(self.policy.data))  # (role, key_id); None in-process
         key_id = ident[1] if ident else "local"
         args_json = json.dumps(args, ensure_ascii=False)  # not ASCII-escaped: Polish rules miss escaped text
         data = self.policy.data
@@ -337,14 +337,14 @@ def build_role_server(role: str, policy: PolicyHolder, sources: dict[str, FastMC
     return srv
 
 
-def require_key(role: str, app):
+def require_key(role: str, app, policy: PolicyHolder):
     """ASGI guard: 401 unless the bearer key is valid and bound to this route's role."""
     async def guard(scope, receive, send):
         if scope["type"] == "http":
             auths = [v for k, v in scope["headers"] if k == b"authorization"]
             # exactly one: a proxy reading the first and us the last would disagree on who is calling
             auth = auths[0].decode("latin-1") if len(auths) == 1 else ""  # non-ASCII: 401, not 500
-            ident = keys.from_header(auth)
+            ident = keys.from_header(auth, keys.unenrolled_ok(policy.data))
             if not ident or ident[0] != role:
                 return await JSONResponse({"error": "invalid key for this role"}, 401)(scope, receive, send)
         await app(scope, receive, send)
@@ -415,7 +415,7 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
               Route("/admin/approvals", admin_approvals),
               Route("/admin/approvals/{id}", admin_decide, methods=["POST"]),
               Route("/v1/chat/completions", model_door.build_door(policy, upstream), methods=["POST"])]
-    routes += [Mount(f"/mcp/{r}", app=require_key(r, a)) for r, a in apps.items()]
+    routes += [Mount(f"/mcp/{r}", app=require_key(r, a, policy)) for r, a in apps.items()]
     from tollgate import console, edge  # late: edge -> gateway
     from tollgate.gateway import hooks  # late: hooks imports helpers from this module
     routes.append(Route("/hook", hooks.build_hook(policy), methods=["POST"]))
