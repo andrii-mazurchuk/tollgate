@@ -1,4 +1,4 @@
-"""Local edge UI: static app at /edge, JSON API at /edge/api/ (read-only except the scenario and local settings),
+"""Local edge UI: static app at /edge, JSON API at /edge/api/ (read-only except local settings),
 SSE of new trace ids.
 
 Loopback only: the API serves full local text and the edge key. Sessions = role keys (taint is keyed by key)."""
@@ -15,7 +15,7 @@ from starlette.responses import JSONResponse, RedirectResponse, StreamingRespons
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from tollgate import explain, scenario
+from tollgate import explain
 from tollgate.gateway import audit, keys, local_text
 
 UI = Path(__file__).resolve().parent / "ui" / "edge"
@@ -348,16 +348,9 @@ def routes(policy) -> list:
             return await view(request)
         return h
 
-    def runner(request) -> scenario.Runner:
-        st = request.app.state
-        if getattr(st, "scenario", None) is None:
-            st.scenario = scenario.Runner(request.app)
-        return st.scenario
-
     def labels(request) -> dict:
-        r = getattr(request.app.state, "scenario", None)
         key_id = keys.verify(edge_key())
-        return {**(r.labels if r else {}), **({key_id[1]: "Your agent"} if key_id else {})}
+        return {key_id[1]: "Your agent"} if key_id else {}
 
     async def status(request):
         key = edge_key()
@@ -462,35 +455,10 @@ def routes(policy) -> list:
                 audit.LISTENERS.discard(q)
         return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
-    async def get_scenario(request):
-        r = runner(request)
-        acts = []
-        for act in r.spec["acts"]:
-            ss = [s for s in scenario.steps(r.spec) if s["act"] == act["id"]]
-            acts.append({"id": act["id"], "title": act["title"], "subtitle": act.get("subtitle"),
-                         "operator": bool(act.get("operator")),
-                         "steps": [{"id": s["id"], "text": s["text"], "operator": s["operator"], "needs": s.get("needs"),
-                                    "agent": r.spec["agents"][s["agent"]]["name"] if s.get("agent") else "Operator",
-                                    "expected": scenario.expected_words(s["expect"]) if s.get("expect") else None,
-                                    "result": r.results.get(s["id"])} for s in ss]})
-        return JSONResponse({"acts": acts})
-
-    async def run_step(request):
-        r = runner(request)
-        if request.path_params["step"] not in r.by_id:
-            return JSONResponse({"error": "unknown step"}, 404)
-        return JSONResponse(await r.run(request.path_params["step"]))
-
-    async def reset(request):
-        runner(request).reset()
-        return JSONResponse({"ok": True})
-
     api = [Route("/status", local(status)), Route("/sessions", local(list_sessions)),
            Route("/sessions/{id}", local(one_session)), Route("/overview", local(get_overview)),
            Route("/events", local(get_events)),
            Route("/setup", local(setup)), Route("/agent", local(get_agent)),
-           Route("/settings", local(settings), methods=["GET", "POST"]), Route("/setup/test", local(setup_test)), Route("/stream", local(stream)),
-           Route("/scenario", local(get_scenario)), Route("/scenario/run/{step}", local(run_step), methods=["POST"]),
-           Route("/scenario/reset", local(reset), methods=["POST"])]
+           Route("/settings", local(settings), methods=["GET", "POST"]), Route("/setup/test", local(setup_test)), Route("/stream", local(stream))]
     return [Mount("/edge/api", routes=api), Route("/edge", lambda r: RedirectResponse("/edge/")),
             Mount("/edge", app=StaticFiles(directory=UI, html=True))]

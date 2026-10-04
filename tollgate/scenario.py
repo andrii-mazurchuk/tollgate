@@ -1,5 +1,5 @@
 """Runs the Acme scenario (scenario/acme.yaml) step by step through the real gateway over HTTP (in-process ASGI),
-as the step's role, with one key per scenario session. Used by the edge UI and tests/test_scenario_acme.py."""
+as the step's role, with one key per scenario session. Used by `tollgate seed-fleet` and tests/test_scenario_acme.py."""
 import copy
 import json
 import os
@@ -56,7 +56,6 @@ class Runner:
         self.keys: dict[str, str] = {}     # scenario session -> role key
         self.prev: dict[str, str] = {}     # scenario session -> last tool output ($prev)
         self.results: dict[str, dict] = {}
-        self.labels: dict[str, str] = {}   # key_id -> "Scenario 3: a3-attack" (edge session names)
         self.charged: dict[tuple, int] = {}  # (role, day) -> tokens the scenario spent; reset gives back only these
 
     def _factory(self, **kw):
@@ -67,7 +66,6 @@ class Runner:
         if step.get("fresh") or sess not in self.keys:
             self.keys[sess] = keys.issue(role)
             self.prev.pop(sess, None)
-            self.labels[keys.verify(self.keys[sess])[1]] = f"Scenario act {step['act']} ({sess})"
         return self.keys[sess]
 
     def reset(self) -> None:

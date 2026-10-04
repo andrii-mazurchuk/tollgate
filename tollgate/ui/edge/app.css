@@ -242,11 +242,6 @@ ul.checks li.skip { color: var(--faint); }
 ul.plain { margin: 0; padding-left: 16px; color: var(--ink-2); }
 .toolchips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 
-/* scenario */
-table.t.sc td { white-space: normal; height: auto; padding-top: 8px; padding-bottom: 8px; vertical-align: top; overflow-wrap: anywhere; }
-table.t.sc td.id { color: var(--muted); font-variant-numeric: tabular-nums; }
-.why-f { color: var(--muted); font-size: 12px; }
-
 .sect { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
 .sect > h3 { margin-bottom: 8px; }
 .pane .filters { padding: 12px 16px; margin: 0; border-bottom: 1px solid var(--line); }

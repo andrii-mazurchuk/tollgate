@@ -45,7 +45,7 @@ bash: `T=$(uv run --project $R tollgate enroll-token | head -1 | cut -d' ' -f3)`
 
 Launch `claude` once in `C:\demo\acme`: accept "trust this folder" and the `tollgate` MCP server from `.mcp.json`, then `/exit` without a prompt (session stays clean). Start `claude` again; leave it at the empty prompt.
 
-**Tabs, in order:** deck (`docs/Tollgate.pdf`) · http://127.0.0.1:8080/console (Overview) · /console **Sessions** · http://127.0.0.1:8080/edge (Scenario, fallback only) · editor on `audit/policy.demo.yaml`.
+**Tabs, in order:** deck (`docs/Tollgate.pdf`) · http://127.0.0.1:8080/console (Overview) · /console **Sessions** · http://127.0.0.1:8080/edge (step details, on demand) · editor on `audit/policy.demo.yaml`.
 
 Check: Overview "Attacks stopped" > 0 and the chip says Balanced; Peers & roles shows `demo-laptop` with Support assistant.
 
@@ -71,7 +71,7 @@ Check: Overview "Attacks stopped" > 0 and the chip says Balanced; Peers & roles 
 |---|---|
 | Claude Code login / trust prompt / model slow (1:00) | T2: `uv run --project $R python $R\scripts\demo_claude.py` (same `TOLLGATE_KEY`). Sends Claude Code's exact hook JSON through the real `tollgate hook claude-code` shim; prints `3. Bash(git push origin main) -> DENIED` + the same sentence. Console beat unchanged (same peer). |
 | Interactive `claude` misbehaves, headless works (1:00) | `Get-Content prompt.txt -Raw \| claude -p` (Windows truncates a multi-line `-p` argument: use stdin). bash: `claude -p < prompt.txt` |
-| No network: curl fails (1:00) | `demo_claude.py` (needs no network), or /edge → **Scenario** → Act 3 → **Run act**: 3.3 **BLOCKED** "session read untrusted text (issue #12) and private data (acme/payroll/.env)". At 1:45 pick that session. |
+| No network: curl fails (1:00) | `demo_claude.py` (needs no network; replays the hook calls through the real shim, same peer), or T2: `uv run tollgate replay github` (taint ON: step 3 **BLOCK**, "session read untrusted text … and private data") / `uv run tollgate agent --scripted`. |
 | Hub down (any time) | Make it the point: any Claude Code call → "Tollgate unreachable: … refused" = fails closed (slide 9). Restart T1, carry on. |
 | Revoke shows nothing in Claude Code (2:05) | `uv run --project $R python $R\scripts\demo_claude.py` → `1. Bash(curl -s https://example.com) -> DENIED  Tollgate unreachable: HTTP 401 {"error":"invalid or revoked key"}` |
 | Console empty | `uv run tollgate seed-fleet --policy audit/policy.demo.yaml` (hub keeps running) |

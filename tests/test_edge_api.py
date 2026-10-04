@@ -1,4 +1,4 @@
-"""Edge API shapes (/edge/api/*): status, sessions, timeline, analytics, setup, scenario; loopback only."""
+"""Edge API shapes (/edge/api/*): status, sessions, timeline, analytics, setup; loopback only."""
 import asyncio
 import contextlib
 
@@ -23,16 +23,15 @@ async def _edge(monkeypatch):  # not a fixture: lifespan enter/exit must run in 
             yield c, app
 
 
-async def test_scenario_then_views(monkeypatch):
-    async with _edge(monkeypatch) as (c, _):
-        assert (await c.post("/edge/api/scenario/reset")).json() == {"ok": True}
+async def test_attack_then_views(monkeypatch):
+    from tollgate import scenario
+    async with _edge(monkeypatch) as (c, app):
+        r = scenario.Runner(app)
+        r.reset()
         for step in ("3.1", "3.2", "3.3"):
-            r = (await c.post(f"/edge/api/scenario/run/{step}")).json()
-            assert r["pass"], r
-        sc = (await c.get("/edge/api/scenario")).json()
-        act3 = next(a for a in sc["acts"] if a["id"] == "3")
-        assert act3["steps"][2]["result"]["pass"] and act3["steps"][2]["expected"].startswith("BLOCK")
-        assert next(a for a in sc["acts"] if a["id"] == "4")["steps"][0]["operator"]
+            res = await r.run(step)
+            assert res["pass"], res
+        assert (await c.get("/edge/api/scenario")).status_code == 404  # the edge Scenario view is gone
 
         st = (await c.get("/edge/api/status")).json()
         assert st["account"]["agent"] == "Support assistant" and st["policy"]["profile"] == "balanced"
@@ -43,7 +42,7 @@ async def test_scenario_then_views(monkeypatch):
         s = sessions[0]
         assert s["state"] == "untrusted+holds_private" and s["last_verdict"] == "block"
         assert s["tools"] == ["Read an issue", "Read a file from a repository", "Open a pull request"]
-        assert s["label"].startswith("Scenario act 3") and s["active"]
+        assert s["active"]
 
         tl = (await c.get(f"/edge/api/sessions/{s['id']}")).json()["timeline"]
         assert [e["verdict"] for e in tl] == ["allow", "redact", "block"]

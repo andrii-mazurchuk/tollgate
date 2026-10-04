@@ -24,7 +24,7 @@ Two interfaces, same visual style:
    - Optional, low priority: per-session stats (model, sources touched such as files and tickets, counts).
 2. **Analytics** (local): charts like the server's, but for this laptop only: actions over time by verdict, blocked and masked counts, top reasons, per-session breakdown.
 3. **Setup**: connection details, key (masked, copy), config snippets for Claude Code / Cursor / OpenAI SDK, Test connection, and what stays local vs. what is sent to the server.
-4. **Scenario** (to be confirmed after a walkthrough): the Acme steps from SCENARIO.md run through the real gateway, expected vs. actual, PASS/FAIL.
+4. **Scenario** (to be confirmed after a walkthrough): the Acme steps from SCENARIO.md run through the real gateway, expected vs. actual, PASS/FAIL. *Removed 2026-10-04: the no-network fallback is `scripts/demo_claude.py` (replays the hook calls through the real shim) and the `tollgate replay github` / `tollgate agent --scripted` terminal commands.*
 
 **Dropped:** the "My agent" panel (tools/model/budget sidebar).
 
@@ -134,7 +134,7 @@ Order on the page, top to bottom: status line → KPI strip → trend → (reaso
 ### Local edge, revision 4 (audit, 2026-10-04)
 
 - **No page titles or subtitles.** The highlighted nav item names the view. Content starts right under the top bar.
-- **The top bar carries the view's controls.** From the left, aligned to the content gutter: the health indicator, then on the right the view's controls (the time range on Overview and Events, the runner on Scenario, nothing elsewhere), a compact status chip, and the theme toggle. Every control is 28px tall.
+- **The top bar carries the view's controls.** From the left, aligned to the content gutter: the health indicator, then on the right the view's controls (the time range on Overview and Events, nothing elsewhere), a compact status chip, and the theme toggle. Every control is 28px tall.
 - **The status chip** shows the agent, role, a connection dot and the server. The app, policy, feed and classifier versions are in its tooltip.
 - **Health counts only the last hour** (or since the last click). An all-time count kept it red forever.
 - **Content is full width**, so its right edge lines up with the top bar's (24px). Master–detail views fill the viewport height. In a session, the steps take up to 40% of the pane and the step detail scrolls in the rest.
@@ -344,7 +344,7 @@ The latest evaluation (`audit/eval.json`) and test suite results, in plain words
    - A solo developer needs no server.
    - It is the same binary in two roles. The demo runs both on one machine, and we say so.
    - Splitting it into `--role edge|hub` with policy sync comes after the hackathon.
-2. **Local edge UI:** demoted to on-demand. No further investment, no auto-open. It stays for the details view and the Scenario fallback.
+2. **Local edge UI:** demoted to on-demand. No further investment, no auto-open. It stays for the details view. The Scenario view is removed; the no-network fallback is `scripts/demo_claude.py` (replays the hook calls through the real shim) and the `tollgate replay github` / `tollgate agent --scripted` terminal commands.
 3. **The developer's interface is the deny message inside their agent:** the reason, "What you can do", and a details link to the local edge step.
    - `tollgate open [edge|console] [TRACE]` opens it.
    - Later: `tollgate status` / `tollgate why`.

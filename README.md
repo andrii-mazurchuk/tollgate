@@ -25,7 +25,8 @@ uv run tollgate up --scripted-model   # :8080 role MCPs, 3 mock MCP servers, mod
 
 **3. Open the two UIs:**
 - http://127.0.0.1:8080/console : the security lead. Overview (attacks stopped) → Sessions (fingerprints only: the text stays on the laptop) → Peers & roles (set roles, revoke a laptop) → Policy (profile switch, **Edit access**) → Threat feed → Self-test.
-- http://127.0.0.1:8080/edge : the developer's laptop. **Scenario → Run all** runs the Acme story ([SCENARIO.md](SCENARIO.md)) through the real gateway, expected vs actual; in Act 3 step 3.3 (open the public PR) is **BLOCKED** with the cause named.
+- http://127.0.0.1:8080/edge : the developer's laptop, on demand: its sessions step by step (full text stays local), Events, Setup. The deny message inside the agent links to the exact step.
+- No agent installed? `uv run tollgate replay github` runs the Acme attack (taint off → PR leaks, on → **BLOCKED** with the cause named); `uv run tollgate agent --scripted` drives a scripted hijacked agent through both doors; `scripts/demo_claude.py` replays Claude Code's hook calls through the real shim.
 
 **4. Try your own prompt through the model door.** The door scans every prompt before any upstream call, so an injection is blocked even with no LLM installed (uses the classifier downloaded in step 1; `--scripted-model` answers the allowed prompts).
 

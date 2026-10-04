@@ -28,7 +28,7 @@ Measured on `main` on 2026-10-04. Fast suite: `uv run pytest -q -m "not slow"` �
 | AC11 budget + loops | green | `tests/acceptance/test_ac11_budget_loops.py` (429, `loop.cutoff`) |
 | AC12 model allow-list | green | `tests/acceptance/test_ac12_model_allowlist.py`; live: `qwen3:4b` for role-1 → 403 `model.denied` |
 | AC13 suite | green | `tollgate test`: 1,411 cases; all checks held-out recall 0.891, FPR 0.048, posture **0.931**; the console Self-test view shows the same numbers and the misses; `content.injection: off` → posture 0.718. `test_ac13_suite_summary.py`, `test_eval_posture.py`. Per-pattern P1–P10 coverage is not audited. |
-| AC14 dashboard | green | Server console `/console` (Overview, Peers & roles, Sessions with fingerprints, Policy view + profile switch + access editing, Threat feed, Self-test) and local edge `/edge` (Sessions trace, Checks per stage in ms, Setup, Scenario); `tests/test_console.py`, `tests/test_console3.py`, `tests/test_edge_*.py`. The earlier Streamlit `dashboard/app.py` remains (`tollgate dashboard`); `tests/test_dashboard_data.py` |
+| AC14 dashboard | green | Server console `/console` (Overview, Peers & roles, Sessions with fingerprints, Policy view + profile switch + access editing, Threat feed, Self-test) and local edge `/edge` (Sessions trace, Checks per stage in ms, Events, Setup); `tests/test_console.py`, `tests/test_console3.py`, `tests/test_edge_*.py`. The earlier Streamlit `dashboard/app.py` remains (`tollgate dashboard`); `tests/test_dashboard_data.py` |
 | AC15 latency | partial | Hub checks (role + taint) p95 **under 1 ms**, tier 1 p95 **2.5 ms**, both under the 5 ms target: **met**. Tier 2 short text (≤ 64 tokens) p95 is **~65–90 ms** depending on the run, against 80 ms: **borderline (partial)**; it is gated so long tool results skip it in balanced. |
 | AC16 deliverables | green | README "Judges: start here", MIT `LICENSE`, public repo https://github.com/andrii-mazurchuk/tollgate, [`DEMO.md`](DEMO.md) run sheet, [`docs/architecture.md`](docs/architecture.md) diagram, commented `policies/strict\|balanced\|lenient.yaml` profiles, 10-slide deck [`docs/Tollgate.pdf`](docs/Tollgate.pdf) (Marp source `docs/deck.md`, screenshots in `docs/img/`). |
 
@@ -381,7 +381,7 @@ Stack:
 
 ## 9. Demo (3 min)
 
-The original plan below; the final run sheet (edge Scenario, console, live policy) is [DEMO.md](DEMO.md).
+The original plan below; the final run sheet (live Claude Code, console, live policy) is [DEMO.md](DEMO.md).
 
 1. **Roles only:** role-2 runs "check open issues". Poisoned issue #12 leads to a private repo read, then a public PR. **Leak.**
 2. **Tollgate:** the same run. The PR is **blocked**: *"session tainted by github.issues.read #12"*.

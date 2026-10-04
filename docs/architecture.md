@@ -37,7 +37,7 @@ flowchart LR
         audit[("audit/events.jsonl<br/>one AuditEvent per decision")]
         puller["Feed puller (lifespan task)<br/>every interval_s: GET bundle,<br/>verify HMAC, newer version only"]
         admin["/healthz (pin_alerts, feed) /admin/taint /admin/budget<br/>/admin/approvals (POST needs admin token)"]
-        edgeui["Local edge UI /edge<br/>sessions trace, checks in ms,<br/>setup, Acme scenario"]
+        edgeui["Local edge UI /edge<br/>sessions trace, checks in ms,<br/>setup"]
         console["Server console /console<br/>overview, peers & roles, sessions (fingerprints),<br/>policy view/switch/edit, threat feed, self-test"]
     end
 

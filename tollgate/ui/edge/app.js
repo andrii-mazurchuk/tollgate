@@ -16,7 +16,7 @@ async function api(path, opts) {
 }
 const view = () => document.getElementById("view");
 const stepHref = (sid, step) => `#/sessions/${encodeURIComponent(sid)}` + (step ? "/" + encodeURIComponent(step) : "");
-const emptyState = msg => h("div", { class: "empty" }, msg || "Nothing in this time range. ", "Connect your agent in ", h("a", { href: "#/setup" }, "Setup"), " or run the ", h("a", { href: "#/scenario" }, "Scenario"), ".");
+const emptyState = msg => h("div", { class: "empty" }, msg || "Nothing in this time range. ", "Connect your agent in ", h("a", { href: "#/setup" }, "Setup"), ".");
 
 /* ---------- shell: health, status, range, theme ---------- */
 async function refreshStatus() {
@@ -50,7 +50,7 @@ function renderHealth(hl) {
   };
 }
 
-// Top-bar slot for the current view's controls: the time range (Overview, Events) or the scenario runner.
+// Top-bar slot for the current view's controls: the time range (Overview, Events).
 const bar = (...kids) => document.getElementById("bar").replaceChildren(...kids);
 function renderRange() {
   if (!["overview", "events"].includes(ui.view)) return bar();
@@ -360,45 +360,8 @@ async function renderSetup() {
             h("td", {}, l.words.join(", ")), h("td", { class: "muted", title: l.why }, l.why))))))));
 }
 
-/* ---------- Scenario ---------- */
-async function renderScenario(note) {
-  const { acts } = await api("/scenario");
-  const all = acts.flatMap(a => a.steps).filter(st => !st.operator);
-  const done = all.filter(st => st.result), passed = done.filter(st => st.result.pass);
-  const runSteps = async ids => {
-    if (ui.running) return;
-    ui.running = true;
-    try { for (const id of ids) { await renderScenario(`Running step ${id}…`); await api("/scenario/run/" + encodeURIComponent(id), { method: "POST" }); } }
-    finally { ui.running = false; }
-    if (ui.view === "scenario") renderScenario();
-  };
-  const btn = (label, fn, cls) => h("button", { class: "btn " + (cls || ""), disabled: ui.running, onclick: fn }, label);
-  const result = r => r.pass ? h("span", { class: "badge" }, icon("check"), "PASS") : h("span", { class: "badge fail" }, icon("x"), "FAIL");
-  if (ui.view !== "scenario") return;
-  bar(h("span", { class: "muted small" }, note || (done.length ? `${passed.length} of ${done.length} passed` : `${all.length} steps`)),
-    btn("Reset", async () => { await api("/scenario/reset", { method: "POST" }); renderScenario(); }),
-    btn("Run all", () => runSteps(all.map(x => x.id)), "primary"));
-  view().replaceChildren(
-    h("div", { class: "stack" }, acts.map(a => card(`Act ${a.id}: ${a.title}`,
-      a.operator ? h("span", { class: "muted small" }, "Done in the Server console") : btn("Run act", () => runSteps(a.steps.filter(x => !x.operator).map(x => x.id)), "sm"),
-      a.subtitle ? h("p", { class: "muted small", style: "margin:-8px 16px 8px" }, a.subtitle) : null,
-      h("table", { class: "t sc" },
-        h("colgroup", {}, h("col", { style: "width:56px" }), h("col", { style: "width:136px" }), h("col", {}), h("col", { style: "width:24%" }), h("col", { style: "width:24%" }), h("col", { style: "width:72px" }), h("col", { style: "width:64px" })),
-        h("thead", {}, h("tr", {}, ["#", "Agent", "Action", "Expected", "Got", "Result", ""].map(t => h("th", {}, t)))),
-        h("tbody", {}, a.steps.map(st => st.operator
-          ? h("tr", {}, h("td", { class: "id" }, st.id), h("td", {}, st.agent), h("td", {}, st.text), h("td", { colspan: 4, class: "muted" }, "Operator step: done in the Server console"))
-          : h("tr", {},
-            h("td", { class: "id" }, st.id), h("td", {}, st.agent),
-            h("td", {}, st.text, st.needs ? h("div", { class: "why-f" }, st.needs === "classifier" ? "Needs the injection classifier" : "Needs a model (Ollama or --scripted-model)") : null),
-            h("td", { class: "muted" }, st.expected),
-            h("td", {}, st.result ? [st.result.got, st.result.why ? h("div", { class: "why-f" }, st.result.why) : null,
-              st.result.session_id && st.result.trace_id ? h("div", {}, h("a", { class: "small", href: stepHref(st.result.session_id, st.result.trace_id) }, "Open step")) : null] : h("span", { class: "muted" }, "–")),
-            h("td", {}, st.result ? result(st.result) : null),
-            h("td", {}, btn("Run", () => runSteps([st.id]), "sm"))))))))));
-}
-
 /* ---------- routing + live updates ---------- */
-const VIEWS = { overview: renderOverview, sessions: renderSessions, events: renderEvents, setup: renderSetup, scenario: renderScenario };
+const VIEWS = { overview: renderOverview, sessions: renderSessions, events: renderEvents, setup: renderSetup };
 async function route(focus) {
   const parts = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
   ui.view = VIEWS[parts[0]] ? parts[0] : "overview";
