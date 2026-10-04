@@ -15,7 +15,6 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-DEV_SECRET = "tollgate-dev-feed-secret"
 SRC = "bundle_src.yaml"
 _STAMP = re.compile(r"#\s*feed-version:\s*(\d+)")
 
@@ -25,7 +24,9 @@ def _now() -> str:
 
 
 def _sig(body: dict) -> str:
-    key = (os.environ.get("TOLLGATE_FEED_SECRET") or DEV_SECRET).encode()
+    from tollgate.gateway.keys import install_secret  # late: tollgate.gateway imports this module
+    # a feed served to other hubs needs TOLLGATE_FEED_SECRET set on both sides (README "Signature feed")
+    key = os.environ["TOLLGATE_FEED_SECRET"].encode() if os.environ.get("TOLLGATE_FEED_SECRET") else install_secret()
     canon = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     return hmac.new(key, canon, hashlib.sha256).hexdigest()
 

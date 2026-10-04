@@ -1,4 +1,13 @@
+import os
+import tempfile
+
 import pytest
+
+
+def pytest_configure(config):
+    """One isolated install secret per test run (keys minted at import must still verify in every test)."""
+    if not os.environ.get("TOLLGATE_SECRET_FILE"):
+        os.environ["TOLLGATE_SECRET_FILE"] = os.path.join(tempfile.mkdtemp(prefix="tollgate-test-"), "secret.key")
 
 
 @pytest.fixture(autouse=True)
