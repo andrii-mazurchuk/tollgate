@@ -149,7 +149,8 @@ def routes(policy) -> list:
                         "servers": [{"name": s["name"], "allowed": len(s["allowed"]), "hidden": len(s["denied"])}
                                     for s in a["servers"]],
                         "actions": len(ev_r), "blocked": sum(e.get("verdict") == "block" for e in ev_r)})
-        return JSONResponse({"roles": out, "peers": rows})
+        from tollgate.gateway import keys
+        return JSONResponse({"roles": out, "peers": rows, "allow_unenrolled_keys": keys.unenrolled_ok(policy.data)})
 
     async def get_peer(request):
         i, evs, reg = request.path_params["id"], edge.load_events(), peers.load()

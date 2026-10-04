@@ -46,3 +46,12 @@ def test_production_default_is_off_and_flag_is_validated():
     assert "allow_unenrolled_keys" not in base  # shipped policy: off
     with pytest.raises(ValueError, match="allow_unenrolled_keys"):
         policy.validate({**base, "allow_unenrolled_keys": "yes"})
+
+
+@pytest.mark.parametrize("flag", [False, True])
+async def test_console_peers_reports_the_flag(monkeypatch, flag):
+    """The Peers page labels the Unenrolled row "Rejected" from this field."""
+    from tests.conftest import ADMIN
+    async with _app(monkeypatch, flag) as c:
+        r = await c.get("/console/api/peers", headers=ADMIN)
+        assert r.status_code == 200 and r.json()["allow_unenrolled_keys"] is flag
