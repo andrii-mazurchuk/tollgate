@@ -94,6 +94,25 @@ def test_too_large_and_errors_fail_closed(monkeypatch):
     assert "content.too_large" in explain.RULES and "content.scan_error" in explain.RULES
 
 
+REDOS = [r"\w*\w*\w*\w*!", "(a|aa)+c", r"\w*[a-z]*\d*[0-9a-f]*!"]
+
+
+@pytest.mark.parametrize("pat", REDOS)
+def test_redos_patterns_rejected_at_publish_and_load(pat, tmp_path):
+    from tollgate import feed
+    from tollgate.content import signatures
+    with pytest.raises(ValueError):
+        feed.check_signatures([{"id": "x", "pattern": pat}])
+    p = tmp_path / "s.yaml"
+    p.write_text(f"- id: x\n  pattern: '{pat}'\n", encoding="utf-8")
+    assert signatures.rules(str(p)) == [] and signatures.errors(str(p))
+
+
+def test_shipped_signatures_still_load():
+    from tollgate.content import signatures
+    assert len(signatures.rules("signatures.yaml")) >= 6 and signatures.errors("signatures.yaml") == []
+
+
 def test_bash_sink_labels_widened():
     from tollgate.gateway.hooks import labels
     from tollgate.gateway.policy import load_policy

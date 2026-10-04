@@ -15,6 +15,8 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
+from tollgate.content.signatures import check_pattern
+
 SRC = "bundle_src.yaml"
 _STAMP = re.compile(r"#\s*feed-version:\s*(\d+)")
 
@@ -57,7 +59,10 @@ def check_signatures(sigs) -> None:
             raise ValueError(f"signature {e!r:.80}: need id and pattern strings")
         if len(e["pattern"]) > MAX_PATTERN or _nested_quantifier(e["pattern"]):
             raise ValueError(f"signature {e['id']}: pattern too long or nested quantifier (ReDoS risk); rejected")
-        re.compile(e["pattern"])
+        try:
+            check_pattern(e["pattern"])  # shapes the loader refuses + a timed probe against adversarial input
+        except (ValueError, re.error) as exc:
+            raise ValueError(f"signature {e['id']}: {exc}") from exc
 
 
 def bundle(feed_dir) -> dict:
