@@ -497,9 +497,10 @@ function matrixCard(m) {
 }
 
 // Rule actions are neutral badges: red stays for real Blocked events and problems, not for describing the policy.
-const RULE_ICON = { Masked: "lock", "Asks a human": "clock" };
+// rule actions come as plain lowercase words from the API (block | mask | ask a human | off)
+const RULE_ACT = { block: ["ban", "Blocks"], mask: ["lock", "Masks"], "ask a human": ["clock", "Asks a human"], off: ["dash", "Off"] };
 const rulesCard = rules => card("Rules in plain words", null, h("div", { class: "rules" }, rules.map(r => h("div", { class: "rule" },
-  h("div", { class: "rule-h" }, h("h3", {}, r.title), h("span", { class: "badge" }, icon(RULE_ICON[r.action] || "ban"), r.action)),
+  h("div", { class: "rule-h" }, h("h3", {}, r.title), h("span", { class: "badge" }, icon((RULE_ACT[r.action] || ["flag"])[0]), (RULE_ACT[r.action] || [, r.action])[1])),
   h("p", {}, r.sentence)))));
 
 const historyCard = (hist, cur) => card("Version history", h("span", { class: "muted small" }, "Every version this hub has seen, newest first"),
