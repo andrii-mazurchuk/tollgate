@@ -2,7 +2,7 @@
 
 **An AI control layer for agents that use MCP tools.** HackYeah 2026, Goldman Sachs task "AI Control Layer". Repo: https://github.com/andrii-mazurchuk/tollgate (public, [MIT](LICENSE)).
 
-> **Status (final, 2026-10-04):** 14 of 16 acceptance criteria green, 2 partial (AC8 injection recall 0.837 vs 0.85 target; AC15 classifier latency borderline). Details: [TOLLGATE.md › Status](TOLLGATE.md#status-final-2026-10-04). 247 fast + 7 slow tests.
+> **Status (final, 2026-10-04):** 14 of 16 acceptance criteria green, 2 partial (AC8 injection recall 0.837 vs 0.85 target; AC15 classifier latency borderline). Details: [TOLLGATE.md › Status](TOLLGATE.md#status-final-2026-10-04). 307 fast + 7 slow tests.
 
 ## Judges: start here (5 minutes)
 
