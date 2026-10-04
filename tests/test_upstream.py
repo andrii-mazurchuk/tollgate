@@ -40,10 +40,11 @@ UPSTREAM = textwrap.dedent('''
 ''')
 
 
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+def _bound() -> socket.socket:
+    """A socket bound to a free port and held open (no find-then-bind race)."""
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    return s
 
 
 @pytest.fixture
@@ -60,14 +61,16 @@ def http_upstream():
         """Post publicly."""
         return "posted"
 
-    port = _free_port()
-    server = uvicorn.Server(uvicorn.Config(web.http_app(path="/mcp"), host="127.0.0.1", port=port, log_level="warning"))
-    t = threading.Thread(target=server.run, daemon=True)
+    sock = _bound()
+    port = sock.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(web.http_app(path="/mcp"), log_level="warning"))
+    t = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
     t.start()
-    for _ in range(100):
+    for _ in range(200):
         if server.started:
             break
         time.sleep(0.05)
+    assert server.started, "HTTP upstream did not start within 10 s"
     yield f"http://127.0.0.1:{port}/mcp"
     server.should_exit = True
     t.join(5)
@@ -80,11 +83,12 @@ def policy(tmp_path, monkeypatch, http_upstream):
     monkeypatch.setenv("TG_UP_TAG", "tag-from-env")
     monkeypatch.setenv("TG_WEB_TOKEN", "s3cret")
     taint.reset("local")
-    return PolicyHolder(validate({
+    dead = _bound()  # bound, never listening: connections are refused; held so no one else takes the port
+    yield PolicyHolder(validate({
         "servers": {
             "up": {"command": sys.executable, "args": [str(script)], "env": {"UP_TAG": "${TG_UP_TAG}"}},
             "web": {"url": http_upstream, "headers": {"Authorization": "Bearer ${TG_WEB_TOKEN}"}},
-            "dead": {"url": f"http://127.0.0.1:{_free_port()}/mcp"},
+            "dead": {"url": f"http://127.0.0.1:{dead.getsockname()[1]}/mcp"},
             "files": {"mock": "mocks.files"},
         },
         "roles": {"dev": {"servers": {"up": {"access": "rw"}, "web": {"access": "read"}, "dead": {"access": "rw"},
@@ -93,6 +97,7 @@ def policy(tmp_path, monkeypatch, http_upstream):
         "labels": {"up.fs.read": ["untrusted_source", "private_data"], "up.pr.create": ["public_sink"]},
         "taint": {"enabled": True, "block_flow": {"from": "private_data", "to": "public_sink", "action": "block"}},
     }))
+    dead.close()
 
 
 @contextlib.asynccontextmanager
@@ -104,6 +109,7 @@ async def _role(policy):
             yield c, sources
 
 
+@pytest.mark.slow  # real uvicorn + stdio child process
 async def test_upstreams_filtered_checked_and_degraded(policy):
     async with _role(policy) as (c, sources):
         names = {t.name for t in await c.list_tools()}
@@ -125,6 +131,7 @@ async def test_upstreams_filtered_checked_and_degraded(policy):
             await c.call_tool("up.pr.create", {"title": "leak"})
 
 
+@pytest.mark.slow  # real uvicorn + stdio child process
 async def test_app_starts_with_dead_upstream_and_reports_it(policy):
     app = build_app(policy)
     async with app.router.lifespan_context(app):

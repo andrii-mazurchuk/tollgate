@@ -126,10 +126,11 @@ async def test_selftest_run_starts_one_eval_subprocess(monkeypatch, tmp_path):
         r = await c.post("/console/api/selftest/run")
         assert r.status_code == 202 and r.json()["run"]["running"]
         assert (await c.post("/console/api/selftest/run")).status_code == 409
-        for _ in range(100):
+        for _ in range(400):  # up to 20 s: a cold interpreter start on a busy CI box
             if not console_feed.RUN["running"]:
                 break
             await asyncio.sleep(0.05)
+        assert not console_feed.RUN["running"], "eval subprocess did not finish within 20 s"
         s = (await c.get("/console/api/selftest")).json()
         assert s["run"]["running"] is False and s["run"]["error"] is None and s["eval"]["ran_at"] == out["ran_at"]
 

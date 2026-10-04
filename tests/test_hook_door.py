@@ -140,7 +140,7 @@ async def test_result_masked_and_prompt_injection(monkeypatch):
 
 
 async def test_role_deny_list_and_bad_keys(monkeypatch, tmp_path):
-    p = yaml.safe_load(Path("policy.yaml").read_text(encoding="utf-8"))
+    p = yaml.safe_load((Path(__file__).resolve().parents[1] / "policy.yaml").read_text(encoding="utf-8"))
     p["roles"]["role-1"]["builtins"] = {"deny": ["WebSearch"]}
     (tmp_path / "policy.yaml").write_text(yaml.safe_dump(p), encoding="utf-8")
     async with _app(monkeypatch, tmp_path / "policy.yaml") as c:
@@ -161,7 +161,7 @@ async def test_role_deny_list_and_bad_keys(monkeypatch, tmp_path):
 
 def test_validate_builtins():
     from tollgate.gateway.policy import validate
-    base = yaml.safe_load(Path("policy.yaml").read_text(encoding="utf-8"))
+    base = yaml.safe_load((Path(__file__).resolve().parents[1] / "policy.yaml").read_text(encoding="utf-8"))
     for bad in ({"builtins": {"Read": ["secret_stuff"]}}, {"builtins": {"Bash": {"sink": ["git push*"]}}},
                 {"builtins": {"Bash": {"public_sink": "git push*"}}}):
         with pytest.raises(ValueError):

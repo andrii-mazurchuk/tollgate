@@ -85,7 +85,8 @@ async def test_revoked_peer_gets_401_over_http(monkeypatch):
         pid = _peer("role-2")
         k = peers.mint(pid, "role-2", ROLES)
         h = {"Authorization": f"Bearer {k}", "Accept": "application/json, text/event-stream"}
-        assert (await c.post("/mcp/role-2/", headers=h, json=LIST)).status_code != 401
+        r = await c.post("/mcp/role-2/", headers=h, json=LIST)
+        assert r.status_code == 400 and "Missing session ID" in r.text  # key accepted; MCP wants initialize first
         chat = {"model": "qwen3:4b", "messages": [{"role": "user", "content": "Hi"}]}
         assert (await c.post("/v1/chat/completions", headers=h, json=chat)).status_code == 200
         assert (await c.post(f"/console/api/peers/{pid}/revoke")).json()["revoked"]
