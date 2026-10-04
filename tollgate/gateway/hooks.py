@@ -113,14 +113,15 @@ def decide(data: dict, version: str, ident: tuple[str, str], kind: str, name: st
            base: str = "") -> dict:
     role, key_id = ident
     rp = (data.get("roles") or {}).get(role) or {}
-    ti = body.get("tool_input") if isinstance(body.get("tool_input"), dict) else {}
-    tool = "builtin.Prompt" if kind == "UserPromptSubmit" else name if name.startswith("mcp__") else f"builtin.{name}"
+    raw_ti = body.get("tool_input")
+    ti = raw_ti if isinstance(raw_ti, dict) else {}  # labels/cause read keys; a string input still gets scanned
+    tool ="builtin.Prompt" if kind == "UserPromptSubmit" else name if name.startswith("mcp__") else f"builtin.{name}"
     if kind == "UserPromptSubmit":
         text, point = _text(body.get("prompt", body.get("user_prompt", ""))), "prompt"
     elif kind == "PostToolUse":
         text, point = _text(body.get("tool_response", body.get("tool_output", ""))), "tool_result"
     else:
-        text, point = json.dumps(ti, ensure_ascii=False), "tool_args"
+        text, point = (raw_ti if isinstance(raw_ti, str) else json.dumps(ti, ensure_ascii=False)), "tool_args"
     ev = AuditEvent(
         ts=datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         role=role, key_id=key_id, door="hook", verdict="allow", scan_point=point,
@@ -146,6 +147,8 @@ def decide(data: dict, version: str, ident: tuple[str, str], kind: str, name: st
 
     out: dict = {}
     try:
+        if kind != "UserPromptSubmit" and not isinstance(raw_ti, (dict, str, type(None))):
+            deny("request.invalid", "tool_input must be a JSON object or a string")
         if kind == "PreToolUse":
             out = {"hookEventName": kind, "permissionDecision": "allow"}
             t0 = time.perf_counter()
