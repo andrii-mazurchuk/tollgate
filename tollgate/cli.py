@@ -328,7 +328,8 @@ def main() -> int:
             import pytest
             from pathlib import Path
             root = Path(__file__).resolve().parents[1]  # collect the repo's tests, not the CWD's
-            rc = pytest.main(["-q", "--rootdir", str(root), str(root / "tests"), *args])
+            from tollgate.eval.runner import Tally
+            rc = pytest.main(["-q", "--rootdir", str(root), str(root / "tests"), *args], plugins=[Tally()])
         from tollgate.eval.runner import main as evaluate
         print("\n== tollgate eval ==")
         evaluate()

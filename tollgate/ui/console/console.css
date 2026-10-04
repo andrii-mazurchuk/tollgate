@@ -45,6 +45,23 @@ dialog.dlg::backdrop { background: rgba(9, 9, 11, .4); }
 @media (max-width: 1100px) { .md.wide { grid-template-columns: minmax(0, 1fr); } }
 .sec .hbars.card-b { padding: 0; }
 
+/* threat feed + self-test (revision 3) */
+.feed-wrap { display: flex; flex-direction: column; gap: 16px; height: calc(100vh - 48px - 48px); min-height: 640px; }
+.feed-wrap > .md { flex: 1 1 0; height: auto; min-height: 0; }
+pre.pat { margin: 0; padding: 8px 12px; background: var(--soft); border-radius: var(--r); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+form.pub .fld { display: grid; gap: 4px; margin-bottom: 12px; }
+form.pub label { color: var(--ink); font-size: 12px; font-weight: 500; }
+form.pub input, form.pub select { height: 28px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--panel); color: var(--ink); font: inherit; }
+form.pub input[aria-invalid="true"] { border-color: var(--red); }
+form.pub .err:empty { display: none; }
+.kpis.tgt { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.kpi .d.miss { color: var(--red); }
+.kpi .d svg.i { width: 12px; height: 12px; vertical-align: -2px; }
+.rejected.boxed { border-radius: var(--r); }
+.miss-wrap { max-height: 420px; overflow: auto; border-top: 1px solid var(--line); }
+.miss-wrap table.t thead th { position: sticky; top: 0; background: var(--panel); z-index: 1; }
+.miss-wrap tr.mrow td { color: var(--ink-2); }
+
 /* sessions: search + compact multi-select filter dropdowns (scale to many peers/roles) */
 .fbar { display: grid; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .fbar .search { width: 100%; height: 28px; }

@@ -71,9 +71,14 @@ def publish(feed_dir, spec: str) -> int:
     entry = dict(kv.split("=", 1) for kv in re.split(r",(?=(?:id|pattern|action|tags)=)", spec))
     if not entry.get("id") or not entry.get("pattern"):
         raise ValueError("need at least id=... and pattern=...")
-    check_signatures([entry])  # refuse a broken or ReDoS-shaped regex at the source
-    entry.setdefault("action", "block")
     entry["tags"] = [t for t in entry.get("tags", "").split(";") if t]
+    return add(feed_dir, entry)
+
+
+def add(feed_dir, entry: dict) -> int:
+    """Adds (or replaces, by id) one {id, pattern, action?, tags?} entry, bumps the version. Returns the new version."""
+    check_signatures([entry])  # refuse a broken or ReDoS-shaped regex at the source
+    entry = {**entry, "action": entry.get("action") or "block", "tags": list(entry.get("tags") or [])}
     path = Path(feed_dir) / SRC
     src = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     sigs = [s for s in src.get("signatures") or [] if s.get("id") != entry["id"]] + [entry]

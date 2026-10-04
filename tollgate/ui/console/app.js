@@ -298,6 +298,194 @@ function drawRole(box, a) {
     h("span", { class: "right small muted" }, a.policy?.version ? `policy ${String(a.policy.version).slice(0, 7)}` : "")), strip, body);
 }
 
+/* ---------- Threat feed: signatures in force (list -> detail), feed status, publish ---------- */
+const sigHref = id => "#/feed" + (id ? "/" + enc(id) : "");
+const SIG_ACT = { block: ["ban", "Blocks"], approve: ["clock", "Asks a human"], redact: ["lock", "Masks"], allow: ["dash", "Records only"] };
+const sigAct = a => h("span", { class: "badge" }, icon((SIG_ACT[a] || ["flag"])[0]), (SIG_ACT[a] || [, a])[1]);
+const base = p => String(p).split(/[\\/]/).pop();
+const kcell = (k, v, tip) => h("div", tip ? { title: tip } : {}, h("div", { class: "k" }, k), h("div", { class: "v" }, v));
+
+async function renderFeed(idArg) {
+  const f = await api("/feed");
+  bar(h("button", { class: "btn", type: "button", onclick: () => publishDialog(f) }, icon("plus"), "Publish a signature…"));
+  const fd = f.feed;
+  const check = !fd.enabled ? h("span", { class: "muted" }, "No feed") : fd.verified === true ? h("span", { class: "state" }, icon("check"), "Verified")
+    : fd.verified === false ? h("span", { class: "badge fail" }, icon("x"), "Failed") : h("span", { class: "muted" }, "Not pulled yet");
+  const status = h("section", { class: "card" }, h("div", { class: "card-h" }, h("h2", {}, "Feed status"),
+    h("span", { class: "muted small" }, f.peers_note)),
+    h("div", { class: "strip" }, [
+      ["Signatures from", f.source === "threat feed" ? `Signed feed${f.file_version != null ? " v" + f.file_version : ""}` : "Local file"],
+      ["Feed", fd.enabled ? h("code", { title: fd.url }, fd.url) : "Off"],
+      ["Version pulled", fd.version != null ? "v" + fd.version : "–"],
+      ["Last pull", fd.last_pull ? ago(fd.last_pull) : "–"],
+      ["Signature check", check],
+      ["File", h("code", {}, base(f.file)), f.file + (f.updated_at ? "\nUpdated " + time(f.updated_at) : "")],
+    ].map(([k, v, tip]) => kcell(k, v, tip))),
+    fd.last_error ? h("div", { class: "rejected", role: "alert" }, icon("warn"),
+      h("span", {}, "Last pull failed: ", h("span", { class: "mono" }, fd.last_error), ". The signatures below stay in force.")) : null,
+    f.errors.length ? h("div", { class: "rejected", role: "alert" }, icon("warn"),
+      h("span", {}, `${f.errors.length} signature${f.errors.length > 1 ? "s" : ""} skipped: `, h("span", { class: "mono" }, f.errors.join("; ")))) : null);
+  const list = f.signatures;
+  const id = list.some(s => s.id === idArg) ? idArg : list.some(s => s.id === ui.sig) ? ui.sig : list[0]?.id;
+  ui.sig = id;
+  if (id && idArg !== id) history.replaceState(null, "", sigHref(id));
+  const left = h("section", { class: "card pane", "data-keep": "siglist" }, list.length ? tbl([null, "128px", "56px"], ["Signature", "Action", ["Tags", "r"]],
+    list.map(s => h("tr", linkRow(() => { location.hash = sigHref(s.id); }, s.id === id ? "sel" : "", { "aria-selected": String(s.id === id) }),
+      h("td", { title: s.plain }, h("div", { class: "two" }, h("span", { class: "ell" }, s.plain), h("span", { class: "ell muted small mono" }, s.id))),
+      h("td", {}, sigAct(s.action)),
+      h("td", { class: "num r" }, n(s.tags.length)))))
+    : h("div", { class: "empty" }, "No signatures in force."));
+  const right = h("section", { class: "card pane split" });
+  const sig = list.find(s => s.id === id);
+  if (sig) drawSig(right, sig, f); else right.append(h("div", { class: "empty" }, "No signature to show."));
+  view().replaceChildren(h("div", { class: "feed-wrap" }, status, h("div", { class: "md" }, left, right)));
+}
+
+const SIG_DONE = { block: "blocked", approve: "held for a human", redact: "masked", allow: "recorded" };
+function drawSig(box, s, f) {
+  box.replaceChildren(h("div", { class: "pane-h" }, h("h2", {}, s.plain)),
+    h("div", { class: "strip" }, [["Rule", h("code", {}, s.rule)], ["Action", sigAct(s.action)], ["Source", s.source === "threat feed" ? "Signed feed" : "Local file"]].map(([k, v]) => kcell(k, v))),
+    h("div", { class: "body", "data-keep": "sigdetail" },
+      h("div", { class: "sec" }, h("div", { class: "sec-h" }, h("h3", {}, "What it catches")),
+        h("p", { style: "margin:0 0 12px" }, `${s.plain}. Every call's arguments and tool results are checked against it; on a match the call is ${SIG_DONE[s.action] || s.action}.`),
+        h("div", { class: "muted small", style: "margin-bottom:4px" }, "Pattern (regular expression, case-insensitive)"),
+        h("pre", { class: "pat mono" }, s.pattern)),
+      h("div", { class: "sec" }, h("div", { class: "sec-h" }, h("h3", {}, "Tags")),
+        s.tags.length ? tbl(["200px", null], ["Tag", "Means"], s.tags.map(t => h("tr", {}, h("td", { class: "mono" }, t.id), h("td", { class: t.plain ? "" : "muted" }, t.plain || "–"))))
+          : h("div", { class: "muted" }, "No tags.")),
+      h("div", { class: "sec" }, h("div", { class: "sec-h" }, h("h3", {}, "Where it comes from")),
+        h("p", { class: "muted", style: "margin:0" }, s.source === "threat feed"
+          ? `Pulled from the signed feed at ${f.feed.url || "the feed"} and written to ${base(f.file)} on this hub. Change the feed, not the file: the next pull overwrites it.`
+          : `Read from ${base(f.file)} on this hub. Changes to the file apply on the next call.`))));
+}
+
+function publishDialog(f) {
+  if (!f.publish.enabled) {
+    const close = h("button", { class: "btn", type: "button", autofocus: true, onclick: () => d.close() }, "Close");
+    const d = dialog("Publish a signature", [h("p", {}, "This hub has no signature feed to publish to, so nothing is written."),
+      h("p", { class: "muted" }, f.publish.reason)], [close]);
+    return;
+  }
+  const errs = {};
+  const field = (key, label, input, hint) => {
+    errs[key] = h("div", { class: "err small", id: "pe-" + key, role: "alert" });
+    input.id = "pf-" + key; input.setAttribute("aria-describedby", "pe-" + key + (hint ? " ph-" + key : ""));
+    return h("div", { class: "fld" }, h("label", { for: input.id }, label), input, hint ? h("div", { class: "muted small", id: "ph-" + key }, hint) : null, errs[key]);
+  };
+  const inp = attrs => h("input", { type: "text", autocomplete: "off", spellcheck: "false", ...attrs });
+  const fId = inp({ placeholder: "e.g. reverse_shell", maxlength: "64" });
+  const fPat = inp({ class: "mono", placeholder: "e.g. nc\\s+-e\\s+/bin/(ba)?sh" });
+  const fAct = h("select", {}, [["block", "Block the call"], ["approve", "Ask a human"], ["redact", "Mask the match"]].map(([v, l]) => h("option", { value: v }, l)));
+  const fTags = inp({ placeholder: "e.g. OWASP-LLM06, ATLAS-AML.T0050" });
+  const els = { id: fId, pattern: fPat, action: fAct, tags: fTags };
+  const err = h("p", { class: "err small", role: "alert" });
+  const cancel = h("button", { class: "btn", type: "button", onclick: () => d.close() }, "Cancel");
+  const go = h("button", { class: "btn primary", type: "submit", form: "pubform" }, "Publish");
+  const show = fields => {
+    for (const [k, msg] of Object.entries(fields)) { if (errs[k]) { errs[k].textContent = msg; els[k].setAttribute("aria-invalid", "true"); } else err.textContent = msg; }
+    const first = Object.keys(fields).find(k => els[k]);
+    if (first) els[first].focus();
+  };
+  const form = h("form", { class: "pub", id: "pubform", novalidate: true, onsubmit: async ev => {
+    ev.preventDefault();
+    Object.values(errs).forEach(e => { e.textContent = ""; });
+    Object.values(els).forEach(x => x.removeAttribute("aria-invalid"));
+    err.textContent = "";
+    const req = { id: fId.value.trim(), pattern: fPat.value, action: fAct.value, tags: fTags.value.split(",").map(t => t.trim()).filter(Boolean) };
+    const local = {};
+    if (!req.id) local.id = "Enter an ID.";
+    if (!req.pattern.trim()) local.pattern = "Enter a pattern.";
+    if (Object.keys(local).length) return show(local);
+    go.disabled = true; go.textContent = "Publishing…";
+    try {
+      const r = await fetch(API + "/feed/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(req) });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        ui.sig = j.id;
+        form.replaceChildren(h("p", {}, `${j.replaced ? "Replaced" : "Published"} `, h("code", {}, j.id), ` in feed version ${j.version}.`), h("p", { class: "muted" }, j.note));
+        go.remove(); cancel.textContent = "Close"; cancel.focus();
+        route(false);
+        return;
+      }
+      if (j.fields) show(j.fields); else err.textContent = j.error || `Publish failed (${r.status}).`;
+    } catch (e) { err.textContent = String(e.message); }
+    go.disabled = false; go.textContent = "Publish";
+  } },
+    h("p", {}, `Adds the signature to the signed feed (now v${f.feed.version ?? "?"}). Every hub pulling the feed picks it up within ${f.feed.interval_s} s.`),
+    field("id", "ID", fId, "Letters, digits and underscores. An existing ID is replaced."),
+    field("pattern", "Pattern", fPat, "A regular expression, matched case-insensitively. Nested repeats such as (a+)+ are refused: they can hang the scanner."),
+    field("action", "On a match", fAct),
+    field("tags", "Tags", fTags, "Optional, comma-separated."), err);
+  const d = dialog("Publish a signature", form, [cancel, go]);
+  fId.focus();
+}
+
+/* ---------- Self-test: latest evaluation vs targets, per corpus and check, misses ---------- */
+const pct = v => v == null ? "–" : v === 1 ? "100%" : `${(v * 100).toFixed(1)}%`;
+const fmtT = (x, v) => v == null ? "–" : x.unit === "ms" ? ms(v) : pct(v);
+const CHECK = { pii: "Personal data", secrets: "Secrets", injection: "Injection", signatures: "Signatures", obfuscation: "Obfuscation" };
+const EXPECT = { flag: "flag", block: "block", redact: "mask", allow: "allow", approve: "ask a human" };
+
+async function renderSelftest() {
+  const s = await api("/selftest");
+  const e = s.eval, run = s.run;
+  const runBtn = h("button", { class: "btn", type: "button", disabled: run.running, onclick: async () => {
+    runBtn.disabled = true;
+    try { await post("/selftest/run"); } catch { /* 409: already running; the view shows it */ }
+    route(false);
+  } }, run.running ? "Running…" : "Run self-test");
+  bar(h("span", { class: "bar-t" }, e ? ["Last run: ", h("strong", { title: time(e.ran_at) }, ago(e.ran_at))] : "Never run"), runBtn);
+  if (run.running) setTimeout(() => { if (ui.view === "selftest") route(false); }, 2000);
+  const cmd = h("div", { class: "cmd" }, h("pre", { class: "mono" }, s.command), h("button", { class: "btn sm", type: "button", onclick: ev => copy(s.command, ev.currentTarget) }, "Copy"));
+  const runInfo = run.running ? h("div", { class: "local", role: "status" }, icon("clock"), `Self-test running since ${time(run.started_at)}…`)
+    : run.error ? h("div", { class: "rejected boxed", role: "alert" }, icon("warn"), h("span", {}, "The last run failed: ", h("span", { class: "mono" }, run.error))) : null;
+  const held = card("Held-out set", null, h("div", { class: "card-b" }, h("p", { style: "margin:0" },
+    s.holdout.sets.map(x => `${x.name} (${n(x.cases)} cases)`).join(", ") || "None", ". ", s.holdout.note)));
+  const cli = card("Full run from a terminal", null, h("div", { class: "card-b" }, h("p", { class: "muted", style: "margin:0 0 8px" }, s.run_note), cmd));
+  if (!e) return view().replaceChildren(h("div", { class: "stack" }, runInfo, h("div", { class: "card empty" }, "No evaluation yet. Run the self-test."), h("div", { class: "grid2" }, held, cli)));
+
+  const op = x => x.op === ">=" ? "≥" : "≤";
+  const tiles = h("div", { class: "kpis tgt" }, e.headline.map(x => h("div", { class: "card kpi" },
+    h("div", { class: "l" }, x.label), h("div", { class: "v" }, fmtT(x, x.value)),
+    h("div", { class: "d" + (x.met === false ? " miss" : "") }, x.met == null ? `Target ${op(x)} ${fmtT(x, x.target)}`
+      : [icon(x.met ? "check" : "x"), ` Target ${op(x)} ${fmtT(x, x.target)}: ${x.met ? "met" : "missed"}`]),
+    h("div", { class: "d" }, x.source))));
+  const t = s.tests, bad = t ? (t.failed || 0) + (t.error || 0) : 0;
+  const suite = !t ? "Not recorded" : bad ? h("span", { class: "err" }, `${n(bad)} failed, ${n(t.passed)} passed`)
+    : `${n(t.passed)} passed` + (t.xfailed ? `, ${n(t.xfailed)} expected to fail` : "") + (t.skipped ? `, ${n(t.skipped)} skipped` : "");
+  const last = card("Last run", h("span", { class: "muted small" }, e.split || ""), h("div", { class: "strip" }, [
+    ["Ran", time(e.ran_at)], ["Took", e.duration_s != null ? dur(e.duration_s) : "–"], ["Cases scanned", n(e.cases_run)], ["Profile", cap(e.profile) || "–"],
+    ["Posture score", pct(e.posture)], ["Test suite", suite, t?.ran_at ? "Ran " + time(t.ran_at) : "Recorded by uv run tollgate test"],
+  ].map(([k, v, tip]) => kcell(k, v, tip))));
+  const rate = v => h("td", { class: "num r" + (v == null ? " muted" : "") }, pct(v));
+  const two = (a, b) => h("div", { class: "two" }, h("span", { class: "ell" }, a), h("span", { class: "ell muted small mono" }, b));
+  const srcT = card("By corpus", h("span", { class: "muted small" }, "Held-out 30% of each corpus"),
+    tbl([null, "56px", "60px", "60px", "92px", "76px"], ["Corpus", ["Cases", "r"], ["Caught", "r"], ["Missed", "r"], ["False alarms", "r"], ["Recall", "r"]],
+      e.sources.map(r => h("tr", {}, h("td", { title: r.name }, two(r.plain, r.name)),
+        h("td", { class: "num r" }, n(r.n)), h("td", { class: "num r" }, n(r.caught)), h("td", { class: "num r" }, n(r.missed)),
+        h("td", { class: "num r" }, n(r.false_alarms)), rate(r.recall)))));
+  const ctlT = card("By check", h("span", { class: "muted small" }, "Held-out cases each check is scored on"),
+    tbl([null, "56px", "60px", "60px", "92px", "76px"], ["Check", ["Cases", "r"], ["Caught", "r"], ["Missed", "r"], ["False alarms", "r"], ["Pass rate", "r"]],
+      e.controls.map(r => h("tr", {}, h("td", {}, r.plain, r.enabled ? null : h("span", { class: "tag-if" }, "off")),
+        h("td", { class: "num r" }, n(r.n)), h("td", { class: "num r" }, n(r.caught)), h("td", { class: "num r" }, n(r.missed)),
+        h("td", { class: "num r" }, n(r.false_alarms)), rate(r.pass_rate)))));
+  const all = e.misses;
+  ui.mk = ui.mk || "all";
+  const shown = (all || []).filter(m => ui.mk === "all" || m.kind === ui.mk);
+  const seg = all && all.length ? h("div", { class: "seg", role: "group", "aria-label": "Show misses" }, [["all", "All"], ["missed", "Missed attacks"], ["false alarm", "False alarms"]].map(([k, l]) =>
+    h("button", { type: "button", "aria-pressed": String(ui.mk === k), onclick: () => { ui.mk = k; route(false); } },
+      `${l} (${n(k === "all" ? all.length : all.filter(m => m.kind === k).length)})`))) : null;
+  const missT = card(all ? `Misses (${n(all.length)})` : "Misses", seg,
+    all == null ? h("div", { class: "empty" }, "This run did not record its misses. Run the self-test again to list them.")
+      : !shown.length ? h("div", { class: "empty" }, "No misses.")
+        : h("div", { class: "miss-wrap", "data-keep": "misses" }, tbl(["124px", "120px", "104px", "112px", null], ["What went wrong", "Corpus", "Check", "Expected → got", "Text (first 120 characters; hover for the fingerprint)"],
+          shown.map(m => h("tr", { class: "mrow" }, h("td", {}, m.kind === "missed" ? "Missed attack" : "False alarm"),
+            h("td", { class: "ell", title: m.id }, m.source), h("td", {}, CHECK[m.control] || m.control),
+            h("td", {}, `${EXPECT[m.expect] || m.expect} → ${EXPECT[m.got] || m.got}`),
+            h("td", { class: "ell", title: `SHA-256 ${m.sha256}\n${m.text}` }, m.text))))));
+  view().replaceChildren(h("div", { class: "stack" }, runInfo, tiles, last, h("div", { class: "grid2" }, srcT, ctlT), missT, h("div", { class: "grid2" }, held, cli)));
+}
+
 /* ---------- Sessions: master-detail across all peers ---------- */
 // Filters are multi-select sets, ORed within a filter and ANDed across filters; elsewhere `ui.f = { peer: id }` still works.
 const sel = k => [].concat(ui.f[k] || []);
@@ -558,7 +746,7 @@ function switchDialog(d) {
 }
 
 /* ---------- routing + live refresh ---------- */
-const VIEWS = { overview: renderOverview, peers: renderPeers, roles: renderRoles, sessions: renderSessions, policy: renderPolicy };
+const VIEWS = { overview: renderOverview, peers: renderPeers, roles: renderRoles, sessions: renderSessions, policy: renderPolicy, feed: renderFeed, selftest: renderSelftest };
 async function route(focus) {
   const parts = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
   ui.view = VIEWS[parts[0]] ? parts[0] : "overview";

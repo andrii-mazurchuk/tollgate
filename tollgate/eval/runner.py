@@ -98,7 +98,7 @@ def run(policy: dict, cases: list[dict] | None = None) -> dict:
 
 def _run(content: dict, cases: list[dict], inj: dict | None) -> dict:
     by_source, by_control, full, lat = defaultdict(list), defaultdict(list), defaultdict(list), defaultdict(list)
-    sync, t2_ms, t2_short = 0, [], []
+    sync, t2_ms, t2_short, misses = 0, [], [], []
     short = (inj or {}).get("sync_max_tokens", 64)
     for c in cases:
         tier2.MS = 0.0
@@ -114,6 +114,8 @@ def _run(content: dict, cases: list[dict], inj: dict | None) -> dict:
             by_source[c["source"]].append(row)
             by_control[c["tags"][0]].append(row)
             lat["t1"].append(v.latency_ms["t1"])  # t2 time comes from the score cache (model time), below
+            if row[0] != row[1]:
+                misses.append(_miss(c, v.action))
     controls = {k: {**_metrics(by_control.get(k, [])), "weight": w, "enabled": _enabled(content, k)} for k, w in WEIGHTS.items()}
     for k, c in controls.items():  # a held-out slice under 10 cases is noise; posture reads the full corpus instead
         small = c["n"] < MIN_HELD_OUT
@@ -129,11 +131,20 @@ def _run(content: dict, cases: list[dict], inj: dict | None) -> dict:
         "latency_ms": {t: _pct(xs) for t, xs in lat.items()},
         "posture": round(posture, 4),
         "ablation": _ablation(content, cases),
+        "misses": misses,
     }
     if inj is not None:
         res["tier2"] = {"sync_share": round(sync / len(cases), 4), "sync_n": sync, "latency_ms": _pct(t2_ms), "latency_ms_short": _pct(t2_short),
                         **_calibrate(content, [c for c in cases if c["tags"][0] == "injection"], inj)}
     return res
+
+
+def _miss(c: dict, got: str) -> dict:
+    """A held-out case the scan got wrong: a fingerprint plus the first 120 characters on one line."""
+    one = " ".join(c["text"].split())
+    return {"id": c["id"], "source": c["source"], "control": c["tags"][0], "expect": c["expect"], "got": got,
+            "kind": "false alarm" if c["expect"] == "allow" else "missed",
+            "sha256": hashlib.sha256(c["text"].encode()).hexdigest(), "text": one[:120] + ("…" if len(one) > 120 else "")}
 
 
 def _calibrate(content: dict, cases: list[dict], inj: dict) -> dict:
@@ -198,13 +209,32 @@ def report(res: dict) -> str:
 def main(policy_path: str = "policy.yaml", out: str = "audit/eval.json") -> dict:
     import yaml
 
+    import time
+    from datetime import datetime, timezone
+
     with open(ROOT / policy_path, encoding="utf-8") as fh:
-        res = run(yaml.safe_load(fh))
+        policy = yaml.safe_load(fh)
+    t0 = time.perf_counter()
+    res = run(policy)
+    res.update(ran_at=datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+               duration_s=round(time.perf_counter() - t0, 1), profile=policy.get("mode"))
     print(report(res))
     p = ROOT / out
     p.parent.mkdir(exist_ok=True)
     p.write_text(json.dumps(res, indent=1), encoding="utf-8")
     return res
+
+
+class Tally:
+    """pytest plugin for `tollgate test`: writes the suite's counts to audit/tests.json for the console Self-test."""
+    def pytest_terminal_summary(self, terminalreporter, exitstatus):
+        from datetime import datetime, timezone
+        st = terminalreporter.stats
+        out = {k: len(st.get(k, [])) for k in ("passed", "failed", "error", "skipped", "xfailed", "xpassed", "deselected")}
+        out.update(exit_code=int(exitstatus), ran_at=datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"))
+        p = ROOT / "audit" / "tests.json"
+        p.parent.mkdir(exist_ok=True)
+        p.write_text(json.dumps(out, indent=1), encoding="utf-8")
 
 
 if __name__ == "__main__":
