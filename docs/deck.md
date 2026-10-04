@@ -61,6 +61,7 @@ section img.logo { border: 0; border-radius: 0; box-shadow: none; background: no
 .box b { display: block; font-size: 38px; margin-bottom: 8px; }
 .box.tg { border-color: var(--blue); background: var(--bluebg); flex: 1.2; }
 .box.tg b { color: var(--blue); }
+.row.four .box b { font-size: 32px; }
 .badge { display: inline-block; font-size: 26px; font-weight: 700; border-radius: 999px; padding: 4px 14px; margin: 4px 6px 4px 0;
   border: 2px solid var(--blue); color: var(--blue); background: #fff; }
 .badge.soon { border: 2px dashed var(--line); color: var(--mute); }
@@ -174,14 +175,16 @@ salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
 
 <p class="kick">Day to day</p>
 
-# Enroll once. <em>Then just work.</em>
+# Install in one line. <em>Then just work.</em>
 
-<div class="row">
-<div class="box"><b>1 · Enroll</b>one-time join,<br>admin sets roles</div>
+<div class="row four" style="gap:12px">
+<div class="box" style="font-size:28px"><b>1 · Install</b><div style="font-family:Consolas,'Courier New',monospace;font-size:26px;line-height:1.3;background:#fff;border-radius:6px;padding:6px 10px">irm …/install.ps1<br>| iex</div>no admin, ~20 s</div>
 <div class="arr">→</div>
-<div class="box"><b>2 · Connect</b><div style="font-family:Consolas,'Courier New',monospace;font-size:28px;line-height:1.3;background:#fff;border-radius:6px;padding:6px 12px">tollgate connect<br>claude-code</div></div>
+<div class="box" style="font-size:28px"><b>2 · Enroll</b>one-time join,<br>admin sets roles</div>
 <div class="arr">→</div>
-<div class="box tg" style="flex:1"><b>3 · Work</b>every call checked,<br>you see only blocks</div>
+<div class="box" style="font-size:28px"><b>3 · Connect</b><div style="font-family:Consolas,'Courier New',monospace;font-size:26px;line-height:1.3;background:#fff;border-radius:6px;padding:6px 10px">tollgate connect<br>claude-code</div></div>
+<div class="arr">→</div>
+<div class="box tg" style="flex:1;font-size:28px"><b>4 · Work</b>every call checked,<br>you see only blocks</div>
 </div>
 
 <div style="margin-top:26px">
@@ -264,10 +267,9 @@ salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
 # Try it in <em>5 minutes.</em>
 
 <div class="box" style="font-family:Consolas,'Courier New',monospace; font-size:32px; line-height:1.55; flex:none">
-uv sync<br>
-uv run tollgate up --scripted-model<br>
-uv run tollgate test<br>
-<span class="mute">→ open /console and /edge</span>
+irm …/tollgate/main/install.ps1 | iex<br>
+tollgate up<br>
+<span class="mute">→ open /console · proof: clone + uv run tollgate test</span>
 </div>
 
 <p class="big"><em class="blue" style="font-style:normal">github.com/andrii-mazurchuk/tollgate</em> <span class="mute" style="font-size:30px">· public · MIT</span></p>
