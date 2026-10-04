@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse, StreamingResponse
 
 from tollgate import edge, explain
 from tollgate.gateway import peers
+from tollgate.util import valid_range
 
 TIMED = ("key", "role", "arguments", "data_flow", "content", "budget")
 TARGET_MS = {"hub": 5.0, "tier1": 5.0, "classifier": 80.0}  # AC15 targets (classifier: short text)
@@ -65,18 +66,18 @@ def select(events: list[dict], q, reg: dict, now: datetime | None = None) -> lis
     any-of within a filter, AND across), then kind. Oldest first."""
     from tollgate.console import session_rows  # console imports this module
     now = now or datetime.now(timezone.utc)
-    rng = q.get("range") if q.get("range") in ("15m", "1h", "today", "all") else "all"
-    evs = edge._in(events, edge.window(rng, now)[0], now)
+    rng = valid_range(q.get("range"), "all")
+    evs = edge.in_window(events, edge.window(rng, now)[0], now)
     p, r, st, s = _list(q, "peer"), _list(q, "role"), _list(q, "state"), (q.get("q") or "").lower()
     if p or r or st or s:
         keep = {x["id"] for x in session_rows(events, reg, now)
                 if (not p or x["peer"] in p) and (not r or x["role"] in r)
                 and (not st or any(y in st for y in (x["state"] or "clean").split("+")))
                 and (not s or s in " ".join(str(x[k]) for k in ("agent", "peer_label", "id", "role")).lower())}
-        evs = [e for e in evs if edge._sid(e) in keep]
+        evs = [e for e in evs if edge.ev_sid(e) in keep]
     if ks := _list(q, "kind"):
         evs = [e for e in evs if (edge.kind(e) or "allowed") in ks]
-    return sorted(evs, key=edge._ts)
+    return sorted(evs, key=edge.ev_ts)
 
 
 def cell(v) -> str:
@@ -85,14 +86,24 @@ def cell(v) -> str:
     return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
 
 
+UNENROLLED = "unenrolled"  # the peer id of events from legacy keys (no peer)
+
+
+def pid(e: dict) -> str:
+    """The event's peer id (from its key id, else its session id), or UNENROLLED. The one attribution rule for the
+    console, the map and the export."""
+    return peers.peer_of(e.get("key_id") or e.get("session_id") or "") or UNENROLLED
+
+
 def csv_row(e: dict, reg: dict) -> list[str]:
-    p = peers.peer_of(e.get("key_id") or "")
+    p = pid(e)
+    p = None if p == UNENROLLED else p
     r = explain.main_reason(e)
     return [cell(v) for v in (
         e["ts"], p or "unenrolled", peers.label(p, reg), e.get("role"), explain.AGENTS.get(e.get("role"), e.get("role")),
-        edge._sid(e), e.get("trace_id"), e.get("door"), e.get("tool"), e.get("verdict"),
+        edge.ev_sid(e), e.get("trace_id"), e.get("door"), e.get("tool"), e.get("verdict"),
         explain.check_name(r["rule"]) if r and edge.kind(e) else "", ";".join(x.get("rule") or "" for x in e.get("reasons") or []),
-        e.get("state_before"), edge._state(e), total_ms(e), e.get("content_sha256"), e.get("policy_version"))]
+        e.get("state_before"), edge.ev_state(e), total_ms(e), e.get("content_sha256"), e.get("policy_version"))]
 
 
 async def export(request):

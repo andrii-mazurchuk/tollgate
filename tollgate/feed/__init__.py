@@ -6,7 +6,6 @@ import hmac
 import json
 import os
 import re
-from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx2
@@ -16,13 +15,14 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from tollgate.content.signatures import check_pattern
+from tollgate.util import now_z
 
 SRC = "bundle_src.yaml"
 _STAMP = re.compile(r"#\s*feed-version:\s*(\d+)")
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return now_z("seconds")
 
 
 def _sig(body: dict) -> str:

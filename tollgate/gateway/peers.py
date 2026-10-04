@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tollgate.gateway import keys
+from tollgate.util import iso_z
 
 DEFAULT_PATH = Path(__file__).resolve().parents[2] / "audit" / "peers.json"
 TOKEN_TTL = timedelta(hours=24)
@@ -29,7 +30,7 @@ def _now() -> datetime:
 
 
 def _iso(t: datetime) -> str:
-    return t.isoformat(timespec="seconds").replace("+00:00", "Z")
+    return iso_z(t, "seconds")
 
 
 def load() -> dict:

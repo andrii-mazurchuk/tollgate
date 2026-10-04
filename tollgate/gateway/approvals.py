@@ -6,7 +6,8 @@ import asyncio
 import hmac
 import os
 import secrets
-from datetime import datetime, timezone
+
+from tollgate.util import now_z
 
 KEEP = 200  # decided items kept for GET /admin/approvals
 
@@ -44,7 +45,7 @@ def admin_request(request) -> bool:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return now_z("milliseconds")
 
 
 class Approvals:

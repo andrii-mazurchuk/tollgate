@@ -16,6 +16,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from tollgate.util import iso_z
+
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / "audit" / "accounts.json"
 ROLES = ("admin", "viewer")
 MIN_PW = 12
@@ -43,7 +45,7 @@ def _now() -> datetime:
 
 
 def _iso(t: datetime) -> str:
-    return t.isoformat(timespec="seconds").replace("+00:00", "Z")
+    return iso_z(t, "seconds")
 
 
 def _sha(s: str) -> str:

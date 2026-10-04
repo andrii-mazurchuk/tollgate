@@ -217,7 +217,7 @@ def open_ui(args: list[str]) -> int:
         if not ev:
             print(f"trace {pos[0]} not in the audit log", file=sys.stderr)
             return 1
-        url = explain.details_url(base, edge._sid(ev), pos[0], ui)
+        url = explain.details_url(base, edge.ev_sid(ev), pos[0], ui)
     print(url)  # headless: copy it by hand
     webbrowser.open(url)
     return 0
@@ -417,8 +417,9 @@ def main() -> int:
         if "--eval-only" in args:
             args.remove("--eval-only")
         else:
-            import pytest
             from pathlib import Path
+
+            import pytest
             root = Path(__file__).resolve().parents[1]  # collect the repo's tests, not the CWD's
             from tollgate.eval.runner import Tally
             rc = pytest.main(["-q", "--rootdir", str(root), str(root / "tests"), *args], plugins=[Tally()])

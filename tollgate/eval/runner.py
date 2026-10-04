@@ -4,9 +4,9 @@ Every case is scanned; cases are split 70/30 by a fixed hash of their id. Tier 2
 and every reported metric comes from the held-out 30. Tier 2 scores are cached in audit/t2_cache.json.
 """
 import copy
-import os
 import hashlib
 import json
+import os
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -14,6 +14,7 @@ from pathlib import Path
 from tollgate.content import scan, tier2
 from tollgate.content.normalise import normalise
 from tollgate.eval.corpus import CORPUS, load
+from tollgate.util import now_z
 
 WEIGHTS = {"pii": 3, "secrets": 3, "injection": 3, "signatures": 1, "obfuscation": 1}
 ROOT = CORPUS.parents[1]
@@ -209,16 +210,15 @@ def report(res: dict) -> str:
 
 
 def main(policy_path: str = "policy.yaml", out: str = "audit/eval.json") -> dict:
-    import yaml
-
     import time
-    from datetime import datetime, timezone
+
+    import yaml
 
     with open(ROOT / policy_path, encoding="utf-8") as fh:
         policy = yaml.safe_load(fh)
     t0 = time.perf_counter()
     res = run(policy)
-    res.update(ran_at=datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+    res.update(ran_at=now_z("seconds"),
                duration_s=round(time.perf_counter() - t0, 1), profile=policy.get("mode"))
     print(report(res))
     p = ROOT / out
@@ -230,10 +230,9 @@ def main(policy_path: str = "policy.yaml", out: str = "audit/eval.json") -> dict
 class Tally:
     """pytest plugin for `tollgate test`: writes the suite's counts to audit/tests.json for the console Self-test."""
     def pytest_terminal_summary(self, terminalreporter, exitstatus):
-        from datetime import datetime, timezone
         st = terminalreporter.stats
         out = {k: len(st.get(k, [])) for k in ("passed", "failed", "error", "skipped", "xfailed", "xpassed", "deselected")}
-        out.update(exit_code=int(exitstatus), ran_at=datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"))
+        out.update(exit_code=int(exitstatus), ran_at=now_z("seconds"))
         p = ROOT / "audit" / "tests.json"
         p.parent.mkdir(exist_ok=True)
         p.write_text(json.dumps(out, indent=1), encoding="utf-8")

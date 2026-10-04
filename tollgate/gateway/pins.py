@@ -4,10 +4,10 @@ ponytail: pins live in memory, taken when the app starts; re-pinning (accepting 
 """
 import hashlib
 import json
-from datetime import datetime, timezone
 
 from tollgate.contract import AuditEvent, Reason
 from tollgate.gateway import audit
+from tollgate.util import now_z
 
 
 def digest(tool) -> str:
@@ -30,7 +30,7 @@ class Pins:
         if old is None or old == new:  # ponytail: tools added after startup are not pinned; pin them on first sight if needed
             return False
         if (self.alerts.get(tool.name) or {}).get("new") != new:
-            ts = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            ts = now_z("milliseconds")
             self.alerts[tool.name] = {"tool": tool.name, "old": old, "new": new, "ts": ts}
             audit.write(AuditEvent(ts=ts, role=role, key_id="-", door="tool", verdict="block",
                                    reasons=[Reason(rule="pin.changed", tier=0, detail=f"{old[:12]} -> {new[:12]}")],

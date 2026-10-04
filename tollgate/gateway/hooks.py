@@ -9,7 +9,6 @@ import hashlib
 import json
 import re
 import time
-from datetime import datetime, timezone
 
 from fastmcp.exceptions import ToolError
 from starlette.responses import JSONResponse
@@ -18,6 +17,7 @@ from tollgate import explain
 from tollgate.content import scan
 from tollgate.contract import AuditEvent, Reason
 from tollgate.gateway import apply_verdict, audit, content_policy, keys, local_text, taint, trace
+from tollgate.util import now_z
 
 PASS_THROUGH = "mcp__tollgate__"  # exactly the server `tollgate connect` writes: our own MCP door already checked and audited these calls
 SPLIT = re.compile(r"&&|\|\||[;|\n]")  # each part of a compound command is labelled on its own
@@ -123,7 +123,7 @@ def decide(data: dict, version: str, ident: tuple[str, str], kind: str, name: st
     else:
         text, point = (raw_ti if isinstance(raw_ti, str) else json.dumps(ti, ensure_ascii=False)), "tool_args"
     ev = AuditEvent(
-        ts=datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        ts=now_z("milliseconds"),
         role=role, key_id=key_id, door="hook", verdict="allow", scan_point=point,
         source=name.split("__")[1] if name.startswith("mcp__") and name.count("__") >= 2 else "builtin", tool=tool,
         content_sha256=hashlib.sha256(text.encode()).hexdigest(), policy_version=version,
