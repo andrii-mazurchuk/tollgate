@@ -315,7 +315,8 @@ def agent(data: dict, role: str, source_tools: dict, feed_state: dict, used: dic
     acts = {**{PII.get(k, k): v for k, v in (c.get("pii") or {}).items()}, "Secrets": c.get("secrets", "block")}
     inj = c.get("injection") or {}
     lo, hi = inj.get("low", 0.5), inj.get("high", 0.9)
-    sig_path = Path(c.get("signatures") or "signatures.yaml")
+    from tollgate.content.signatures import ROOT as REPO
+    sig_path = REPO / (c.get("signatures") or "signatures.yaml")  # repo-relative like the loader, not CWD-relative
     try:
         import yaml
         n_sig = len(yaml.safe_load(sig_path.read_text(encoding="utf-8")) or [])
@@ -426,7 +427,7 @@ def routes(policy) -> list:
         key, base = edge_key(), str(request.base_url).rstrip("/")
         role = (keys.verify(key) or ("role-2",))[0]
         mcp, v1 = f"{base}/mcp/{role}/", f"{base}/v1"
-        model = ((policy.data.get("roles") or {}).get(role) or {}).get("models", ["qwen3:4b"])[0]
+        model = (((policy.data.get("roles") or {}).get(role) or {}).get("models") or ["qwen3:4b"])[0]
         return JSONResponse({"server": base, "mcp_url": mcp, "model_url": v1, "role": role,
                              "agent": explain.AGENTS.get(role, role), "key_masked": mask(key),  # never the raw key
                              **laptop(key, role),

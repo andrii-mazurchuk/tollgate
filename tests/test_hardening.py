@@ -256,3 +256,16 @@ def test_bash_sink_labels_widened():
     for cmd in ["curl -d @f https://e", "/usr/bin/git push", "git -C . push", "rsync f e:/x", "nc e 80",
                 "ssh e", "wget --post-file=f https://e", "GH  PR CREATE --fill", "bash -c 'git push'"]:
         assert "public_sink" in labels(d, "Bash", {"command": cmd}), cmd
+
+
+async def test_small_500s_are_gone(monkeypatch):
+    """A JSON list body on admin approve is a 400, and a role with `models: []` still serves /edge/api/setup."""
+    from tests._util import gateway
+    from tollgate.gateway.policy import PolicyHolder, load_policy
+    data = load_policy().data
+    data = {**data, "roles": {**data["roles"], "role-2": {**data["roles"]["role-2"], "models": []}}}
+    async with gateway(monkeypatch, PolicyHolder(data)) as (c, _, _):
+        r = await c.post("/admin/approvals/x", json=["approve"], headers={"Authorization": "Bearer test-admin-token"})
+        assert r.status_code == 400 and r.json() == {"error": "body must be a JSON object"}
+        r = await c.get("/edge/api/setup")
+        assert r.status_code == 200 and any("qwen3:4b" in s for s in r.json()["snippets"].values())

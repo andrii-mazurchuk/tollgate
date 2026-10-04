@@ -38,17 +38,6 @@ from tollgate.util import now_z
 log = logging.getLogger("tollgate.gateway")
 
 
-def build_gateway(github) -> FastMCP:
-    """Tollgate gateway: proxies the github MCP under dotted tool names."""
-    gw = FastMCP("tollgate")
-    gw.mount(create_proxy(github), tool_names={
-        "issues_read": "github.issues.read",
-        "repo_read": "github.repo.read",
-        "pr_create": "github.pr.create",
-    })
-    return gw
-
-
 class Dotted(Namespace):
     """`issues_read` on server github -> `github.issues.read`."""
 
@@ -416,9 +405,12 @@ def build_app(policy: PolicyHolder, upstream=None) -> Starlette:
         if not admin_ok(request.headers.get("authorization")):
             return JSONResponse({"error": "admin token required (TOLLGATE_ADMIN_TOKEN)"}, 401)
         try:
-            decision = (await request.json()).get("decision")
+            body = await request.json()
         except ValueError:
-            decision = None
+            body = {}
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "body must be a JSON object"}, 400)
+        decision = body.get("decision")
         item = approvals.decide(request.path_params["id"], decision)
         if item is None:
             return JSONResponse({"error": "unknown or already decided id, or decision not approve|deny"}, 404)
