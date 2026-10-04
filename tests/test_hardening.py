@@ -164,6 +164,22 @@ async def test_role_gate_keys_taint_by_role(monkeypatch):
     taint.reset("local")
 
 
+@pytest.mark.parametrize("sql", [
+    "SELECT pg_read_file('/etc/passwd')", "SELECT * FROM pg_ls_dir('.')", "SELECT lo_export(1, '/tmp/x')",
+    "SELECT lo_import('/etc/passwd')", "SELECT * FROM dblink('host=evil', 'select 1')",
+    "SELECT * INTO leaked FROM customers", "SELECT * FROM t INTO OUTFILE '/tmp/x'", "SELECT LOAD_FILE('/etc/x')",
+    "SELECT 1 /* x */ ; COPY t TO '/tmp/x'", "select pg_read_file ('/x')"])
+def test_select_only_rejects_side_effecting_selects(sql):
+    from tollgate.gateway import check_args
+    assert check_args({"sql": "select_only"}, {"sql": sql})
+
+
+def test_select_only_still_allows_plain_selects():
+    from tollgate.gateway import check_args
+    assert check_args({"sql": "select_only"}, {"sql": "SELECT name, email FROM customers WHERE id = 1"}) is None
+    assert check_args({"sql": "select_only"}, {"sql": "SELECT name FROM copy_jobs"}) is None
+
+
 def test_bash_sink_labels_widened():
     from tollgate.gateway.hooks import labels
     from tollgate.gateway.policy import load_policy

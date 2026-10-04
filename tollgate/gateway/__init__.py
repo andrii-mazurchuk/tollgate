@@ -74,6 +74,12 @@ def tool_allowed(role_policy: dict, tool) -> bool:
     return spec.get("access") == "rw" or bool(tool.annotations and tool.annotations.read_only_hint)
 
 
+# a SELECT that reads/writes files, opens connections or creates tables. ponytail: denylist; fail-closed on
+# `into`/`copy` even inside string literals
+_SQL_SIDE_EFFECT = re.compile(r"\b(?:pg_read_file|pg_read_binary_file|pg_ls_dir|pg_stat_file|lo_export|lo_import|"
+                              r"dblink\w*|load_file|copy|into)\b", re.I)
+
+
 def check_args(constraint: dict, args: dict) -> str | None:
     """Returns why the arguments break the constraint, or None."""
     for key, rule in constraint.items():
@@ -86,6 +92,8 @@ def check_args(constraint: dict, args: dict) -> str | None:
             sql = str(args.get(key, "")).strip().rstrip(";").strip()
             if not sql.upper().startswith("SELECT") or ";" in sql:
                 return f"{key}: only a single SELECT is allowed"
+            if m := _SQL_SIDE_EFFECT.search(sql):
+                return f"{key}: {m.group().lower()} is not allowed in a read-only SELECT"
         else:
             raw = str(args.get(key, ""))
             # `\` and %-escapes are separators/dots to some servers: normalise them too (fail closed), refuse NUL
