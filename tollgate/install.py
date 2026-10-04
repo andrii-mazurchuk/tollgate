@@ -18,7 +18,7 @@ from tollgate import paths
 LABEL = "com.tollgate.hub"  # launchd label; the systemd unit is tollgate.service, the Windows task "Tollgate"
 
 
-def init(force: bool = False) -> str:
+def init(force: bool = False, fetch_model: bool = False) -> str:
     """Creates HOME and HOME/audit, copies the packaged defaults (never over an existing file without --force, which
     keeps a .bak), creates the install secret. Idempotent."""
     from tollgate.gateway import keys
@@ -41,6 +41,12 @@ def init(force: bool = False) -> str:
     existed = secret.exists()
     keys.install_secret()
     out.append(f"  {'kept   ' if existed else 'created'} {secret}")
+    if fetch_model:
+        from tollgate.content import tier2
+        out.append(f"  tier 2 classifier: {'ready' if tier2.available() else 'unavailable (see the warning above)'}")
+    elif not model_cached():
+        out.append("  tier 2 classifier not downloaded yet: the first content scan fetches ~739 MB and hook calls time "
+                   "out (fail closed) until it is done. Fetch it now: tollgate init --fetch-model")
     out += ["", "Next steps:",
             "  tollgate up                                   # the hub: http://127.0.0.1:8080/console/",
             "  tollgate service install --yes                # optional: start the hub at logon",
@@ -52,6 +58,13 @@ def init(force: bool = False) -> str:
 
 
 # ---------------------------------------------------------------- doctor
+
+def model_cached() -> bool:
+    from huggingface_hub import try_to_load_from_cache
+
+    from tollgate.content import tier2
+    return isinstance(try_to_load_from_cache(tier2.REPO, "onnx/model.onnx", revision=tier2.REVISION), str)
+
 
 AGENT_FILES = {  # where each agent's Tollgate config lives: (user scope, project scope), relative to ~ / the CWD
     "claude-code": ((".claude/settings.json", ".claude.json"), (".claude/settings.json", ".mcp.json")),
@@ -113,6 +126,8 @@ def doctor(port: int = 8080, cwd: Path | None = None) -> tuple[str, int]:
     for agent, (user, project) in AGENT_FILES.items():
         hits = [f"~/{p}" for p in user if _configured(Path.home() / p)] + [p for p in project if _configured(cwd / p)]
         add("OK" if hits else "WARN", f"{agent}: {'configured in ' + ', '.join(hits) if hits else 'not configured'}")
+    add("OK" if model_cached() or os.environ.get("TOLLGATE_T2") == "off" else "WARN",
+        "tier 2 classifier " + ("cached" if model_cached() else "not downloaded (tollgate init --fetch-model, ~739 MB)"))
     add("OK" if os.environ.get("TOLLGATE_KEY") else "WARN",
         "TOLLGATE_KEY " + ("set" if os.environ.get("TOLLGATE_KEY") else "not set in this shell (tollgate connect prints it)"))
     return "\n".join(f"{lvl:4}  {msg}" for lvl, msg in rows), int(any(lvl == "FAIL" for lvl, _ in rows))

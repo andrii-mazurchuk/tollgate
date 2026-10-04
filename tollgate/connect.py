@@ -143,7 +143,7 @@ def hook(agent: str, event: str | None, stdin: str | bytes, url: str | None = No
     req = {"hook_event_name": ev if ev in CLAUDE_EVENTS else "PreToolUse", "tool_name": ""}  # for a deny on bad input
     resp, why = None, "Tollgate: hook error"
     try:
-        payload = json.loads((stdin.decode("utf-8") if isinstance(stdin, bytes) else stdin) or "{}")
+        payload = json.loads((stdin.decode("utf-8-sig") if isinstance(stdin, bytes) else stdin) or "{}")  # utf-8-sig: PowerShell pipes a BOM
         if not isinstance(payload, dict):
             raise ValueError("hook input is not a JSON object")
         r = to_claude(agent, event, payload)

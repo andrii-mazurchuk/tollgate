@@ -355,7 +355,8 @@ USAGE = {  # one line per subcommand; `tollgate <cmd> --help` prints its line an
     "connect": "connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--scope project|user] [--port P]"
                " [--host H] [--policy F] [--write [--dir PATH]] [--fast]   mint a key per agent launch + that agent's config"
                " (user scope: ~/.claude, ~/.codex, ~/.cursor, ~/.gemini)",
-    "init": "init [--force]   create the Tollgate home: default policy, signatures, install secret (--force: reset, keeps .bak)",
+    "init": "init [--force] [--fetch-model]   create the Tollgate home: default policy, signatures, install secret"
+            " (--force: reset, keeps .bak; --fetch-model: download the ~739 MB tier 2 classifier now)",
     "doctor": "doctor [--port 8080]   check the install, home, policy, secret, hub, console owner, agent configs",
     "service": "service install|uninstall|status [--port 8080] [--yes]   start the hub at logon (systemd --user / launchd /"
                " Scheduled Task); dry run without --yes",
@@ -430,7 +431,7 @@ def main() -> int:
         return 0
     if cmd == "init":
         from tollgate.install import init
-        print(init("--force" in sys.argv))
+        print(init("--force" in sys.argv, "--fetch-model" in sys.argv))
         return 0
     if cmd == "doctor":
         from tollgate.install import doctor
