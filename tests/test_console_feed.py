@@ -14,7 +14,7 @@ from tests.conftest import ADMIN
 WRITE = {**ADMIN, "Content-Type": "application/json"}  # writes need the admin token (or a session) and JSON
 import yaml
 
-from tollgate import console3
+from tollgate import console_feed
 
 pytestmark = pytest.mark.track_b
 ROOT = Path(__file__).resolve().parents[1]
@@ -124,14 +124,14 @@ async def test_selftest_reads_eval_from_the_audit_dir(monkeypatch, tmp_path):
 
 async def test_selftest_run_starts_one_eval_subprocess(monkeypatch, tmp_path):
     out = {"ran_at": "2026-10-04T02:00:00Z", "cases_run": 1, "overall": {}, "sources": {}, "controls": {}}
-    monkeypatch.setattr(console3, "EVAL_ARGV", lambda p: [sys.executable, "-c",
+    monkeypatch.setattr(console_feed, "EVAL_ARGV", lambda p: [sys.executable, "-c",
                                                           f"import json,pathlib; pathlib.Path({str(p)!r}).write_text({json.dumps(json.dumps(out))})"])
     async with _app(monkeypatch, tmp_path, feed=False) as (c, _):
         r = await c.post("/console/api/selftest/run")
         assert r.status_code == 202 and r.json()["run"]["running"]
         assert (await c.post("/console/api/selftest/run")).status_code == 409
         for _ in range(100):
-            if not console3.RUN["running"]:
+            if not console_feed.RUN["running"]:
                 break
             await asyncio.sleep(0.05)
         s = (await c.get("/console/api/selftest")).json()
