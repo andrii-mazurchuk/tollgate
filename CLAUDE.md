@@ -11,7 +11,7 @@ Every role gets its own MCP server, generated from one policy file, that exposes
 | Worktree | Track | Owns | Branches |
 |---|---|---|---|
 | `rebel/` | **A: Gateway** | `tollgate/gateway/`, `mocks/`, `tollgate/cli.py` | `a/<feature>` |
-| `rebel-b/` | **B: Content and evidence** | `tollgate/content/`, `tollgate/eval/`, `dashboard/`, `tests/corpus/`, `signatures.yaml` | `b/<feature>` |
+| `rebel-b/` | **B: Content and evidence** | `tollgate/content/`, `tollgate/eval/`, `tests/corpus/`, `signatures.yaml` | `b/<feature>` |
 
 **Never edit the other track's folders.** Shared files are `tollgate/contract.py`, `API_CONTRACT.md`, `PLAN.md`, `policy.yaml` (per the section ownership in the contract) and `tests/test_smoke.py`. Change them only on `main`, in small commits, and say so in your reply so the operator can tell the other session.
 
@@ -19,7 +19,7 @@ Every role gets its own MCP server, generated from one policy file, that exposes
 - Python 3.13, **uv** (never pip directly). bun/bunx for any JS (never npm/npx).
 - **fastmcp==4.0.10, pinned.** It uses `httpx2`, not `httpx`.
 - pytest + pytest-asyncio (`asyncio_mode=auto`).
-- Later: onnxruntime (tier 2), Ollama (model door), Streamlit (dashboard).
+- Later: onnxruntime (tier 2), Ollama (model door), the `/console` and `/edge` UIs.
 
 ## Run
 ```

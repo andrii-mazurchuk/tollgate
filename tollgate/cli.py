@@ -1,4 +1,4 @@
-"""`tollgate` command. Subcommands land as tracks build them (up/serve/dashboard/approve/deny/replay/key: A, test: B)."""
+"""`tollgate` command. Subcommands land as tracks build them (up/serve/approve/deny/replay/key: A, test: B)."""
 import sys
 
 
@@ -129,21 +129,6 @@ def decide(id: str, decision: str) -> int:
         return 1
 
 
-DASHBOARD = ["-m", "streamlit", "run", "dashboard/app.py", "--server.headless", "true", "--server.address", "127.0.0.1",
-             "--browser.gatherUsageStats", "false", "--server.port"]
-
-
-def dashboard(wait: bool = True):
-    """Streamlit dashboard as a subprocess of this Python. wait=False returns the Popen (used by `up`)."""
-    import subprocess
-    from pathlib import Path
-
-    port = _opt("--dashboard-port", "8501")
-    p = subprocess.Popen([sys.executable, *DASHBOARD, port], cwd=Path(__file__).resolve().parents[1])
-    print(f"  dashboard: http://127.0.0.1:{port}", flush=True)
-    return p.wait() if wait else p
-
-
 def feed(sub: str) -> int:
     """P6 signature feed: serve (the external system), publish --add 'id=..,pattern=..,action=..,tags=A;B', pull (once)."""
     from tollgate.feed import Puller, build_feed_app, publish
@@ -176,14 +161,13 @@ def feed(sub: str) -> int:
 
 
 def up() -> int:
-    """AC1 one command: gateway (in-process, with /console and /edge) + feed server (subprocess, if `feed:` is set).
-    The superseded Streamlit dashboard starts only with --streamlit."""
+    """AC1 one command: gateway (in-process, with /console and /edge) + feed server (subprocess, if `feed:` is set)."""
     import subprocess
     from urllib.parse import urlparse
 
     from tollgate.gateway.policy import DEFAULT_PATH, load_policy
 
-    procs = [dashboard(wait=False)] if "--streamlit" in sys.argv else []
+    procs = []
     url = (load_policy(_opt("--policy") or DEFAULT_PATH).data.get("feed") or {}).get("url")
     if url:
         procs.append(subprocess.Popen([sys.executable, "-m", "tollgate.cli", "feed", "serve",
@@ -382,8 +366,6 @@ def main() -> int:
         return decide(sys.argv[2], cmd)
     if cmd == "up":
         return up()
-    if cmd == "dashboard":
-        return dashboard()
     if cmd == "enroll-token":
         return enroll_token()
     if cmd == "enroll" and len(sys.argv) > 2:
@@ -399,8 +381,8 @@ def main() -> int:
         return seed_fleet()
     if cmd == "feed":
         return feed(sys.argv[2] if len(sys.argv) > 2 else "")
-    print("usage: tollgate {up [--port P] [--policy F] [--scripted-model] [--streamlit [--dashboard-port D]]|serve [--port P] [--policy F] [--scripted-model]"
-          "|agent [--role R] [--model M] [--base URL] [--scripted] TASK|dashboard"
+    print("usage: tollgate {up [--port P] [--policy F] [--scripted-model]|serve [--port P] [--policy F] [--scripted-model]"
+          "|agent [--role R] [--model M] [--base URL] [--scripted] TASK"
           "|approve ID|deny ID [--port P]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]|feed serve|publish|pull"
           "|enroll-token|enroll TOKEN --owner O --device D|connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--write]|hook AGENT EVENT|open [edge|console] [TRACE_ID] [--port N]|seed-fleet}",
           file=sys.stderr)

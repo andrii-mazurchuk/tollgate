@@ -110,7 +110,6 @@ Held-out 30% split (`sha256(id) % 100 >= 70`); thresholds tuned on the other 70%
 | Add an attack signature | Append to `signatures.yaml`; it applies on the next call (mtime reload) |
 | Ask a human | `policies/lenient.yaml` parks the tainted flow for approval: `uv run tollgate approve <id>` / `deny <id>`, or `POST /admin/approvals/{id}` with `TOLLGATE_ADMIN_TOKEN` (API only) |
 | Measure latency | `uv run tollgate perf` (writes `audit/perf.json`) |
-| Old Streamlit dashboard | `uv run tollgate dashboard` (or `tollgate up --streamlit`) on :8501; superseded by `/console` |
 
 **Ollama (optional).** Without `--scripted-model`, the model door proxies to `http://127.0.0.1:11434/v1` (`TOLLGATE_UPSTREAM`): `ollama pull qwen3:1.7b` (role-1), `ollama pull qwen3:4b` (role-2). Without Ollama a clean, allowed prompt gets 502 `upstream.error`; the allow-list, budget and prompt scan still apply.
 
