@@ -1,6 +1,6 @@
 # Tollgate: 10-slide outline
 
-Numbers are from `uv run tollgate test --eval-only`, `uv run tollgate perf` and `uv run tollgate replay github|supabase` at submission 1 (2026-10-03). Status per AC: [TOLLGATE.md › Status at submission 1](../TOLLGATE.md#status-at-submission-1-2026-10-03).
+> **Superseded.** This is the early 10-slide outline. The final deck is [`docs/deck.md`](deck.md) → [`docs/Tollgate.pdf`](Tollgate.pdf); it supersedes the numbers and the dashboard references below (the server console at `/console/` replaced the Streamlit dashboard). Current status per AC: [TOLLGATE.md › Status (final, 2026-10-04)](../TOLLGATE.md#status-final-2026-10-04).
 
 ## 1. Problem: agents hold the keys, and data talks back
 - Agents reach real systems through MCP servers with one broad token.
