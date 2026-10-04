@@ -9,6 +9,7 @@ from pathlib import Path
 import httpx2
 import pytest
 
+from tests._util import gateway
 from tests.conftest import ADMIN
 
 WRITE = {**ADMIN, "Content-Type": "application/json"}  # writes need the admin token (or a session) and JSON
@@ -23,9 +24,6 @@ ROOT = Path(__file__).resolve().parents[1]
 @contextlib.asynccontextmanager
 async def _app(monkeypatch, tmp_path, feed: bool):
     """Gateway on a tmp policy copy; with feed=True it has `feed:` and a tmp feed source + signatures file."""
-    monkeypatch.setenv("TOLLGATE_UPSTREAM", "scripted")
-    monkeypatch.setenv("TOLLGATE_T2", "off")
-    from tollgate.gateway import build_app
     from tollgate.gateway.policy import DEFAULT_PATH, load_policy
 
     data = yaml.safe_load(DEFAULT_PATH.read_text(encoding="utf-8"))
@@ -37,10 +35,8 @@ async def _app(monkeypatch, tmp_path, feed: bool):
         data["feed"] = {"url": "http://127.0.0.1:9/bundle.json", "interval_s": 3600, "dir": str(tmp_path / "feed")}
     path = tmp_path / "policy.yaml"
     path.write_text(yaml.safe_dump(data), encoding="utf-8")
-    app = build_app(load_policy(path))
-    async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1:8080", headers=WRITE) as c:
-            yield c, app
+    async with gateway(monkeypatch, load_policy(path), headers=WRITE, t2_off=True) as (c, app, _):
+        yield c, app
 
 
 async def test_feed_view_without_a_feed_refuses_publish(monkeypatch, tmp_path):

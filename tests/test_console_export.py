@@ -9,6 +9,7 @@ from pathlib import Path
 
 import httpx2
 
+from tests._util import gateway
 from tollgate import telemetry
 from tollgate.gateway import peers
 
@@ -28,14 +29,8 @@ def _ev(i, key, verdict="allow", role="role-2", tool="github.issues.read", ms=(1
 @contextlib.asynccontextmanager
 async def _app(monkeypatch, events):
     Path(os.environ["TOLLGATE_AUDIT"]).write_text("".join(json.dumps(e) + "\n" for e in events), encoding="utf-8")
-    monkeypatch.setenv("TOLLGATE_UPSTREAM", "scripted")
-    monkeypatch.setenv("TOLLGATE_T2", "off")
-    from tollgate.gateway import build_app
-    from tollgate.gateway.policy import load_policy
-    app = build_app(load_policy())
-    async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://127.0.0.1") as c:
-            yield c, app
+    async with gateway(monkeypatch, base="http://127.0.0.1", t2_off=True) as (c, app, _):
+        yield c, app
 
 
 def _fleet():

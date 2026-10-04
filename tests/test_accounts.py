@@ -6,6 +6,7 @@ import json
 import httpx2
 import pytest
 
+from tests._util import gateway, policy_copy
 from tests.conftest import ADMIN
 from tollgate import accounts
 
@@ -24,16 +25,8 @@ def _no_failures():
 
 @contextlib.asynccontextmanager
 async def _app(monkeypatch, tmp_path, client=("127.0.0.1", 123), base=BASE):
-    monkeypatch.setenv("TOLLGATE_UPSTREAM", "scripted")
-    from tollgate.gateway import build_app
-    from tollgate.gateway.policy import DEFAULT_PATH, load_policy
-    path = tmp_path / "policy.yaml"
-    path.write_bytes(DEFAULT_PATH.read_bytes())
-    holder = load_policy(path)
-    app = build_app(holder)
-    async with app.router.lifespan_context(app):
-        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=client), base_url=base) as c:
-            yield c, app, holder
+    async with gateway(monkeypatch, policy_copy(tmp_path), base=base, client=client) as t:
+        yield t
 
 
 def _client(app, client=("127.0.0.1", 124)):

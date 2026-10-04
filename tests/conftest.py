@@ -3,8 +3,12 @@ import tempfile
 
 import pytest
 
+from mocks.files import FS as _FS
+
 ADMIN_TOKEN = "test-admin-token"
 ADMIN = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+
+_FS0 = dict(_FS)  # mock files server contents at import
 
 
 def pytest_configure(config):
@@ -14,8 +18,13 @@ def pytest_configure(config):
 
 
 @pytest.fixture(autouse=True)
-def _audit_to_tmp(tmp_path, monkeypatch):
-    """No test writes the real audit/events.jsonl; tests that set their own path override this."""
+def _audit_to_tmp(request, tmp_path, monkeypatch):
+    """No test writes the real audit/events.jsonl; tests that set their own path override this. Any TOLLGATE_* the
+    developer's shell carries is dropped first (except the per-run secret file set in pytest_configure)."""
+    for k in [k for k in os.environ if k.startswith("TOLLGATE_") and k != "TOLLGATE_SECRET_FILE"]:
+        monkeypatch.delenv(k)
+    if not request.node.get_closest_marker("slow"):  # fast eval runs never rewrite audit/t2_cache.json
+        monkeypatch.setenv("TOLLGATE_T2_CACHE", str(tmp_path / "t2_cache.json"))
     monkeypatch.setenv("TOLLGATE_AUDIT", str(tmp_path / "audit.jsonl"))
     monkeypatch.setenv("TOLLGATE_PEERS", str(tmp_path / "peers.json"))  # nor the real peer registry
     monkeypatch.setenv("TOLLGATE_ACCOUNTS", str(tmp_path / "accounts.json"))  # nor the real console accounts
@@ -30,13 +39,24 @@ def _tests_allow_unenrolled_keys(monkeypatch):
     monkeypatch.setattr(keys, "unenrolled_ok", lambda data: data.get("allow_unenrolled_keys", True) is True)
 
 
+def _reset_globals():
+    """Process-wide in-memory state (budgets, taint, caches, mock servers, the console eval run) back to import time."""
+    from mocks import files, github
+    from tollgate import accounts, console_feed, edge
+    from tollgate.gateway import UPSTREAMS, model_door, peers, taint
+    for d in (model_door.USED, taint.STATE, UPSTREAMS, edge._CACHE, peers._CACHE, accounts._CACHE, accounts._FAILS,
+              console_feed._TASKS, github.PRS, files.FS):
+        d.clear()
+    files.FS.update(_FS0)
+    console_feed.RUN.update(running=False, started_at=None, error=None)
+
+
 @pytest.fixture(autouse=True)
-def _fresh_budgets():
-    """Token budgets are process-wide per (role, UTC day); without this, earlier tests' spend leaks into AC11."""
-    from tollgate.gateway import model_door
-    model_door.USED.clear()
+def _fresh_globals():
+    """Without this, one test's budget spend, taint or cache leaks into the next (e.g. AC11 budgets)."""
+    _reset_globals()
     yield
-    model_door.USED.clear()
+    _reset_globals()
 
 
 @pytest.fixture(autouse=True)
