@@ -129,8 +129,9 @@ const lms = v => v == null ? "–" : v < 1 ? `${v.toFixed(2)} ms` : v < 10 ? `${
 function latencyCard(L) {
   const head = h("span", { class: "muted small" }, "Hub ≤ 5 ms · tier 1 ≤ 5 ms · classifier ≤ 80 ms");
   if (!L || !L.n) return card("Latency", head, h("div", { class: "empty" }, "No timed actions in this time range."));
-  const rows = [{ label: "Hub checks (role + data flow)", ...L.hub }, ...L.stages.map(s => ({ label: STAGE[s.name] || s.name, ...s })),
-    { label: "Tier 1 scan", ...L.tier1 }, { label: "Classifier (tier 2)", ...L.classifier }].filter(r => r.n).sort((a, b) => b.p95 - a.p95);
+  const cn = L.classifier.n ? "Content (tier 1 + 2)" : "Content (tier 1 scan)";
+  const rows = [{ label: "Hub checks (role + data flow)", ...L.hub }, ...L.stages.map(s => ({ label: s.name === "content" ? cn : STAGE[s.name] || s.name, ...s })),
+    { label: "Classifier (tier 2)", ...L.classifier }].filter(r => r.n).sort((a, b) => b.p95 - a.p95);
   return card("Latency", head, h("div", { class: "lat" },
     h("div", { class: "kpi" }, h("div", { class: "l" }, "End to end, p95"), h("div", { class: "v" }, lms(L.total.p95)),
       h("div", { class: "d" }, `p50 ${lms(L.total.p50)} · ${n(L.n)} actions`)),
