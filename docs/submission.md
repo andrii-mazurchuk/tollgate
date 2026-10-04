@@ -47,7 +47,7 @@ In May 2025 a poisoned public GitHub issue made an agent copy private repository
 - All checks (390 held-out): recall 0.891, FPR 0.048. Personal-data recall 0.967. Posture score 0.931.
 - Normalisation ablation: obfuscated attacks caught 1.00 with normalisation, 0.67 without.
 - Latency p95: hub checks under 1 ms, tier 1 2.5 ms, classifier on short text ~65–90 ms vs an 80 ms target (borderline; gated so long tool results skip it in the balanced profile).
-- 378 fast + 10 slow automated tests pass. 14 of 16 acceptance criteria green; the two partial ones are the recall and classifier-latency targets above.
+- 397 fast + 11 slow automated tests pass. 14 of 16 acceptance criteria green; the two partial ones are the recall and classifier-latency targets above.
 
 ## How to open the project
 
@@ -79,6 +79,6 @@ The full judge guide (PowerShell and bash, ad-hoc prompts, live policy edits) is
 | Demo agent (scripted hijacked model or Ollama) | `tollgate/agent/` | done |
 | Content pipeline and signed signature feed | `tollgate/content/`, `signatures.yaml`, `tollgate/feed/` | done |
 | Eval suite, corpus, red-team sets, latency bench | `tollgate/eval/`, `tests/corpus/`, `tollgate perf` | done |
-| Automated tests | `tests/` | 378 fast + 10 slow |
+| Automated tests | `tests/` | 397 fast + 11 slow |
 | Mock MCP servers | `mocks/` (github, tickets, files) | done |
 | License | `LICENSE` (MIT) | done |

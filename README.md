@@ -2,13 +2,15 @@
 
 **An AI control layer for agents that use MCP tools.** HackYeah 2026, Goldman Sachs task "AI Control Layer". Repo: https://github.com/andrii-mazurchuk/tollgate (public, [MIT](LICENSE)).
 
-> **Status (final, 2026-10-04):** 14 of 16 acceptance criteria green, 2 partial (AC8 injection recall 0.837 vs 0.85 target; AC15 classifier latency borderline). Details: [TOLLGATE.md › Status](TOLLGATE.md#status-final-2026-10-04). 378 fast + 10 slow tests.
+> **Status (final, 2026-10-04):** 14 of 16 acceptance criteria green, 2 partial (AC8 injection recall 0.837 vs 0.85 target; AC15 classifier latency borderline). Details: [TOLLGATE.md › Status](TOLLGATE.md#status-final-2026-10-04). 397 fast + 11 slow tests.
+
+Use it on your own machine: [Install](#install-use-it-on-your-machine). Evaluate it from a clone: below.
 
 ## Judges: start here (5 minutes)
 
 Needs Git and [uv](https://docs.astral.sh/uv/) (it installs Python 3.13). Ollama is **optional**: `--scripted-model` runs a scripted hijacked model offline.
 
-**1. Install and run the self-test suite.** The first `tollgate test` downloads the ~739 MB ONNX classifier (~5 min, once); warm runs take ~30 s. Fast path without the download: `uv run pytest -q -m "not slow"` (378 tests, ~60 s).
+**1. Install and run the self-test suite.** The first `tollgate test` downloads the ~739 MB ONNX classifier (~5 min, once); warm runs take ~30 s. Fast path without the download: `uv run pytest -q -m "not slow"` (397 tests, ~60 s).
 
 ```bash
 uv sync
@@ -113,9 +115,35 @@ Held-out 30% split (`sha256(id) % 100 >= 70`); thresholds tuned on the other 70%
 
 **Ollama (optional).** Without `--scripted-model`, the model door proxies to `http://127.0.0.1:11434/v1` (`TOLLGATE_UPSTREAM`): `ollama pull qwen3:1.7b` (role-1), `ollama pull qwen3:4b` (role-2). Without Ollama a clean, allowed prompt gets 502 `upstream.error`; the allow-list, budget and prompt scan still apply.
 
+## Install (use it on your machine)
+
+A real install: a `tollgate` command on your PATH, its own Python, no repo checkout. No admin/root needed; re-running the installer upgrades.
+
+```bash
+# Linux / macOS
+curl -LsSf https://raw.githubusercontent.com/andrii-mazurchuk/tollgate/main/install.sh | sh
+# Windows (PowerShell 5.1+)
+irm https://raw.githubusercontent.com/andrii-mazurchuk/tollgate/main/install.ps1 | iex
+# from a clone (either OS): sh install.sh --source .   /   .\install.ps1 --source .
+```
+
+The installer uses `uv tool install` when [uv](https://docs.astral.sh/uv/) is present (it fetches Python 3.13 itself); otherwise a Python 3.13+ venv in the Tollgate home with a `tollgate` shim; otherwise it prints the uv installer command (`--install-uv` runs it). It never edits PATH or shell profiles unless you pass `--modify-path`; it prints the line instead. Options: `--source PATH|URL`, `--ref TAG`, `--uninstall` (removes the program, keeps your data and prints its path). Then it runs `tollgate init`.
+
+```bash
+tollgate init [--fetch-model]        # home + default policy + install secret; --fetch-model pre-downloads the ~739 MB classifier
+tollgate up                          # the hub: http://127.0.0.1:8080/console/ and /edge/
+tollgate admin create --email you@example.com
+tollgate enroll-token                # then: tollgate enroll <token> --owner <you> --device <laptop>; give it a role in the console
+tollgate connect claude-code --role role-2 --peer <id> --scope user --write
+tollgate doctor                      # OK/WARN/FAIL: python, PATH, home, policy, secret, hub, owner, agent configs, key
+tollgate service install --yes       # optional: hub at logon (systemd --user / launchd agent / Scheduled Task); dry run without --yes
+```
+
+**Where things live (installed mode).** The *Tollgate home* holds `policy.yaml`, `policies/`, `signatures.yaml` (yours to edit) and `audit/` (events, peers, accounts, `secret.key`, policy history, backups, eval/perf results). It is `TOLLGATE_HOME` (or `tollgate --home DIR`) if set, else Linux `$XDG_DATA_HOME/tollgate` (`~/.local/share/tollgate`), macOS `~/Library/Application Support/Tollgate`, Windows `%LOCALAPPDATA%\Tollgate`. Running from a source checkout (the judges' route below) keeps everything repo-relative, as before. `tollgate --help` prints the home in use. Uninstall: the installer with `--uninstall`, `tollgate service uninstall --yes` first if you installed the service, then delete the home if you want the data gone.
+
 ## Connect your agent
 
-One command per agent launch on an enrolled laptop (`--peer` from `seed-fleet` or the console). It mints a key, prints the agent's MCP entry (the role's tools, remote HTTP) and its hooks, plus the `TOLLGATE_KEY` line to set (PowerShell and bash). Add `--write` to merge them into the project's config in `--dir` (default: current folder): unrelated keys are kept, a short diff is printed, and the key is never written to a file, only referenced as `TOLLGATE_KEY`.
+One command per agent launch on an enrolled laptop (`--peer` from `seed-fleet` or the console). It mints a key, prints the agent's MCP entry (the role's tools, remote HTTP) and its hooks, plus the `TOLLGATE_KEY` line to set (PowerShell and bash). Add `--write` to merge them into the project's config in `--dir` (default: current folder): unrelated keys are kept, a short diff is printed, and the key is never written to a file, only referenced as `TOLLGATE_KEY`. `--scope user` targets the agent's user-level config instead (every project): `~/.claude/settings.json` (hooks; the MCP entry is a printed `claude mcp add --scope user …` line, since `~/.claude.json` is Claude Code's live state file), `~/.codex/config.toml`, `~/.cursor/mcp.json` + `~/.cursor/hooks.json`, `~/.gemini/settings.json`; it also prints how to persist `TOLLGATE_KEY` (`setx` / your shell profile), but never writes a profile. Installed: drop the `uv run` prefix.
 
 ```bash
 uv run tollgate connect claude-code --role role-2 --peer <id> --write   # .mcp.json + .claude/settings.json (fail-closed hooks -> /hook; --fast = native http)
@@ -125,7 +153,7 @@ uv run tollgate connect gemini      --role role-2 --peer <id> --write   # .gemin
 uv run tollgate connect hermes      --role role-2 --peer <id>           # ~/.hermes/config.yaml snippet (--write merges it)
 ```
 
-**What gets checked.** The MCP entry exposes the role's MCP tools. The hooks see **every** tool call the agent makes, built-ins included (shell, file read/write, web fetch), each result (secrets and PII masked) and the user's prompt (injection blocked), against the same policy and session taint. Every agent (Claude Code included) runs `tollgate hook <agent> <event>` (the venv's absolute python, so it works from any folder), which maps their hook JSON onto Claude Code's and back. It fails **closed**: hub unreachable, bad key or a 5xx is a deny ("Tollgate unreachable: …"). `connect claude-code --fast` uses Claude Code's native http hooks instead: no process start per call, but fail-open on a connection error (per its docs).
+**What gets checked.** The MCP entry exposes the role's MCP tools. The hooks see **every** tool call the agent makes, built-ins included (shell, file read/write, web fetch), each result (secrets and PII masked) and the user's prompt (injection blocked), against the same policy and session taint. Every agent (Claude Code included) runs `tollgate hook <agent> <event>` (the absolute python of the install that wrote it, so it works from any folder), which maps their hook JSON onto Claude Code's and back. It fails **closed**: hub unreachable, bad key or a 5xx is a deny ("Tollgate unreachable: …"). `connect claude-code --fast` uses Claude Code's native http hooks instead: no process start per call, but fail-open on a connection error (per its docs).
 
 **Verified with a real Claude Code session** (headless, Haiku): `curl` → read `payroll.txt` → `git push` was denied by the hook with Tollgate's reason; the audit shows the session go clean → untrusted → untrusted + holds private → blocked. Use `--host`/`--port` for a remote hub.
 
@@ -158,6 +186,7 @@ Same binary, two roles; the demo runs both on one machine. Next step: split into
 | Variable | Default | What it does |
 |---|---|---|
 | `TOLLGATE_KEY_SECRET` | per-install secret | HMAC secret for role keys; set the same value on hubs that must accept each other's keys |
+| `TOLLGATE_HOME` | the checkout, else the per-user dir ([Install](#install-use-it-on-your-machine)) | holds `policy.yaml`, `policies/`, `signatures.yaml` and `audit/`; every `audit/…` path below is relative to it |
 | `TOLLGATE_SECRET_FILE` | `audit/secret.key` | where the per-install secret lives |
 | `TOLLGATE_FEED_SECRET` | per-install secret | HMAC secret for the signature feed; the same on the feed server and every hub |
 | `TOLLGATE_ADMIN_TOKEN` | unset (off) | bearer token for `/admin/*`, `/console/api/*` automation, `tollgate approve\|deny` |
