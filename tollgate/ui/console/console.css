@@ -64,3 +64,56 @@ details.dd.on > summary .muted { color: var(--accent); }
 .dd-opt:hover { background: var(--soft); }
 .dd-opt .small { max-width: 110px; }
 .dd-foot { display: flex; justify-content: flex-end; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; }
+
+/* policy: in force, role x tool matrix, rules, history, profile switch */
+.bar-t { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.bar-t strong { color: var(--ink); font-weight: 500; }
+.rejected { display: flex; gap: 8px; align-items: flex-start; padding: 8px 16px; background: var(--red-soft); color: var(--red-ink); border-radius: 0 0 var(--r) var(--r); }
+.rejected svg.i { margin-top: 3px; }
+.rejected .mono { overflow-wrap: anywhere; }
+.card > .strip:last-child { border-bottom: 0; }
+.mx-wrap { overflow: auto; max-height: calc(100vh - 180px); border-top: 1px solid var(--line); border-radius: 0 0 var(--r) var(--r); }
+table.t.mx { border-collapse: separate; border-spacing: 0; table-layout: auto; }
+table.t.mx thead th { position: sticky; top: 0; z-index: 2; background: var(--panel); height: 44px; }
+table.t.mx th[scope="row"], table.t.mx thead th:first-child { position: sticky; left: 0; z-index: 1; background: var(--panel); text-align: left; width: 32%; min-width: 260px; max-width: 420px; }
+table.t.mx thead th:first-child { z-index: 3; }
+table.t.mx thead th:nth-child(2) { width: 18%; }
+table.t.mx th[scope="row"] { font-weight: 400; color: var(--ink); border-bottom: 1px solid var(--line); }
+table.t.mx td, table.t.mx th[scope="row"] { height: 44px; }
+table.t.mx tbody tr:hover th[scope="row"] { background: var(--soft); }
+table.t.mx tr.grp th { height: 32px; padding-left: 16px; background: var(--soft); color: var(--ink); font-weight: 600; text-align: left; border-bottom: 1px solid var(--line); }
+table.t.mx tbody tr:last-child td, table.t.mx tbody tr:last-child th { border-bottom: 1px solid var(--line); }
+table.t.mx tbody:last-child tr:last-child td, table.t.mx tbody:last-child tr:last-child th { border-bottom: 0; }
+.mx-c { line-height: 16px; }
+.mx-c.write > div:first-child { font-weight: 500; color: var(--ink); }
+.mx-c.read { color: var(--ink-2); }
+.mx-c.hidden { color: var(--faint); }
+.mx-c .lim { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; padding: 0 16px 16px; }
+.rule { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; }
+.rule-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+.rule-h h3 { margin: 0; color: var(--ink); font-size: 13px; font-weight: 600; }
+.rule p { margin: 0; color: var(--ink-2); }
+dialog.dlg.wide { width: 860px; }
+.pdiff-wrap { border: 1px solid var(--line); border-radius: var(--r); overflow: auto; max-height: 44vh; margin-bottom: 12px; }
+table.t.pdiff { border-collapse: separate; border-spacing: 0; }
+table.t.pdiff thead th { position: sticky; top: 0; z-index: 1; background: var(--panel); height: 40px; }
+table.t.pdiff th, table.t.pdiff td { padding-left: 12px; }
+table.t.pdiff th[scope="row"] { font-weight: 400; color: var(--ink-2); text-align: left; border-bottom: 1px solid var(--line); }
+table.t.pdiff td, table.t.pdiff th[scope="row"] { height: 32px; }
+table.t.pdiff tbody tr:last-child th { border-bottom: 0; }
+table.t.pdiff thead label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--ink); }
+table.t.pdiff input[type="radio"] { accent-color: var(--accent); margin: 0; }
+table.t.pdiff input:disabled { display: none; }
+table.t.pdiff .cur, table.t.pdiff thead th.cur { background: var(--soft); }
+table.t.pdiff .tgt, table.t.pdiff thead th.tgt { background: var(--accent-soft); color: var(--ink); }
+table.t.pdiff thead th.tgt label { color: var(--accent); }
+table.t.pdiff .tag { font-size: 11px; color: var(--muted); font-weight: 400; }
+.chg h3 { color: var(--ink); font-weight: 600; margin-bottom: 2px; }
+.chg p { margin: 0; }
+.chg ul.plain li { margin: 2px 0; }
+.warnbox { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; background: var(--soft); border-radius: var(--r); color: var(--ink); margin-bottom: 12px; }
+.warnbox svg.i { margin-top: 3px; }
+table.t.pdiff tbody tr:hover { background: none; }
+table.t.pdiff td.cur { font-weight: 500; color: var(--ink); }
+.t .tag-if { font-family: var(--font); font-size: 12px; color: var(--muted); margin-left: 6px; }

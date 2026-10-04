@@ -1,4 +1,4 @@
-// Tollgate server console, revision 1: Overview, Peers & roles, Sessions. Vanilla JS, no build step.
+// Tollgate server console, revisions 1-2: Overview, Peers & roles, Sessions, Policy. Vanilla JS, no build step.
 // Shared helpers (h, icon, badge, time, trend, hbars, serverList, tabOverview, tabChecks, ...) come from /edge/common.js.
 "use strict";
 
@@ -6,7 +6,7 @@ const API = "/console/api";
 const STATES = ["clean", "untrusted", "holds_private"];
 PATHS.plus = ["M12 5v14M5 12h14"];
 
-const ui = { view: "overview", range: load("c.range") || "today", since: load("c.since") || "", tab: "overview", stepMode: "list",
+const ui = { pol: null, view: "overview", range: load("c.range") || "today", since: load("c.since") || "", tab: "overview", stepMode: "list",
   f: {}, trace: null, peer: null, role: null, roleNames: {}, dirty: false };
 
 async function api(path, opts) {
@@ -89,6 +89,10 @@ function renderBar() {
     return bar(h("div", { class: "seg", role: "group", "aria-label": "Peers or roles" }, [["peers", "Peers"], ["roles", "Roles"]].map(([k, l]) =>
       h("button", { type: "button", "aria-pressed": String(ui.view === k), onclick: () => { location.hash = k === "peers" ? peerHref(ui.peer) : roleHref(ui.role); } }, l))),
       ui.view === "peers" ? h("button", { class: "btn", type: "button", onclick: enrollDialog }, icon("plus"), "Enroll a laptop") : null);
+  }
+  if (ui.view === "policy" && ui.pol) {
+    return bar(h("span", { class: "bar-t" }, "Profile: ", h("strong", {}, profileLabel(ui.pol))),
+      h("button", { class: "btn", type: "button", onclick: () => switchDialog(ui.pol) }, "Switch profile…"));
   }
   bar();
 }
@@ -451,8 +455,109 @@ function tabFingerprint(e, x, sess) {
       ["Time", time(e.ts)], ["Trace ID", h("code", {}, e.trace_id || "–")]])];
 }
 
+/* ---------- Policy: read-only, plus the profile switch ---------- */
+const cap = x => x ? x[0].toUpperCase() + x.slice(1) : x;
+const profileLabel = d => (cap(d.profiles.current) || "Custom") + (d.status.modified ? " (edited)" : "");
+const ACCESS = { read: "Read", write: "Write", asks: "Asks a human" };
+const errText = e => e ? (typeof e === "string" ? e : e.message) : "";
+const short = v => String(v ?? "–").slice(0, 7);
+
+async function renderPolicy() {
+  const d = await api("/policy");
+  ui.pol = d;
+  renderBar();
+  const st = d.status, err = st.last_error;
+  const strip = h("div", { class: "strip" }, [
+    ["Version", h("code", { title: st.version }, short(st.version))], ["Profile", profileLabel(d)], ["Loaded", st.loaded_at ? time(st.loaded_at) : "–"],
+    ["File", h("code", {}, st.path || "–")],
+  ].map(([k, v]) => h("div", {}, h("div", { class: "k" }, k), h("div", { class: "v" }, v))));
+  const inForce = h("section", { class: "card" }, h("div", { class: "card-h" }, h("h2", {}, "In force"),
+    h("span", { class: "muted small" }, "Live: edits to the policy file apply on the next call")), strip,
+    err ? h("div", { class: "rejected", role: "alert" }, icon("warn"),
+      h("span", {}, `Edit rejected${err.at ? " at " + time(err.at) : ""}: `, h("span", { class: "mono" }, errText(err)), `. Still enforcing ${short(st.version)}.`)) : null);
+  view().replaceChildren(h("div", { class: "stack" }, inForce, matrixCard(d.matrix), rulesCard(d.rules), historyCard(d.history, st.version)));
+}
+
+function matrixCard(m) {
+  const cell = c => !c || c.access === "hidden"
+    ? h("td", { class: "mx-c hidden", title: "Hidden from this role" }, h("span", { "aria-label": "Hidden" }, "–"))
+    : h("td", { class: "mx-c " + c.access }, h("div", {}, ACCESS[c.access] || c.access),
+      (c.limits || []).length ? h("div", { class: "lim", title: c.limits.join("; ") }, c.limits.join("; ")) : null);
+  const table = h("table", { class: "t mx" },
+    h("thead", {}, h("tr", {}, h("th", { scope: "col" }, "Tool"), h("th", { scope: "col" }, "Data flow"),
+      m.roles.map(r => h("th", { scope: "col", title: `${r.agent} (${r.role})` }, h("div", { class: "two" }, h("span", { class: "ell" }, r.agent), h("span", { class: "muted small mono" }, r.role)))))),
+    m.servers.map(srv => h("tbody", {},
+      h("tr", { class: "grp" }, h("th", { scope: "colgroup", colspan: String(m.roles.length + 2) }, srv.name, h("span", { class: "sub-l small" }, `${srv.tools.length} tools`))),
+      srv.tools.map(t => h("tr", {},
+        h("th", { scope: "row", title: t.name }, h("div", { class: "two" }, h("span", { class: "ell" }, t.plain), h("span", { class: "ell muted small mono" }, t.name))),
+        h("td", { class: (t.labels || []).length ? "" : "muted" }, (t.labels || []).join(", ") || "–"),
+        m.roles.map(r => cell(t.cells[r.role])))))));
+  return card("Who may do what", h("span", { class: "muted small" }, "Hidden tools are not listed to the role and are refused if called"),
+    h("div", { class: "mx-wrap", "data-keep": "matrix" }, table));
+}
+
+// Rule actions are neutral badges: red stays for real Blocked events and problems, not for describing the policy.
+const RULE_ICON = { Masked: "lock", "Asks a human": "clock" };
+const rulesCard = rules => card("Rules in plain words", null, h("div", { class: "rules" }, rules.map(r => h("div", { class: "rule" },
+  h("div", { class: "rule-h" }, h("h3", {}, r.title), h("span", { class: "badge" }, icon(RULE_ICON[r.action] || "ban"), r.action)),
+  h("p", {}, r.sentence)))));
+
+const historyCard = (hist, cur) => card("Version history", h("span", { class: "muted small" }, "Every version this hub has seen, newest first"),
+  hist.length ? tbl(["140px", "150px", "120px", "120px", null], ["Version", "Time", "Profile", "Result", "Reason"],
+    hist.map(x => h("tr", {},
+      h("td", { class: "mono", title: x.version }, short(x.version), x.ok && x.version === cur ? h("span", { class: "tag-if" }, "in force") : null),
+      h("td", { class: "num muted" }, time(x.at)),
+      h("td", {}, cap(x.profile) || "Custom"),
+      h("td", {}, x.ok ? h("span", { class: "state" }, icon("check"), "Applied") : h("span", { class: "badge fail" }, icon("x"), "Rejected")),
+      h("td", { class: x.error ? "mono small" : "muted", title: errText(x.error) }, errText(x.error) || "–"))))
+    : h("div", { class: "empty" }, "No versions recorded yet."));
+
+function switchDialog(d) {
+  const P = d.profiles, cur = P.current, edited = d.status.modified;
+  let target = null;
+  const err = h("p", { class: "err small", role: "alert" });
+  const changes = h("div", { class: "chg", "aria-live": "polite" }, h("p", { class: "muted" }, "Pick a profile to see what would change."));
+  const cancel = h("button", { class: "btn", type: "button", autofocus: true, onclick: () => dlg.close() }, "Cancel");
+  const go = h("button", { class: "btn primary", type: "button", disabled: true, onclick: async () => {
+    go.disabled = true; err.textContent = "";
+    try {
+      const r = await post("/policy/profile", { profile: target });
+      body.replaceChildren(h("p", {}, `Switched to ${cap(target)}. Version `, h("code", {}, short(r.status?.version)), " applies from the next call."),
+        h("p", { class: "muted" }, "The previous policy file is saved as ", h("code", {}, r.backup || "–"), "."));
+      cancel.textContent = "Close"; go.remove(); cancel.focus();
+      refreshStatus(); route(false);
+    } catch (e) { err.textContent = String(e.message); go.disabled = false; }
+  } }, "Switch");
+  const pick = name => {
+    target = name;
+    table.querySelectorAll("[data-p]").forEach(el => el.classList.toggle("tgt", el.dataset.p === name));
+    go.disabled = false; go.textContent = `Switch to ${cap(name)}`;
+    const xs = name === cur ? [] : (P.changes || {})[name] || [];
+    const grp = (dir, label) => {
+      const ys = xs.filter(x => x.direction === dir);
+      return ys.length ? h("div", {}, h("h3", {}, `${label} (${ys.length})`), h("ul", { class: "plain" }, ys.map(x => h("li", {}, x.plain)))) : null;
+    };
+    changes.replaceChildren(name === cur ? h("p", {}, `Restores the ${cap(cur)} profile as written: the edits in the file are replaced.`)
+      : xs.length ? h("div", { class: "grid2" }, grp("stricter", "Stricter"), grp("looser", "Looser")) : h("p", { class: "muted" }, "No setting changes."));
+  };
+  const head = name => h("th", { scope: "col", "data-p": name, class: name === cur ? "cur" : null },
+    h("label", {}, h("input", { type: "radio", name: "prof", value: name, disabled: name === cur && !edited, onchange: () => pick(name) }),
+      cap(name), name === cur ? h("span", { class: "tag" }, edited ? "in force, edited" : "in force") : null));
+  const table = h("table", { class: "t pdiff" }, h("colgroup", {}, h("col", {}), P.names.map(() => h("col", { style: "width:20%" }))),
+    h("thead", {}, h("tr", {}, h("th", { scope: "col" }, "Setting"), P.names.map(head))),
+    h("tbody", {}, P.diff.map(r => h("tr", {}, h("th", { scope: "row" }, r.plain),
+      P.names.map(nm => h("td", { "data-p": nm, class: nm === cur ? "cur" : null }, r.values[nm] ?? "–"))))));
+  const body = h("div", {},
+    h("p", {}, "Only the settings that differ between the profiles are shown. Pick the profile to switch to."),
+    edited ? h("div", { class: "warnbox" }, icon("warn"), h("span", {}, "The policy file has edits that are not in the profile. Switching replaces them; the current file is kept in ",
+      h("code", {}, "audit/policy-backups/"), ".")) : null,
+    h("div", { class: "pdiff-wrap" }, table), changes, err);
+  const dlg = dialog("Switch policy profile", body, [cancel, go]);
+  dlg.classList.add("wide");
+}
+
 /* ---------- routing + live refresh ---------- */
-const VIEWS = { overview: renderOverview, peers: renderPeers, roles: renderRoles, sessions: renderSessions };
+const VIEWS = { overview: renderOverview, peers: renderPeers, roles: renderRoles, sessions: renderSessions, policy: renderPolicy };
 async function route(focus) {
   const parts = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
   ui.view = VIEWS[parts[0]] ? parts[0] : "overview";
