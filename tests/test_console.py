@@ -275,3 +275,89 @@ async def test_policy_api_needs_admin(monkeypatch, tmp_path):
                                       base_url="http://x") as remote:
             assert (await remote.get("/console/api/policy")).status_code == 401
             assert (await remote.post("/console/api/policy/profile", json={"profile": "strict"})).status_code == 401
+
+
+async def _access(c, holder, *changes, base=None):
+    return await c.post("/console/api/policy/access", json={
+        "base_version": base or holder.version, "changes": [{"role": r, "tool": t, "allowed": a} for r, t, a in changes]})
+
+
+async def test_access_edit_writes_smallest_form(monkeypatch, tmp_path):
+    import yaml
+
+    from tollgate.gateway.policy import DEFAULT_PATH
+    repo_policy = DEFAULT_PATH.read_bytes()
+    async with _policy_app(monkeypatch, tmp_path) as (c, _, holder):
+        v0 = holder.version
+        r = await _access(c, holder, ("role-1", "github.pr.create", True), ("role-2", "files.fs.delete", True),
+                          ("role-2", "files.fs.list", False))
+        assert r.status_code == 200, r.text
+        j = r.json()
+        assert "Intern bot may now open a pull request (write, public destination)" in j["sentences"]
+        assert "Support assistant may now delete a file (write)" in j["sentences"]
+        assert "Support assistant can no longer list files" in j["sentences"] and len(j["sentences"]) == 3
+        assert Path(j["backup"]).read_bytes() == repo_policy and v0 in Path(j["backup"]).name
+        assert j["status"]["version"] == holder.version != v0 and j["status"]["modified"] is True
+        p = yaml.safe_load((tmp_path / "policy.yaml").read_text(encoding="utf-8"))
+        assert p["roles"]["role-1"]["servers"]["github"] == {"access": "rw"}
+        assert p["roles"]["role-2"]["servers"]["files"] == {"tools": ["fs.read", "fs.write", "fs.delete"]}
+        assert p["roles"]["role-2"]["constrain"] == {"files.fs.read": {"path": "/workspace/**"},
+                                                     "tickets.query": {"sql": "select_only"}}
+        assert p["roles"]["role-2"]["content"] == {"secrets": "redact"} and p["content"]["secrets"] == "block"
+        h = (await c.get("/console/api/policy")).json()["history"][0]
+        assert h["ok"] and h["note"] == "Edited in console" and h["version"] == holder.version
+
+        # all tools -> rw; only the read tools -> read; nothing -> the server key goes
+        assert (await _access(c, holder, ("role-2", "files.fs.list", True))).status_code == 200
+        assert yaml.safe_load((tmp_path / "policy.yaml").read_text())["roles"]["role-2"]["servers"]["files"] == {"access": "rw"}
+        assert (await _access(c, holder, ("role-2", "github.pr.create", False))).status_code == 200
+        assert yaml.safe_load((tmp_path / "policy.yaml").read_text())["roles"]["role-2"]["servers"]["github"] == {"access": "read"}
+        assert (await _access(c, holder, ("role-1", "github.issues.read", False), ("role-1", "github.repo.read", False),
+                              ("role-1", "github.pr.create", False))).status_code == 200
+        assert "github" not in yaml.safe_load((tmp_path / "policy.yaml").read_text())["roles"]["role-1"]["servers"]
+    assert DEFAULT_PATH.read_bytes() == repo_policy
+
+
+async def test_access_edit_enforced_on_next_call(monkeypatch, tmp_path):
+    from fastmcp import Client
+    from fastmcp.client.transports import StreamableHttpTransport
+
+    from tollgate.gateway.keys import issue
+    async with _policy_app(monkeypatch, tmp_path) as (c, app, holder):
+        def factory(**kw):
+            return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t", **kw)
+
+        async def names():
+            async with Client(StreamableHttpTransport("http://t/mcp/role-1/", auth=issue("role-1"),
+                                                      httpx_client_factory=factory)) as m:
+                return {t.name for t in await m.list_tools()}
+
+        assert "github.pr.create" not in await names()
+        assert (await _access(c, holder, ("role-1", "github.pr.create", True))).status_code == 200
+        assert "github.pr.create" in await names()
+        m = (await c.get("/console/api/policy")).json()["matrix"]
+        cell = {t["name"]: t for s in m["servers"] for t in s["tools"]}
+        assert cell["github.pr.create"]["cells"]["role-1"]["access"] == "write"
+
+
+async def test_access_edit_refusals(monkeypatch, tmp_path):
+    async with _policy_app(monkeypatch, tmp_path) as (c, app, holder):
+        before = (tmp_path / "policy.yaml").read_bytes()
+        assert (await _access(c, holder, ("role-1", "github.pr.create", True), base="deadbeef")).status_code == 409
+        assert (await c.post("/console/api/policy/access", json={"base_version": "x", "changes": []})).status_code == 400
+        assert (await c.post("/console/api/policy/access", content=b"[1]")).status_code == 400
+        for bad in [("role-9", "github.pr.create", True), ("role-1", "github.nope", True),
+                    ("role-1", "github.pr.create", "yes"), ("role-1", "github.issues.read", True)]:  # last: no change
+            assert (await _access(c, holder, bad)).status_code == 400, bad
+        assert (tmp_path / "policy.yaml").read_bytes() == before
+        # the file changed underneath (the admin's view is stale): 409 carries the new version
+        old = holder.version
+        (tmp_path / "policy.yaml").write_bytes(before + b"\n# edited by hand\n")
+        os.utime(tmp_path / "policy.yaml", ns=(10**18, 10**18))
+        stale = await _access(c, holder, ("role-1", "github.pr.create", True), base=old)
+        assert stale.status_code == 409 and stale.json()["version"] == holder.version != old
+        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app, client=("10.1.2.3", 5000)),
+                                      base_url="http://x") as remote:
+            r = await remote.post("/console/api/policy/access", json={"base_version": holder.version, "changes": [
+                {"role": "role-1", "tool": "github.pr.create", "allowed": False}]})
+            assert r.status_code == 401

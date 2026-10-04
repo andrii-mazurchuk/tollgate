@@ -92,7 +92,8 @@ function renderBar() {
   }
   if (ui.view === "policy" && ui.pol) {
     return bar(h("span", { class: "bar-t" }, "Profile: ", h("strong", {}, profileLabel(ui.pol))),
-      h("button", { class: "btn", type: "button", onclick: () => switchDialog(ui.pol) }, "Switch profile…"));
+      h("button", { class: "btn", type: "button", "aria-pressed": String(!!ui.edit), onclick: toggleEdit }, ui.edit ? "Stop editing" : "Edit access"),
+      ui.edit ? null : h("button", { class: "btn", type: "button", onclick: () => switchDialog(ui.pol) }, "Switch profile…"));
   }
   bar();
 }
@@ -465,6 +466,7 @@ const short = v => String(v ?? "–").slice(0, 7);
 async function renderPolicy() {
   const d = await api("/policy");
   ui.pol = d;
+  if (ui.edit && !pending().length) ui.edit.base = d.status.version;  // nothing pending: follow the live version
   renderBar();
   const st = d.status, err = st.last_error;
   const strip = h("div", { class: "strip" }, [
@@ -479,6 +481,7 @@ async function renderPolicy() {
 }
 
 function matrixCard(m) {
+  if (ui.edit) return editMatrixCard(m);
   const cell = c => !c || c.access === "hidden"
     ? h("td", { class: "mx-c hidden", title: "Hidden from this role" }, h("span", { "aria-label": "Hidden" }, "–"))
     : h("td", { class: "mx-c " + c.access }, h("div", {}, ACCESS[c.access] || c.access),
@@ -492,8 +495,10 @@ function matrixCard(m) {
         h("th", { scope: "row", title: t.name }, h("div", { class: "two" }, h("span", { class: "ell" }, t.plain), h("span", { class: "ell muted small mono" }, t.name))),
         h("td", { class: (t.labels || []).length ? "" : "muted" }, (t.labels || []).join(", ") || "–"),
         m.roles.map(r => cell(t.cells[r.role])))))));
-  return card("Who may do what", h("span", { class: "muted small" }, "Hidden tools are not listed to the role and are refused if called"),
+  const c = card("Who may do what", h("span", { class: "muted small" }, "Hidden tools are not listed to the role and are refused if called"),
     h("div", { class: "mx-wrap", "data-keep": "matrix" }, table));
+  c.dataset.mx = "1";
+  return c;
 }
 
 // Rule actions are neutral badges: red stays for real Blocked events and problems, not for describing the policy.
@@ -510,7 +515,7 @@ const historyCard = (hist, cur) => card("Version history", h("span", { class: "m
       h("td", { class: "num muted" }, time(x.at)),
       h("td", {}, cap(x.profile) || "Custom"),
       h("td", {}, x.ok ? h("span", { class: "state" }, icon("check"), "Applied") : h("span", { class: "badge fail" }, icon("x"), "Rejected")),
-      h("td", { class: x.error ? "mono small" : "muted", title: errText(x.error) }, errText(x.error) || "–"))))
+      h("td", { class: x.error ? "mono small" : x.note ? "" : "muted", title: errText(x.error) || x.note || "" }, errText(x.error) || x.note || "–"))))
     : h("div", { class: "empty" }, "No versions recorded yet."));
 
 function switchDialog(d) {
@@ -557,6 +562,153 @@ function switchDialog(d) {
   dlg.classList.add("wide");
 }
 
+/* ---------- Policy: edit access (revision 3). ui.edit = { base: version, want: {"role\ttool": bool} } ---------- */
+const accKey = (role, tool) => role + "\t" + tool;
+const lower1 = x => x ? x[0].toLowerCase() + x.slice(1) : x;
+const isAllowed = (t, role) => (t.cells[role]?.access || "hidden") !== "hidden";
+const want = (t, role) => ui.edit.want[accKey(role, t.name)] ?? isAllowed(t, role);
+const plural = (k, w) => `${k} ${w}${k === 1 ? "" : "s"}`;
+
+// Every role x tool whose wanted state differs from the policy in force.
+function pending() {
+  if (!ui.edit || !ui.pol) return [];
+  const m = ui.pol.matrix, out = [];
+  for (const t of m.servers.flatMap(s => s.tools)) for (const r of m.roles) {
+    const w = want(t, r.role);
+    if (w !== isAllowed(t, r.role)) out.push({ role: r.role, agent: r.agent, tool: t.name, allowed: w, t });
+  }
+  return out;
+}
+
+function toggleEdit() {
+  if (!ui.edit) ui.edit = { base: ui.pol.status.version, want: {} };
+  else {
+    const k = pending().length;
+    if (k && !confirm(`Discard ${plural(k, "unsaved access change")}?`)) return;
+    ui.edit = null; ui.dirty = false;
+  }
+  renderBar(); redrawMatrix();
+}
+
+function setWant(list) {
+  for (const [role, tool, v] of list) ui.edit.want[accKey(role, tool)] = v;
+  ui.dirty = pending().length > 0;  // the 10 s poll leaves the view alone while edits are pending
+  redrawMatrix();
+}
+
+// Re-render only the matrix card, keeping its scroll position and the focused control.
+function redrawMatrix() {
+  const old = document.querySelector("[data-mx]");
+  if (!old || !ui.pol) return;
+  const w = old.querySelector(".mx-wrap"), top = w?.scrollTop || 0, left = w?.scrollLeft || 0, fk = document.activeElement?.dataset?.k;
+  const nu = matrixCard(ui.pol.matrix);
+  old.replaceWith(nu);
+  const w2 = nu.querySelector(".mx-wrap");
+  if (w2) { w2.scrollTop = top; w2.scrollLeft = left; }
+  if (fk) [...nu.querySelectorAll("[data-k]")].find(el => el.dataset.k === fk)?.focus();
+}
+
+function editMatrixCard(m) {
+  const P = pending(), changed = new Set(P.map(p => accKey(p.role, p.tool)));
+  const cell = (t, r) => {
+    const k = accKey(r.role, t.name), on = want(t, r.role), lim = t.cells[r.role]?.limits || [];
+    return h("td", { class: "mx-c ed" + (changed.has(k) ? " chg" : "") },
+      h("div", { class: "ed-row" },
+        h("button", { type: "button", class: "tgl", "data-k": k, "aria-pressed": String(on), "aria-label": `${t.plain} (${t.name}) for ${r.agent}`,
+          title: changed.has(k) ? `Changed: was ${on ? "hidden" : "allowed"}` : null, onclick: () => setWant([[r.role, t.name, !on]]) },
+          h("span", { class: "sw", "aria-hidden": "true" }), on ? "Allowed" : "Hidden"),
+        h("span", { class: "kind", title: "Set by the MCP server" }, t.write ? "Write" : "Read")),
+      lim.length ? h("div", { class: "lim", title: lim.join("; ") }, lim.join("; ")) : null);
+  };
+  const quick = (srv, r) => {
+    const ts = srv.tools, on = ts.filter(t => want(t, r.role)), reads = ts.filter(t => !t.write);
+    const now = !on.length ? "none" : on.length === ts.length ? "all" : on.length === reads.length && on.every(t => !t.write) ? "read" : null;
+    return h("td", { class: "qs" }, h("div", { class: "seg", role: "group", "aria-label": `${srv.name} for ${r.agent}` },
+      [["none", "Hidden", () => false], ["read", "Read only", t => !t.write], ["all", "All tools", () => true]].map(([key, label, f]) =>
+        h("button", { type: "button", "data-k": `q\t${srv.name}\t${r.role}\t${key}`, "aria-pressed": String(now === key),
+          onclick: () => setWant(ts.map(t => [r.role, t.name, f(t)])) }, label))));
+  };
+  const table = h("table", { class: "t mx editing" },
+    h("thead", {}, h("tr", {}, h("th", { scope: "col" }, "Tool"), h("th", { scope: "col" }, "Data flow"),
+      m.roles.map(r => h("th", { scope: "col", title: `${r.agent} (${r.role})` }, h("div", { class: "two" }, h("span", { class: "ell" }, r.agent), h("span", { class: "muted small mono" }, r.role)))))),
+    m.servers.map(srv => h("tbody", {},
+      h("tr", { class: "grp" }, h("th", { scope: "colgroup", colspan: "2" }, srv.name, h("span", { class: "sub-l small" }, `${srv.tools.length} tools`)),
+        m.roles.map(r => quick(srv, r))),
+      srv.tools.map(t => h("tr", {},
+        h("th", { scope: "row", title: t.name }, h("div", { class: "two" }, h("span", { class: "ell" }, t.plain), h("span", { class: "ell muted small mono" }, t.name))),
+        h("td", { class: (t.labels || []).length ? "" : "muted" }, (t.labels || []).join(", ") || "–"),
+        m.roles.map(r => cell(t, r)))))));
+  const editbar = h("div", { class: "editbar" },
+    h("span", { class: "small" + (P.length ? "" : " muted"), "aria-live": "polite" }, P.length ? plural(P.length, "change") : "No changes yet"),
+    h("button", { class: "btn sm", type: "button", disabled: !P.length, onclick: () => { ui.edit.want = {}; ui.dirty = false; redrawMatrix(); } }, "Discard"),
+    h("button", { class: "btn sm primary", type: "button", disabled: !P.length, onclick: reviewDialog }, "Review changes…"));
+  const c = card("Who may do what", editbar,
+    h("p", { class: "muted small ed-hint" }, "Editing access. Each cell allows or hides one tool for one role; the server row sets a whole MCP server. Read or Write is fixed by the server. Limits stay as they are."),
+    h("div", { class: "mx-wrap", "data-keep": "matrix" }, table));
+  c.dataset.mx = "1";
+  return c;
+}
+
+const accessSentence = p => p.allowed
+  ? `${p.agent} may now ${lower1(p.t.plain)} (${[p.t.write ? "write" : "read", ...(p.t.labels || [])].join(", ")})`
+  : `${p.agent} can no longer ${lower1(p.t.plain)}`;
+
+// A role that gains a public destination while it can read outside text and private data: the data-flow rule is what guards it.
+function flowWarnings(P) {
+  const flow = (ui.pol.rules || []).find(r => r.id === "data_flow");
+  const all = ui.pol.matrix.servers.flatMap(s => s.tools);
+  return ui.pol.matrix.roles.filter(r => P.some(p => p.role === r.role && p.allowed && (p.t.labels || []).includes("public destination")))
+    .filter(r => ["outside text", "private data"].every(l => all.some(t => want(t, r.role) && (t.labels || []).includes(l))))
+    .map(r => `${r.agent} can now read outside text and private data and send to a public destination. ` + (flow?.action === "off"
+      ? "The data-flow rule is off, so nothing stops private data from leaving."
+      : `The data-flow rule still guards this: ${lower1(flow?.sentence || "a call to a public destination after both is blocked.")}`));
+}
+
+function reviewDialog() {
+  const err = h("p", { class: "err small", role: "alert" });
+  const body = h("div", {});
+  const cancel = h("button", { class: "btn", type: "button", autofocus: true, onclick: () => dlg.close() }, "Back to editing");
+  const go = h("button", { class: "btn primary", type: "button", onclick: save });
+  const fill = notice => {
+    const P = pending();
+    go.textContent = P.length ? `Save ${plural(P.length, "change")}` : "Save"; go.disabled = !P.length;
+    body.replaceChildren(h("div", {},
+      notice ? h("div", { class: "warnbox", role: "alert" }, icon("warn"), h("span", {}, notice)) : null,
+      P.length ? ui.pol.matrix.roles.filter(r => P.some(p => p.role === r.role)).map(r => h("div", { class: "chg" },
+        h("h3", {}, r.agent, h("span", { class: "sub-l mono" }, r.role)), h("ul", { class: "plain" }, P.filter(p => p.role === r.role).map(p => h("li", {}, accessSentence(p))))))
+        : h("p", { class: "muted" }, "Nothing left to save: the policy in force already says this."),
+      flowWarnings(P).map(w => h("div", { class: "warnbox" }, icon("warn"), h("span", {}, w))),
+      h("p", { class: "muted small" }, "Saving backs up the policy file, writes the new access and applies it from the next call. Comments in the file are not kept; the backup has them."),
+      err));
+  };
+  async function save() {
+    const P = pending();
+    go.disabled = true; err.textContent = "";
+    let r, j = {};
+    try {
+      r = await fetch(API + "/policy/access", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base_version: ui.edit.base, changes: P.map(({ role, tool, allowed }) => ({ role, tool, allowed })) }) });
+      j = await r.json().catch(() => ({}));
+    } catch { err.textContent = "Could not reach the server. Nothing was saved."; go.disabled = false; return; }
+    if (r.status === 409) {  // someone changed the file: review against the version now in force
+      ui.edit.base = j.version;
+      await route(false);
+      ui.dirty = pending().length > 0;
+      return fill(`The policy changed while you were editing (now ${short(j.version)}). Review again.`);
+    }
+    if (!r.ok) { err.textContent = `Not saved: ${j.error || r.status}`; go.disabled = false; return; }
+    ui.edit = null; ui.dirty = false;
+    body.replaceChildren(h("p", {}, "Saved. Version ", h("code", {}, short(j.status?.version)), " applies from the next call."),
+      h("ul", { class: "plain" }, (j.sentences || []).map(x => h("li", {}, x))),
+      h("p", { class: "muted" }, "The previous policy file is saved as ", h("code", {}, j.backup || "–"), "."));
+    cancel.textContent = "Close"; go.remove(); cancel.focus();
+    refreshStatus(); route(false);
+  }
+  fill();
+  const dlg = dialog("Review access changes", body, [cancel, go]);
+  dlg.classList.add("mid");
+}
+
 /* ---------- routing + live refresh ---------- */
 const VIEWS = { overview: renderOverview, peers: renderPeers, roles: renderRoles, sessions: renderSessions, policy: renderPolicy };
 async function route(focus) {
@@ -575,7 +727,15 @@ async function route(focus) {
   document.querySelectorAll("[data-keep]").forEach(el => { if (keep[el.dataset.keep]) el.scrollTop = keep[el.dataset.keep]; });
   if (focus) view().focus({ preventScroll: true });
 }
-window.addEventListener("hashchange", () => route(true));
+window.addEventListener("hashchange", () => {
+  if (ui.edit && !/^#\/?policy/.test(location.hash)) {  // leaving the Policy view: pending access edits ask first
+    const k = pending().length;
+    if (k && !confirm(`Discard ${k} unsaved access change${k === 1 ? "" : "s"}?`)) return history.replaceState(null, "", "#/policy");
+    ui.edit = null; ui.dirty = false;
+  }
+  route(true);
+});
+window.addEventListener("beforeunload", ev => { if (ui.edit && pending().length) ev.preventDefault(); });
 
 // Poll every 10 s; skip the view while a dialog is open, a role edit is unsaved, or a control has focus.
 setInterval(() => {
