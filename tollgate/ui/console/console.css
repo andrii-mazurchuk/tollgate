@@ -117,3 +117,29 @@ table.t.pdiff .tag { font-size: 11px; color: var(--muted); font-weight: 400; }
 table.t.pdiff tbody tr:hover { background: none; }
 table.t.pdiff td.cur { font-weight: 500; color: var(--ink); }
 .t .tag-if { font-family: var(--font); font-size: 12px; color: var(--muted); margin-left: 6px; }
+
+/* policy: edit access (revision 3). Grey by default; blue = on / changed */
+.editbar { display: flex; align-items: center; gap: 8px; }
+.btn.sm.primary:disabled, .btn:disabled { opacity: .5; cursor: default; filter: none; }
+.ed-hint { margin: 0; padding: 0 16px 10px; }
+table.t.mx.editing td.mx-c.ed { padding-top: 6px; padding-bottom: 6px; }
+.ed-row { display: flex; align-items: center; gap: 8px; }
+.tgl { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px 0 4px; border: 1px solid var(--line-2); border-radius: 12px;
+  background: var(--panel); color: var(--muted); font-size: 12px; cursor: pointer; min-width: 84px; }
+.tgl:hover { background: var(--soft); color: var(--ink); }
+.tgl .sw { position: relative; width: 22px; height: 14px; border-radius: 7px; background: var(--soft-2); flex: none; transition: background .12s; }
+.tgl .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--panel); box-shadow: 0 0 0 1px var(--line-2); transition: left .12s; }
+.tgl[aria-pressed="true"] { color: var(--ink); }
+.tgl[aria-pressed="true"] .sw { background: var(--ink-2); }
+.tgl[aria-pressed="true"] .sw::after { left: 10px; box-shadow: none; }
+.mx-c .kind { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; line-height: 16px; }
+td.mx-c.ed.chg { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+td.mx-c.ed.chg .tgl { border-color: var(--accent); color: var(--accent); }
+td.mx-c.ed.chg .tgl[aria-pressed="true"] .sw { background: var(--accent); }
+table.t.mx tr.grp td.qs { background: var(--soft); border-bottom: 1px solid var(--line); height: 36px; }
+td.qs .seg { background: var(--panel); }
+td.qs .seg button { height: 20px; padding: 0 6px; font-size: 11px; }
+dialog.dlg.mid { width: 640px; }
+.chg + .chg { margin-top: 12px; }
+.chg h3 .sub-l { margin-left: 6px; font-weight: 400; color: var(--muted); font-size: 11px; }
+.dlg-b .warnbox { margin: 12px 0; }
