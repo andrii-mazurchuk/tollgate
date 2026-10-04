@@ -336,4 +336,19 @@ The latest evaluation (`audit/eval.json`) and test suite results, in plain words
 - **Held-out set:** stated as "scored once by hand", never re-run.
 - **Run self-test:** a button runs the fast eval if it is cheap. If not, it shows the CLI command (`uv run tollgate test`) and when the last run happened.
 
+### Do we need the dashboards? (grilling, 2026-10-04 06:30)
+
+**Decisions (Andrey):**
+1. **Deployment:** a local enforcer plus an optional control plane. Checks run on the laptop (hooks and MCP to localhost), so the text never leaves it and it works offline.
+   - The server, when present, does what only a server can: enrollment, roles, policy, revocation, the threat feed, and fleet audit as fingerprints.
+   - A solo developer needs no server.
+   - It is the same binary in two roles. The demo runs both on one machine, and we say so.
+   - Splitting it into `--role edge|hub` with policy sync comes after the hackathon.
+2. **Local edge UI:** demoted to on-demand. No further investment, no auto-open. It stays for the details view and the Scenario fallback.
+3. **The developer's interface is the deny message inside their agent:** the reason, "What you can do", and a details link to the local edge step.
+   - `tollgate open [edge|console] [TRACE]` opens it.
+   - Later: `tollgate status` / `tollgate why`.
+4. **On stage:** the console plus the agent's terminal. The edge appears only as the no-network fallback.
+5. **The console Overview gets a live access map on top:** laptops → agents/roles → MCP servers and built-ins, live traffic, red for blocks, click → session. The existing content moves below it. It is time-boxed and merged only if clean.
+
 These texts will be revised, and both frontends rebuilt, several times. This spec is the source of truth for each rebuild.
