@@ -4,6 +4,7 @@ roles each may run, and every agent launch mints a key `tg_<role>_<peer>-<n>_<ma
 ponytail: one JSON file under a process lock, re-read when its mtime changes; a DB when peers or processes grow."""
 import hashlib
 import json
+import logging
 import os
 import secrets
 import threading
@@ -16,6 +17,7 @@ DEFAULT_PATH = Path(__file__).resolve().parents[2] / "audit" / "peers.json"
 TOKEN_TTL = timedelta(hours=24)
 _LOCK = threading.Lock()
 _CACHE: dict = {}
+log = logging.getLogger("tollgate.peers")
 
 
 def path() -> Path:
@@ -39,17 +41,25 @@ def load() -> dict:
         if _CACHE.get("sig") != sig:
             _CACHE.update(sig=sig, data=json.loads(p.read_text(encoding="utf-8")))
         return _CACHE["data"]
-    except (OSError, ValueError):
+    except OSError:
+        return {"peers": {}, "tokens": {}}
+    except ValueError as e:  # reads see no peers (every minted key fails closed); writes refuse, see _update
+        log.error("peer registry %s is not valid JSON (%s); fix or restore it", p, e)
         return {"peers": {}, "tokens": {}}
 
 
 def _update(fn):
     """Read-modify-write under the lock; fn(reg) mutates reg and returns the result."""
     with _LOCK:
+        p = path()
+        if p.exists():
+            try:
+                json.loads(p.read_text(encoding="utf-8"))
+            except ValueError as e:  # writing load()'s empty fallback back would wipe every peer and token
+                raise RuntimeError(f"peer registry {p} is corrupt ({e}); refusing to overwrite it") from e
         reg = json.loads(json.dumps(load()))
         reg.setdefault("peers", {}), reg.setdefault("tokens", {})
         out = fn(reg)
-        p = path()
         p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_suffix(".tmp")
         tmp.write_text(json.dumps(reg, indent=1, ensure_ascii=False), encoding="utf-8")
@@ -135,10 +145,10 @@ def peer_of(key_id: str) -> str | None:
     return key_id.split("-")[0] if "-" in key_id else None
 
 
-def is_key_allowed(role: str, key_id: str) -> bool:
+def is_key_allowed(role: str, key_id: str, allow_unenrolled: bool = False) -> bool:
     pid = peer_of(key_id)
-    if pid is None:
-        return True
+    if pid is None:  # hand-issued (`tollgate key issue`): only with policy allow_unenrolled_keys: true
+        return allow_unenrolled
     p = load()["peers"].get(pid)
     n = key_id.split("-", 1)[1]
     return bool(p and not p["revoked_at"] and role in p["roles"] and n.isdigit()

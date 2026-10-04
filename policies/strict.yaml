@@ -4,6 +4,8 @@
 # Expect more false positives than balanced (tier 1 phrases block alone, all tool results scored); that is the price.
 
 mode: strict                                   # profile name; a label for the dashboard and audit, not read as a switch
+# allow_unenrolled_keys: true   # lets hand-issued keys (tollgate key issue, no peer) in; default false: only keys
+#                               # minted per agent launch (tollgate connect) on an enrolled laptop pass the doors
 
 servers:                                       # source MCP servers the gateway proxies (tool names become <server>.<tool>)
   github:  { mock: mocks.github }              # in-process mock GitHub: issues.read, repo.read, pr.create

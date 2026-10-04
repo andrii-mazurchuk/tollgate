@@ -63,7 +63,7 @@ Optional trace fields (absent in older lines; readers must default them):
 - `stages`: the check chain in order `key, role, arguments, data_flow, content, budget, approval`; `outcome` is `ok|warn|fail|skip`.
 - Full text (original and masked args/results/prompts) goes only to the edge-local `audit/local_text.jsonl`, keyed by `trace_id`, capped to the last 2,000 calls.
 
-Raw content is never written to `events.jsonl`. B's dashboard and eval read this file only.
+Raw content is never written to `events.jsonl`. The console, the edge UI and the eval read this file only.
 
 ## 3. `policy.yaml` ownership
 

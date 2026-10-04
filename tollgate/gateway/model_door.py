@@ -57,7 +57,7 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
     from tollgate.gateway import apply_verdict, content_policy  # late: avoids a cycle with gateway/__init__
 
     async def chat(request: Request):
-        ident = keys.from_header(request.headers.get("authorization"))
+        ident = keys.from_header(request.headers.get("authorization"), keys.unenrolled_ok(policy.data))
         if not ident:
             return JSONResponse({"error": {"message": "invalid key", "code": "auth.invalid"}}, 401)
         role, key_id = ident

@@ -61,7 +61,8 @@ def test_mint_refusals_and_revocation():
     assert keys.from_header(f"Bearer {k2}") is None
     with pytest.raises(ValueError):
         peers.mint(pid, "role-2", ROLES)
-    assert keys.from_header(f"Bearer {keys.issue('role-2')}")  # legacy keys keep working
+    assert keys.from_header(f"Bearer {keys.issue('role-2')}") is None  # unenrolled keys: refused by default
+    assert keys.from_header(f"Bearer {keys.issue('role-2')}", allow_unenrolled=True)  # policy allow_unenrolled_keys
     assert keys.from_header(f"Bearer {keys.issue('role-2', 'pabcd-1')}") is None  # unknown peer
 
 
@@ -361,3 +362,14 @@ async def test_access_edit_refusals(monkeypatch, tmp_path):
             r = await remote.post("/console/api/policy/access", json={"base_version": holder.version, "changes": [
                 {"role": "role-1", "tool": "github.pr.create", "allowed": False}]})
             assert r.status_code == 401
+
+
+def test_corrupt_peer_registry_is_never_overwritten(tmp_path, monkeypatch):
+    p = tmp_path / "peers.json"
+    monkeypatch.setenv("TOLLGATE_PEERS", str(p))
+    peers.enroll(peers.enroll_token()["token"], "Ada", "ada-x1")
+    p.write_text('{"peers": {"p1": ', encoding="utf-8")  # a torn write / bad hand edit
+    assert peers.load() == {"peers": {}, "tokens": {}}   # reads fail closed (no peer, no key)
+    with pytest.raises(RuntimeError, match="corrupt"):
+        peers.enroll_token()
+    assert p.read_text(encoding="utf-8") == '{"peers": {"p1": '

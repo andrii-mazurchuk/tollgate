@@ -36,7 +36,7 @@ In May 2025 a poisoned public GitHub issue made an agent copy private repository
 - **Model door**: OpenAI-compatible proxy with per-role model allow-list, token budgets and loop cut-off; prompts are scanned before any upstream call.
 - **Identity**: laptops enroll once with a one-time token, the admin sets roles per laptop, a key is minted per agent launch, revocation kills every key a laptop minted.
 - **Governance**: hot-reloaded policy with invalid edits rejected; three commented profiles; tool-description pinning against rug pulls; audit log with fingerprints, never raw text.
-- **Two UIs**: `/edge` for the developer (sessions trace, checks in ms per stage, the Acme scenario) and `/console` for the security lead (overview, peers & roles, sessions, policy view/switch/edit, threat feed, self-test).
+- **Two UIs**: `/edge` for the developer (sessions trace, checks in ms per stage, setup) and `/console` for the security lead (overview, peers & roles, sessions, policy view/switch/edit, threat feed, self-test).
 
 ## Results (held-out 30%, thresholds tuned on the other 70%)
 

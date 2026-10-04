@@ -15,7 +15,7 @@ Measured on `main` on 2026-10-04. Fast suite: `uv run pytest -q -m "not slow"` �
 
 | AC | Status | Evidence |
 |---|---|---|
-| AC1 one command | green | `tollgate up` starts the gateway (role MCPs, 3 in-process mocks, model door, `/healthz`, `/admin/*`, the `/console` and `/edge` UIs; `--scripted-model` for an offline LLM; the superseded Streamlit dashboard only with `--streamlit`) (`test_ac07_hot_reload.py::test_ac01_app_serves_healthz_and_roles`). Ollama is external (`ollama serve`); without it only the model door returns 502. No separate Edge process. |
+| AC1 one command | green | `tollgate up` starts the gateway (role MCPs, 3 in-process mocks, model door, `/healthz`, `/admin/*`, the `/console` and `/edge` UIs; `--scripted-model` for an offline LLM) (`test_ac07_hot_reload.py::test_ac01_app_serves_healthz_and_roles`). Ollama is external (`ollama serve`); without it only the model door returns 502. No separate Edge process. |
 | AC2 role scoping | green | `tests/acceptance/test_ac02_role_scoping.py` |
 | AC3 exact tools | green | `tests/acceptance/test_ac03_exact_tools.py` |
 | AC4 argument limits | green | `tests/acceptance/test_ac04_argument_limits.py` |
@@ -28,7 +28,7 @@ Measured on `main` on 2026-10-04. Fast suite: `uv run pytest -q -m "not slow"` �
 | AC11 budget + loops | green | `tests/acceptance/test_ac11_budget_loops.py` (429, `loop.cutoff`) |
 | AC12 model allow-list | green | `tests/acceptance/test_ac12_model_allowlist.py`; live: `qwen3:4b` for role-1 → 403 `model.denied` |
 | AC13 suite | green | `tollgate test`: 1,411 cases; all checks held-out recall 0.891, FPR 0.048, posture **0.931**; the console Self-test view shows the same numbers and the misses; `content.injection: off` → posture 0.718. `test_ac13_suite_summary.py`, `test_eval_posture.py`. Per-pattern P1–P10 coverage is not audited. |
-| AC14 dashboard | green | Server console `/console` (Overview, Peers & roles, Sessions with fingerprints, Policy view + profile switch + access editing, Threat feed, Self-test) and local edge `/edge` (Sessions trace, Checks per stage in ms, Setup, Scenario); `tests/test_console.py`, `tests/test_console3.py`, `tests/test_edge_*.py`. The earlier Streamlit `dashboard/app.py` remains (`tollgate dashboard`); `tests/test_dashboard_data.py` |
+| AC14 dashboard | green | Server console `/console` (Overview, Peers & roles, Sessions with fingerprints, Policy view + profile switch + access editing, Threat feed, Self-test) and local edge `/edge` (Sessions trace, Checks per stage in ms, Events, Setup); `tests/test_console.py`, `tests/test_console3.py`, `tests/test_edge_*.py`. The earlier Streamlit dashboard was removed (superseded by `/console`). |
 | AC15 latency | partial | Hub checks (role + taint) p95 **under 1 ms**, tier 1 p95 **2.5 ms**, both under the 5 ms target: **met**. Tier 2 short text (≤ 64 tokens) p95 is **~65–90 ms** depending on the run, against 80 ms: **borderline (partial)**; it is gated so long tool results skip it in balanced. |
 | AC16 deliverables | green | README "Judges: start here", MIT `LICENSE`, public repo https://github.com/andrii-mazurchuk/tollgate, [`DEMO.md`](DEMO.md) run sheet, [`docs/architecture.md`](docs/architecture.md) diagram, commented `policies/strict\|balanced\|lenient.yaml` profiles, 10-slide deck [`docs/Tollgate.pdf`](docs/Tollgate.pdf) (Marp source `docs/deck.md`, screenshots in `docs/img/`). |
 
@@ -40,7 +40,7 @@ Measured on `main` on 2026-10-04. Fast suite: `uv run pytest -q -m "not slow"` �
 - Approval flow: `taint.block_flow.action: approve` or `roles.<role>.approval: [tool]` parks the call. It appears in `GET /admin/approvals` and on the dashboard, and waits up to `approval.timeout_s` for Approve/Deny (dashboard button, `tollgate approve|deny <id>`, or `POST /admin/approvals/{id}` with `TOLLGATE_ADMIN_TOKEN`). Deny and timeout fail closed. Audit rules: `approval.requested`, `approval.approved`, `approval.denied`, `approval.timeout`.
 - Tool-description pinning (rug-pull defence): name + description + schema hashed at startup; a changed tool is hidden and its calls blocked (`pin.changed`); `/healthz` `pin_alerts` drives the dashboard's red strip.
 
-**Known gaps, stated plainly:**
+**Known gaps, stated plainly** (full list: [README › Known limits](README.md#known-limits)):
 - Injection recall 83.7% is below the 85% target. Misses concentrate in the `deepset` source (recall 0.371 held-out).
 - Tier 2 meets latency only on short text, and there p95 is ~65–90 ms against 80 ms; long tool results skip it in balanced.
 - A content-level `approve` verdict still blocks; only taint and role approvals park.
@@ -361,7 +361,7 @@ Targets in AC8, AC9 and AC15 are proposals. They stand until the first held-out 
 | 8 | Tier 2 classifier (ONNX) | 2 | AC8 |
 | 9 | Model door, budgets, model allow-list, loop cut-off | 3 | AC11–AC12 |
 | 10 | Eval suite: corpora, own cases, report, posture score | 4 | AC13, AC15 |
-| 11 | Dashboard (Streamlit) | 3 | AC14 |
+| 11 | Dashboard (Streamlit; replaced by `/console` + `/edge`) | 3 | AC14 |
 | 12 | Diagram, slides, README | 1 | AC16 |
 
 Helpers start only after AC1–AC16 pass. Their order is: approval → tier 3 → pinning → admin UI.
@@ -381,7 +381,7 @@ Stack:
 
 ## 9. Demo (3 min)
 
-The original plan below; the final run sheet (edge Scenario, console, live policy) is [DEMO.md](DEMO.md).
+The original plan below; the final run sheet (live Claude Code, console, live policy) is [DEMO.md](DEMO.md).
 
 1. **Roles only:** role-2 runs "check open issues". Poisoned issue #12 leads to a private repo read, then a public PR. **Leak.**
 2. **Tollgate:** the same run. The PR is **blocked**: *"session tainted by github.issues.read #12"*.

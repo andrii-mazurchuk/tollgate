@@ -30,10 +30,16 @@ def verify(key: str) -> tuple[str, str] | None:
     return (role, key_id) if hmac.compare_digest(mac, _mac(role, key_id)) else None
 
 
-def from_header(authorization: str | None) -> tuple[str, str] | None:
+def unenrolled_ok(policy_data: dict) -> bool:
+    """Policy `allow_unenrolled_keys: true` lets hand-issued keys (no peer) in; default false."""
+    return policy_data.get("allow_unenrolled_keys") is True
+
+
+def from_header(authorization: str | None, allow_unenrolled: bool = False) -> tuple[str, str] | None:
     if not authorization or not authorization.lower().startswith("bearer "):
         return None
     ident = verify(authorization[7:].strip())
     from tollgate.gateway import peers  # late: peers mints with issue()
-    # every HTTP door (/mcp/{role}/ guard, RoleGate, model door) reads the key here: revoked peers stop at once
-    return ident if ident and peers.is_key_allowed(*ident) else None
+    # every HTTP door (/mcp/{role}/ guard, RoleGate, model door, hook door) reads the key here: revoked peers stop
+    # at once, unenrolled keys only when the policy allows them
+    return ident if ident and peers.is_key_allowed(*ident, allow_unenrolled=allow_unenrolled) else None

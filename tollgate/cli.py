@@ -1,4 +1,4 @@
-"""`tollgate` command. Subcommands land as tracks build them (up/serve/dashboard/approve/deny/replay/key: A, test: B)."""
+"""`tollgate` command. Subcommands land as tracks build them (up/serve/approve/deny/replay/key: A, test: B)."""
 import sys
 
 
@@ -55,7 +55,7 @@ def serve() -> int:
     base = f"http://127.0.0.1:{port}"
     print(f"Tollgate on {base}  policy {holder.status()['version']} ({holder.path})")
     for role in holder.data["roles"]:
-        print(f"  {role}: {base}/mcp/{role}/   (key: tollgate key issue --role {role})")
+        print(f"  {role}: {base}/mcp/{role}/   (key per agent launch: tollgate connect <agent> --role {role} --peer P)")
     import os
 
     from tollgate.gateway.model_door import DEFAULT_UPSTREAM
@@ -71,6 +71,7 @@ def serve() -> int:
 def agent() -> int:
     """Demo agent through both doors. --scripted without --base: in-process gateway + scripted hijacked model."""
     import asyncio
+    import os
 
     import httpx2
 
@@ -82,19 +83,18 @@ def agent() -> int:
         i += 1 if rest[i] == "--scripted" else 2
     task = rest[i] if i < len(rest) else "check the open issues on acme/website and handle them"
     role, model, base = _opt("--role", "role-2"), _opt("--model", "qwen3:4b"), _opt("--base")
-    key = issue(role)
+    key = os.environ.get("TOLLGATE_KEY") or issue(role)  # a running server takes a minted key (tollgate connect)
     print(f"[agent] role={role} model={model} task={task!r}")
     if base or "--scripted" not in sys.argv:
         asyncio.run(run(task, role, model, base or "http://127.0.0.1:8080", key))
         return 0
 
-    import os
-
     from tollgate.gateway import build_app
-    from tollgate.gateway.policy import DEFAULT_PATH, load_policy
+    from tollgate.gateway.policy import DEFAULT_PATH, PolicyHolder, load_policy
 
     os.environ["TOLLGATE_UPSTREAM"] = "scripted"
-    app = build_app(load_policy(_opt("--policy") or DEFAULT_PATH))
+    data = load_policy(_opt("--policy") or DEFAULT_PATH).data  # in-process: its own hand-issued key is allowed here
+    app = build_app(PolicyHolder({**data, "allow_unenrolled_keys": True}))
 
     def factory(**kw):
         return httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://t", **kw)
@@ -129,21 +129,6 @@ def decide(id: str, decision: str) -> int:
         return 1
 
 
-DASHBOARD = ["-m", "streamlit", "run", "dashboard/app.py", "--server.headless", "true", "--server.address", "127.0.0.1",
-             "--browser.gatherUsageStats", "false", "--server.port"]
-
-
-def dashboard(wait: bool = True):
-    """Streamlit dashboard as a subprocess of this Python. wait=False returns the Popen (used by `up`)."""
-    import subprocess
-    from pathlib import Path
-
-    port = _opt("--dashboard-port", "8501")
-    p = subprocess.Popen([sys.executable, *DASHBOARD, port], cwd=Path(__file__).resolve().parents[1])
-    print(f"  dashboard: http://127.0.0.1:{port}", flush=True)
-    return p.wait() if wait else p
-
-
 def feed(sub: str) -> int:
     """P6 signature feed: serve (the external system), publish --add 'id=..,pattern=..,action=..,tags=A;B', pull (once)."""
     from tollgate.feed import Puller, build_feed_app, publish
@@ -176,14 +161,13 @@ def feed(sub: str) -> int:
 
 
 def up() -> int:
-    """AC1 one command: gateway (in-process, with /console and /edge) + feed server (subprocess, if `feed:` is set).
-    The superseded Streamlit dashboard starts only with --streamlit."""
+    """AC1 one command: gateway (in-process, with /console and /edge) + feed server (subprocess, if `feed:` is set)."""
     import subprocess
     from urllib.parse import urlparse
 
     from tollgate.gateway.policy import DEFAULT_PATH, load_policy
 
-    procs = [dashboard(wait=False)] if "--streamlit" in sys.argv else []
+    procs = []
     url = (load_policy(_opt("--policy") or DEFAULT_PATH).data.get("feed") or {}).get("url")
     if url:
         procs.append(subprocess.Popen([sys.executable, "-m", "tollgate.cli", "feed", "serve",
@@ -205,6 +189,8 @@ def key_issue() -> int:
         return 2
     key = issue(role, key_id)
     print(key)
+    print("warning: an unenrolled key; every door refuses it unless the policy sets allow_unenrolled_keys: true. "
+          "Per-laptop keys: tollgate enroll, then tollgate connect <agent>.", file=sys.stderr)
     base = f"http://127.0.0.1:{_opt('--port', '8080')}"
     print(f"MCP URL: {base}/mcp/{role}/")
     print(f"Model door: {base}/v1/chat/completions")
@@ -349,9 +335,40 @@ def seed_fleet() -> int:
     return 0
 
 
+USAGE = {  # one line per subcommand; `tollgate <cmd> --help` prints its line and exits before doing anything
+    "up": "up [--port 8080] [--policy F] [--scripted-model]   gateway + /console + /edge (+ feed server if `feed:` is set)",
+    "serve": "serve [--port 8080] [--policy F] [--scripted-model]   gateway only",
+    "agent": "agent [--role R] [--model M] [--base URL] [--scripted] [TASK]   demo agent (--scripted: in-process)",
+    "replay": "replay github|supabase   attack trace, taint off then on (in-process)",
+    "test": "test [--eval-only] [PYTEST ARGS]   test suite + eval report",
+    "perf": "perf [--n 200]   latency per stage (writes audit/perf.json)",
+    "approve": "approve ID [--port P]   approve a parked call",
+    "deny": "deny ID [--port P]   deny a parked call",
+    "key": "key issue --role R [--key-id K] [--port P]   hand-issued key (dev; needs allow_unenrolled_keys: true)",
+    "enroll-token": "enroll-token   one-time token to enroll a laptop",
+    "enroll": "enroll TOKEN --owner O --device D   enroll this laptop",
+    "connect": "connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--port P] [--host H] [--policy F]"
+               " [--write [--dir PATH]] [--fast]   mint a key per agent launch + that agent's config",
+    "hook": "hook AGENT [EVENT] [--url http://127.0.0.1:8080]   hook shim (agent JSON on stdin)",
+    "open": "open [edge|console] [TRACE_ID] [--port N]   open a UI or one step's details",
+    "seed-fleet": "seed-fleet [--policy F]   demo fleet traffic through the real gateway",
+    "feed": "feed serve [--port 8090] [--dir feed] | publish --add 'id=..,pattern=..,action=block,tags=A;B' | pull [--url U]",
+}
+
+
+def usage(cmd: str | None = None) -> str:
+    if cmd in USAGE:
+        return "usage: tollgate " + USAGE[cmd]
+    return "usage: tollgate <command> [options]   (tollgate <command> --help)\n" + "\n".join(
+        "  " + u for u in dict.fromkeys(USAGE.values()))
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252 and mangle "…" in redactions
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+    if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:  # before anything runs: `up --help` must not start a server
+        print(usage(cmd))
+        return 0
     if cmd == "test":
         args = sys.argv[2:]
         rc = 0
@@ -382,8 +399,6 @@ def main() -> int:
         return decide(sys.argv[2], cmd)
     if cmd == "up":
         return up()
-    if cmd == "dashboard":
-        return dashboard()
     if cmd == "enroll-token":
         return enroll_token()
     if cmd == "enroll" and len(sys.argv) > 2:
@@ -399,11 +414,7 @@ def main() -> int:
         return seed_fleet()
     if cmd == "feed":
         return feed(sys.argv[2] if len(sys.argv) > 2 else "")
-    print("usage: tollgate {up [--port P] [--policy F] [--scripted-model] [--streamlit [--dashboard-port D]]|serve [--port P] [--policy F] [--scripted-model]"
-          "|agent [--role R] [--model M] [--base URL] [--scripted] TASK|dashboard"
-          "|approve ID|deny ID [--port P]|test|replay github|supabase|perf [--n N]|key issue --role R [--key-id K]|feed serve|publish|pull"
-          "|enroll-token|enroll TOKEN --owner O --device D|connect claude-code|codex|cursor|gemini|hermes|print --role R --peer P [--write]|hook AGENT EVENT|open [edge|console] [TRACE_ID] [--port N]|seed-fleet}",
-          file=sys.stderr)
+    print(usage(), file=sys.stderr)
     return 2
 
 

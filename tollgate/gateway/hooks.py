@@ -64,7 +64,7 @@ def _text(x) -> str:
 def build_hook(policy):
     async def hook(request):
         auths = request.headers.getlist("authorization")
-        ident = keys.from_header(auths[0]) if len(auths) == 1 else None  # revoked peers are refused in from_header
+        ident = keys.from_header(auths[0], keys.unenrolled_ok(policy.data)) if len(auths) == 1 else None  # revoked peers are refused in from_header
         if not ident:
             return JSONResponse({"error": "invalid or revoked key"}, 401)
         try:

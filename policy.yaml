@@ -1,6 +1,8 @@
 # Tollgate policy. Hot reloaded. Track A owns everything except `content:` (Track B).
 # Full schema sketch: TOLLGATE.md section 4.6. Grows as acceptance tests land.
 mode: balanced
+# allow_unenrolled_keys: true   # lets hand-issued keys (tollgate key issue, no peer) in; default false: only keys
+#                               # minted per agent launch (tollgate connect) on an enrolled laptop pass the doors
 
 servers:
   github:  { mock: mocks.github }
