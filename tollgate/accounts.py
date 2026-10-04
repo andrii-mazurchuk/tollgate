@@ -15,10 +15,11 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from tollgate import paths
 
 from tollgate.util import iso_z
 
-DEFAULT_PATH = Path(__file__).resolve().parents[1] / "audit" / "accounts.json"
+DEFAULT_PATH = paths.AUDIT / "accounts.json"
 ROLES = ("admin", "viewer")
 MIN_PW = 12
 INVITE_TTL = timedelta(hours=24)

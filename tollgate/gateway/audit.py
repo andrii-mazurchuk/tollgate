@@ -4,10 +4,11 @@ import dataclasses
 import json
 import os
 from pathlib import Path
+from tollgate import paths
 
 from tollgate.contract import AuditEvent
 
-DEFAULT_PATH = Path(__file__).resolve().parents[2] / "audit" / "events.jsonl"
+DEFAULT_PATH = paths.AUDIT / "events.jsonl"
 LISTENERS: set[asyncio.Queue] = set()  # edge SSE: each gets the trace_id of every written event
 
 

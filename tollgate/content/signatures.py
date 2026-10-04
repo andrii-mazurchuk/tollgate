@@ -4,10 +4,11 @@ import os
 import re
 import time
 from pathlib import Path
+from tollgate import paths
 
 import yaml
 
-ROOT = Path(__file__).resolve().parents[2]  # policy paths are relative to the repo root, not the CWD
+ROOT = paths.HOME  # policy paths are relative to the Tollgate home (the repo root in a checkout), not the CWD
 
 log = logging.getLogger(__name__)
 _ACTIONS = ("allow", "redact", "approve", "block")

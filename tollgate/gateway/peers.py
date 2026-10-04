@@ -10,11 +10,12 @@ import secrets
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from tollgate import paths
 
 from tollgate.gateway import keys
 from tollgate.util import iso_z
 
-DEFAULT_PATH = Path(__file__).resolve().parents[2] / "audit" / "peers.json"
+DEFAULT_PATH = paths.AUDIT / "peers.json"
 TOKEN_TTL = timedelta(hours=24)
 _LOCK = threading.Lock()
 _CACHE: dict = {}

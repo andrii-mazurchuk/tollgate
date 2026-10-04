@@ -6,12 +6,13 @@ import json
 import logging
 import os
 from pathlib import Path
+from tollgate import paths
 
 import yaml
 
 from tollgate.util import now_z
 
-DEFAULT_PATH = Path(__file__).resolve().parents[2] / "policy.yaml"
+DEFAULT_PATH = paths.HOME / "policy.yaml"
 log = logging.getLogger("tollgate.policy")
 
 
