@@ -60,9 +60,9 @@ async function refreshStatus() {
     return;
   }
   renderHealth(st.health);
-  const admin = typeof st.admin === "string" ? st.admin : (st.admin && (st.admin.name || st.admin.id)) || "Admin";
-  box.title = [`Policy ${String(st.policy.version).slice(0, 7)} (${st.policy.profile})`, `Threat feed ${st.feed?.version ?? "local"}`, `App ${st.app_version}`].join("\n");
-  box.replaceChildren(h("span", { class: "who" }, icon("user"), admin), h("span", { class: "sep" }), h("span", {}, h("span", { class: "cdot" }), location.host));
+  // st.admin says how the caller was let in ("loopback" | "token"), not who: show the role, keep the how in the tooltip
+  box.title = [`Signed in as admin (${st.admin})`, `Policy ${String(st.policy.version).slice(0, 7)} (${st.policy.profile})`, `Threat feed ${st.feed?.version ?? "local"}`, `App ${st.app_version}`].join("\n");
+  box.replaceChildren(h("span", { class: "who" }, icon("user"), "Admin"), h("span", { class: "sep" }), h("span", {}, h("span", { class: "cdot" }), location.host));
 }
 
 function renderHealth(hl) {
