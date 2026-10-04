@@ -37,7 +37,7 @@ const PATHS = {
   ban: [CIRCLE, "M5.7 5.7l12.6 12.6"], lock: ["M6 11h12v10H6z", "M8 11V7a4 4 0 0 1 8 0v4"], clock: [CIRCLE, "M12 7v5l3 2"],
   flag: ["M5 21V4h11l-1.5 4L16 12H5"], check: ["M5 12l5 5L20 7"], x: ["M6 6l12 12M18 6 6 18"], dash: ["M7 12h10"],
   user: ["M16 8a4 4 0 1 1-8 0 4 4 0 0 1 8 0z", "M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"], warn: ["M12 3 2 20h20z", "M12 10v4M12 17h.01"],
-  back: ["M15 6l-6 6 6 6"], moon: ["M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"],
+  back: ["M15 6l-6 6 6 6"], chev: ["M6 9l6 6 6-6"], moon: ["M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"],
   sun: ["M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z", "M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"],
 };
 const icon = (name, cls) => s("svg", { class: "i" + (cls ? " " + cls : ""), viewBox: "0 0 24 24", "aria-hidden": "true" }, ...PATHS[name].map(d => s("path", { d })));

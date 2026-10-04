@@ -295,26 +295,66 @@ function drawRole(box, a) {
 }
 
 /* ---------- Sessions: master-detail across all peers ---------- */
+// Filters are multi-select sets, ORed within a filter and ANDed across filters; elsewhere `ui.f = { peer: id }` still works.
+const sel = k => [].concat(ui.f[k] || []);
+const matches = x => {
+  const [p, r, st] = [sel("peer"), sel("role"), sel("state")], q = (ui.sq || "").toLowerCase();
+  return (!p.length || p.includes(x.peer)) && (!r.length || r.includes(x.role))
+    && (!st.length || (x.state || "clean").split("+").some(s => st.includes(s)))
+    && (!q || [x.agent, x.peer_label, x.id, x.role].join(" ").toLowerCase().includes(q));
+};
+
+// A compact filter button with a popover: search (for long lists), checkboxes, Clear. Scales to hundreds of options.
+function dropdown(key, label, opts, onchange) {
+  const btnText = () => { const v = sel(key); return v.length === 0 ? "All" : v.length === 1 ? (opts.find(o => o.id === v[0])?.name || v[0]) : `${v.length} selected`; };
+  const val = h("span", { class: "dd-v ell" }, btnText());
+  const listBox = h("div", { class: "dd-list", role: "group", "aria-label": label });
+  const draw = q => listBox.replaceChildren(...(() => {
+    const on = sel(key), shown = opts.filter(o => !q || (o.name + " " + (o.sub || "")).toLowerCase().includes(q.toLowerCase()))
+      .sort((a, b) => on.includes(b.id) - on.includes(a.id));  // selected first
+    return shown.length ? shown.map(o => h("label", { class: "dd-opt" },
+      h("input", { type: "checkbox", checked: sel(key).includes(o.id), onchange: ev => {
+        const s = new Set(sel(key)); ev.target.checked ? s.add(o.id) : s.delete(o.id);
+        ui.f[key] = [...s]; val.textContent = btnText(); d.classList.toggle("on", s.size > 0); onchange();
+      } }),
+      h("span", { class: "ell" }, o.name), o.sub ? h("span", { class: "muted small ell" }, o.sub) : null))
+      : [h("div", { class: "muted small", style: "padding:8px" }, "No match.")];
+  })());
+  const search = opts.length > 6 ? h("input", { class: "dd-search", type: "search", placeholder: `Find ${label.toLowerCase()}`, "aria-label": `Find ${label.toLowerCase()}`,
+    oninput: ev => draw(ev.target.value) }) : null;
+  const d = h("details", { class: "dd" + (sel(key).length ? " on" : "") },
+    h("summary", { class: "btn sm" }, h("span", { class: "muted" }, label + ":"), val, icon("chev")),
+    h("div", { class: "dd-pop" }, search, listBox,
+      h("div", { class: "dd-foot" }, h("button", { type: "button", class: "btn sm", onclick: () => {
+        ui.f[key] = []; val.textContent = btnText(); d.classList.remove("on"); draw(search?.value || ""); onchange();
+      } }, "Clear"))));
+  d.addEventListener("toggle", () => {
+    if (!d.open) return;
+    // fixed, so the scrolling list pane can't clip it; clamped to the viewport
+    const r = d.querySelector("summary").getBoundingClientRect(), pop = d.querySelector(".dd-pop");
+    pop.style.left = Math.max(8, Math.min(r.left, innerWidth - 268)) + "px"; pop.style.top = (r.bottom + 4) + "px";
+    draw(""); if (search) { search.value = ""; search.focus(); }
+  });
+  return d;
+}
+document.addEventListener("click", ev => document.querySelectorAll("details.dd[open]").forEach(d => { if (!d.contains(ev.target)) d.open = false; }));
+document.addEventListener("scroll", ev => { if (!ev.target.closest?.(".dd-pop")) document.querySelectorAll("details.dd[open]").forEach(d => { d.open = false; }); }, true);
+document.addEventListener("keydown", ev => { if (ev.key === "Escape") document.querySelectorAll("details.dd[open]").forEach(d => { d.open = false; d.querySelector("summary").focus(); }); });
+
 async function renderSessions(sidArg, stepArg) {
-  const q = new URLSearchParams(Object.entries(ui.f).filter(([, v]) => v));
-  const [res, fl] = await Promise.all([api("/sessions?" + q), fleet().catch(() => ({ peers: [], roles: [] }))]);
-  // Apply the filters here too, so the list is right whatever the server's state matching is.
-  let items = (Array.isArray(res) ? res : res.sessions).filter(x => (!ui.f.peer || x.peer === ui.f.peer) && (!ui.f.role || x.role === ui.f.role)
-    && (!ui.f.state || (x.state || "clean").split("+").includes(ui.f.state)));
-  if (sidArg && !items.some(x => x.id === sidArg) && Object.values(ui.f).some(Boolean)) { ui.f = {}; return renderSessions(sidArg, stepArg); }
-  const peerNames = Object.fromEntries(fl.peers.map(p => [p.id, p.device]));
-  const group = (key, label, opts, words) => h("div", { class: "pills", role: "group", "aria-label": label }, h("span", { class: "lab" }, label),
-    [null, ...opts].map(v => h("button", { type: "button", class: "fpill", "aria-pressed": String((ui.f[key] || null) === v),
-      onclick: () => { ui.f[key] = v; if (location.hash === "#/sessions") route(false); else location.hash = "#/sessions"; } }, v == null ? "All" : words(v))));
-  const filters = h("div", { class: "filters" },
-    group("peer", "Peer", fl.peers.map(p => p.id), v => peerNames[v] || v),
-    group("role", "Role", fl.roles.map(r => r.role), roleName),
-    group("state", "State", STATES, v => STATE[v]));
+  const [res, fl] = await Promise.all([api("/sessions"), fleet().catch(() => ({ peers: [], roles: [] }))]);
+  const all = Array.isArray(res) ? res : res.sessions;  // ponytail: filtered in the browser; send filters to the API past ~10k sessions
+  if (sidArg && !all.filter(matches).some(x => x.id === sidArg)) { ui.f = {}; ui.sq = ""; }
+  const items = all.filter(matches);
   const sid = sidArg || (ui.trace && items.some(x => x.id === ui.trace.sid) ? ui.trace.sid : items[0]?.id);
   const pick = id => { location.hash = sessHref(id); };
-  const list = h("section", { class: "card pane", "data-keep": "slist" }, filters,
-    items.length ? tbl([null, "76px", "52px", "52px", "96px"], ["Agent and peer", "Started", ["Steps", "r"], "State", "Last"],
-      items.map(x => h("tr", linkRow(() => pick(x.id), x.id === sid ? "sel" : "", { "aria-selected": String(x.id === sid) }),
+  const body = h("div", { class: "slist-b" });
+  const count = h("span", { class: "muted small", style: "margin-left:auto" });
+  const drawList = () => {
+    const rows = all.filter(matches);
+    count.textContent = `${n(rows.length)} of ${n(all.length)}`;
+    body.replaceChildren(rows.length ? tbl([null, "76px", "52px", "52px", "96px"], ["Agent and peer", "Started", ["Steps", "r"], "State", "Last"],
+      rows.map(x => h("tr", linkRow(() => pick(x.id), x.id === sid ? "sel" : "", { "aria-selected": String(x.id === sid) }),
         h("td", { title: `${x.agent} on ${x.peer_label} (${x.id})` }, h("div", { class: "two" }, h("span", { class: "ell" }, x.agent, x.active ? h("span", { class: "live", title: "Active" }) : null),
           h("span", { class: "ell muted small" }, x.peer_label, " · ", x.id))),
         h("td", { class: "num" }, time(x.first_ts)),
@@ -322,6 +362,18 @@ async function renderSessions(sidArg, stepArg) {
         h("td", {}, stateIcons(x.state)),
         h("td", {}, lastOutcome(x.last_verdict)))))
       : h("div", { class: "empty" }, "No sessions match these filters."));
+  };
+  const peerOpts = fl.peers.map(p => ({ id: p.id, name: p.device || p.label || p.id, sub: p.owner }));
+  const filters = h("div", { class: "fbar" },
+    h("input", { class: "search", type: "search", placeholder: "Search agent, laptop or session", "aria-label": "Search sessions", value: ui.sq || "",
+      oninput: ev => { ui.sq = ev.target.value; drawList(); } }),
+    h("div", { class: "fbar-row" },
+      dropdown("peer", "Peer", peerOpts, drawList),
+      dropdown("role", "Role", fl.roles.map(r => ({ id: r.role, name: roleName(r.role), sub: r.role })), drawList),
+      dropdown("state", "State", STATES.map(s => ({ id: s, name: STATE[s] })), drawList),
+      count));
+  drawList();
+  const list = h("section", { class: "card pane", "data-keep": "slist" }, filters, body);
   const right = h("section", { class: "card pane split" });
   view().replaceChildren(h("div", { class: "md" }, list, right));
   if (!sid) return right.replaceChildren(h("div", { class: "empty" }, "No session to show."));
@@ -422,7 +474,7 @@ window.addEventListener("hashchange", () => route(true));
 // Poll every 10 s; skip the view while a dialog is open, a role edit is unsaved, or a control has focus.
 setInterval(() => {
   refreshStatus();
-  if (document.querySelector("dialog[open]") || ui.dirty || document.activeElement?.matches?.("input, select, textarea, #view :focus-visible")) return;
+  if (document.querySelector("dialog[open], details.dd[open]") || ui.dirty || document.activeElement?.matches?.("input, select, textarea, #view :focus-visible")) return;
   route(false);
 }, 10000);
 
