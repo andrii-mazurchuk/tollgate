@@ -46,7 +46,7 @@ bash: `T=$(uv run --project $R tollgate enroll-token | head -1 | cut -d' ' -f3)`
 
 Launch `claude` once in `C:\demo\acme`: accept "trust this folder" and the `tollgate` MCP server from `.mcp.json`, then `/exit` without a prompt (session stays clean). Start `claude` again; leave it at the empty prompt.
 
-**T3, the install window** (a fresh PowerShell, any folder). Run the one-liner once off stage: it warms the uv cache so the live run takes ~20 s (verified 2026-10-04; a cold run downloads ~150 MB of wheels). Re-run = reinstall, so no uninstall is needed between rehearsals.
+**T3, the install window** (a fresh PowerShell, any folder). Run the one-liner once off stage: it warms the uv cache so the live run takes ~20 s (verified 2026-10-04; a cold run downloads ~150 MB of wheels). Re-run = reinstall, so no uninstall is needed between rehearsals. **Warm up again after the last push to `main`:** a new commit is rebuilt once (~60 s), then cached (~20 s).
 ```powershell
 irm https://raw.githubusercontent.com/andrii-mazurchuk/tollgate/main/install.ps1 | iex
 tollgate doctor          # hub on :8080 answers; "console owner: none" is expected (the installed copy has its own home, %LOCALAPPDATA%\Tollgate)
