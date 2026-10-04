@@ -80,7 +80,7 @@ def build_door(policy, upstream: httpx2.AsyncBaseTransport | None = None):
                         source="model", tool=str(model),
                         content_sha256=hashlib.sha256(prompt.encode()).hexdigest(),
                         policy_version=policy.version, trace_id=trace.new_id(), session_id=key_id)
-        ev.state_before = ev.state_after = trace.label(taint.STATE.get(key_id))  # the model door never changes taint
+        ev.state_before = ev.state_after = trace.label(taint.get(key_id, role))  # the model door never changes taint
         texts: dict = {}
 
         base = str(request.base_url).rstrip("/")

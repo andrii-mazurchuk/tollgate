@@ -136,21 +136,29 @@ def render(agent: str, claude_req: dict, claude_resp: dict | None, v: dict) -> t
     return {"action": "allow"}, 0
 
 
-def hook(agent: str, event: str | None, stdin: str, url: str | None = None) -> tuple[str, str, int]:
-    """One hook call: (stdout, stderr, exit code). Fails closed: hub unreachable, non-2xx, bad answer -> deny."""
+def hook(agent: str, event: str | None, stdin: str | bytes, url: str | None = None) -> tuple[str, str, int]:
+    """One hook call: (stdout, stderr, exit code). Fails closed: bad input, unknown event, hub unreachable, non-2xx,
+    bad answer, any exception -> the agent's deny form (an uncaught error would exit 1 = non-blocking)."""
+    ev = EVENTS[agent].get(event or "", "")
+    req = {"hook_event_name": ev if ev in CLAUDE_EVENTS else "PreToolUse", "tool_name": ""}  # for a deny on bad input
+    resp, why = None, "Tollgate: hook error"
     try:
-        payload = json.loads(stdin or "{}")
-    except ValueError:
-        payload = {}
-    req = to_claude(agent, event, payload)
-    try:
+        payload = json.loads((stdin.decode("utf-8") if isinstance(stdin, bytes) else stdin) or "{}")
+        if not isinstance(payload, dict):
+            raise ValueError("hook input is not a JSON object")
+        r = to_claude(agent, event, payload)
+        if r["hook_event_name"] not in CLAUDE_EVENTS:
+            raise ValueError(f"unknown hook event {r['hook_event_name']!r}")
+        req, why = r, "Tollgate unreachable"
         resp = post(req, url)
-    except Exception as e:  # noqa: BLE001 - any failure is a deny
-        resp, v = None, {"deny": True, "reason": f"Tollgate unreachable: {e}", "input": None, "output": None,
-                         "context": None}
-    else:
         v = verdict(req["hook_event_name"], resp)
-    out, code = render(agent, req, resp, v)
+    except Exception as e:  # noqa: BLE001 - any failure is a deny
+        resp, v = None, {"deny": True, "reason": f"{why}: {e}", "input": None, "output": None, "context": None}
+    try:
+        out, code = render(agent, req, resp, v)
+    except Exception as e:  # noqa: BLE001
+        v = {"deny": True, "reason": f"Tollgate: hook error: {e}"}
+        out, code = ({"action": "block", "message": v["reason"]}, 0) if agent == "hermes" else (None, 2)
     return (json.dumps(out) if out is not None else ""), (v["reason"] if v["deny"] else ""), code
 
 
@@ -163,7 +171,11 @@ def main(argv: list[str]) -> int:
     if not args or args[0] not in AGENTS:
         print(f"usage: tollgate hook {'|'.join(AGENTS)} [EVENT] [--url http://127.0.0.1:8080]", file=sys.stderr)
         return 2
-    out, err, code = hook(args[0], args[1] if len(args) > 1 else None, sys.stdin.buffer.read().decode("utf-8"), url)
+    try:
+        stdin = sys.stdin.buffer.read()
+    except Exception as e:  # noqa: BLE001 - unreadable stdin is a deny, not exit 1
+        stdin = f"\x00{e}".encode()
+    out, err, code = hook(args[0], args[1] if len(args) > 1 else None, stdin, url)
     if out:
         sys.stdout.write(out + "\n")
     if err:

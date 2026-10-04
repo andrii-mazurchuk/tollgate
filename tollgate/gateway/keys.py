@@ -4,11 +4,35 @@ import hmac
 import os
 import secrets
 
-DEV_SECRET = "tollgate-dev-secret-change-me"
+import logging
+from pathlib import Path
+
+SECRET_FILE = Path(__file__).resolve().parents[2] / "audit/secret.key"  # audit/ is gitignored
+_installed: dict[str, bytes] = {}
+
+
+def install_secret() -> bytes:
+    """Per-install random secret (never a constant from the public repo): created on first use at audit/secret.key
+    (env TOLLGATE_SECRET_FILE), 0600. Used for role keys and the feed unless their env secret is set."""
+    path = Path(os.environ.get("TOLLGATE_SECRET_FILE") or SECRET_FILE)
+    if str(path) not in _installed:
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "w") as f:
+                    f.write(secrets.token_hex(32))
+                logging.getLogger("tollgate").warning("generated a new install secret at %s", path)
+            except FileExistsError:  # another process won the race: use its secret
+                pass
+        _installed[str(path)] = path.read_text().strip().encode()
+        if len(_installed[str(path)]) < 32:
+            raise RuntimeError(f"{path}: install secret too short; delete it to regenerate")
+    return _installed[str(path)]
 
 
 def _mac(role: str, key_id: str) -> str:
-    secret = os.environ.get("TOLLGATE_KEY_SECRET", DEV_SECRET).encode()
+    secret = os.environ["TOLLGATE_KEY_SECRET"].encode() if os.environ.get("TOLLGATE_KEY_SECRET") else install_secret()
     return hmac.new(secret, f"{role}:{key_id}".encode(), hashlib.sha256).hexdigest()[:32]
 
 

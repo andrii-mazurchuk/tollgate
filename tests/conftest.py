@@ -1,7 +1,16 @@
+import os
+import tempfile
+
 import pytest
 
 ADMIN_TOKEN = "test-admin-token"
 ADMIN = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+
+
+def pytest_configure(config):
+    """One isolated install secret per test run (keys minted at import must still verify in every test)."""
+    if not os.environ.get("TOLLGATE_SECRET_FILE"):
+        os.environ["TOLLGATE_SECRET_FILE"] = os.path.join(tempfile.mkdtemp(prefix="tollgate-test-"), "secret.key")
 
 
 @pytest.fixture(autouse=True)
@@ -49,9 +58,9 @@ def pytest_collection_modifyitems(items):
     try:
         from huggingface_hub import hf_hub_download
 
-        from tollgate.content.tier2 import REPO
+        from tollgate.content.tier2 import REPO, REVISION
         for f in ("onnx/tokenizer.json", "onnx/model.onnx"):
-            hf_hub_download(REPO, f)
+            hf_hub_download(REPO, f, revision=REVISION)
         repl = None
     except Exception as exc:
         repl = pytest.mark.skip(reason=f"tier 2 model unavailable (download failed: {type(exc).__name__}: {exc})").mark
