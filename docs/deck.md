@@ -80,9 +80,19 @@ section img.logo { border: 0; border-radius: 0; box-shadow: none; background: no
 .kw.tight { font-size: 34px; } .kw.tight li { margin: 0 0 12px; } .kw.tight li span { font-size: 28px; }
 </style>
 
+<!-- 0 · TITLE -->
+
+<div style="text-align:left;margin:0 0 30px"><img class="logo" src="brand/tollgate-logo.svg" alt="Tollgate" style="height:120px;display:inline-block;margin:0"></div>
+
+# <em>An AI control layer</em><br>for agents that use MCP tools
+
+<p class="big" style="margin-top:30px">Team <b>holonic</b> · Andrii Mazurchuk</p>
+<p class="mute" style="font-size:30px;margin:8px 0 0">HackYeah 2026 · Goldman Sachs · “AI Control Layer”</p>
+
+---
+
 <!-- 1 · ONE INCIDENT -->
 
-<div style="text-align:left;margin:0 0 14px"><img class="logo" src="brand/tollgate-logo.svg" alt="Tollgate" style="height:56px;display:inline-block;margin:0"></div>
 
 <p class="kick">May 2025 · GitHub MCP · Claude</p>
 
@@ -153,7 +163,8 @@ salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
 <div class="box"><b>Tools & models</b>GitHub, databases,<br>files, LLMs</div>
 </div>
 
-<p class="big mute">One policy file. One MCP server per role.</p>
+<p class="big mute" style="margin-top:14px">One policy file. One MCP server per role.</p>
+<p class="mute" style="font-size:28px;margin:10px 0 0"><b style="color:var(--ink)">Stack:</b> Python 3.13 · FastMCP · Starlette · ONNX Runtime (on-device DeBERTa) · HMAC-signed feed · plain-JS console · 408 pytest tests</p>
 
 ---
 
@@ -268,13 +279,14 @@ salary&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>$███,███</b>
 
 <div class="box" style="font-family:Consolas,'Courier New',monospace; font-size:32px; line-height:1.55; flex:none">
 irm …/tollgate/main/install.ps1 | iex<br>
+uv tool install agent-tollgate  <span class="mute"># PyPI</span><br>
 tollgate up<br>
 <span class="mute">→ open /console · proof: clone + uv run tollgate test</span>
 </div>
 
 <p class="big"><em class="blue" style="font-style:normal">github.com/andrii-mazurchuk/tollgate</em> <span class="mute" style="font-size:30px">· public · MIT</span></p>
 
-<p class="mute" style="font-size:28px;margin-top:14px">Next: edge/hub split + policy sync · model door v2 (Anthropic, streaming)<br>budgets in money · memory controls · SSO</p>
+<p style="font-size:28px;margin-top:14px"><b class="blue">Live preview:</b> <span class="mute">it runs on your laptop in 30 s. No hosted copy: the console is an admin surface.</span><br><b class="blue">Next:</b> <span class="mute">edge/hub split + policy sync · model door v2 (Anthropic, streaming) · budgets in money · memory controls · SSO</span></p>
 
 <!--
 SOURCES (checked 2026-10-04)

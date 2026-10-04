@@ -12,7 +12,7 @@ Copy each field as-is into HackTribe.
 
 **Repository:** https://github.com/andrii-mazurchuk/tollgate (public, MIT)
 
-**Presentation:** `docs/Tollgate.pdf` (10 slides; upload the PDF)
+**Presentation:** `docs/Tollgate.pdf` (11 slides; upload the PDF)
 
 ## Project description (1,393 characters)
 
@@ -70,7 +70,7 @@ The full judge guide (PowerShell and bash, ad-hoc prompts, live policy edits) is
 
 | Deliverable | Path | Status |
 |---|---|---|
-| Presentation (10 slides) | `docs/Tollgate.pdf` (source `docs/deck.md`) | done |
+| Presentation (11 slides) | `docs/Tollgate.pdf` (source `docs/deck.md`) | done |
 | Product page, judges' start | `README.md` | done |
 | Spec, AC1–AC16, status | `TOLLGATE.md` | 14 green, 2 partial |
 | 3-minute run sheet | `DEMO.md` | done |
